@@ -1,0 +1,938 @@
+// prisma/schema.prisma
+//
+// MULTI-TENANT: todo modelo que pertence a um estabelecimento
+// tem tenantId obrigatório. Nunca faça queries sem filtrar por tenantId.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // necessário para migrations no Neon/Supabase
+}
+
+// ══════════════════════════════════════════════════════════
+// ENUMS
+// ══════════════════════════════════════════════════════════
+
+enum Plan {
+  STARTER   // até 50 produtos, 1 usuário
+  PRO       // ilimitado, 5 usuários, delivery
+  PREMIUM   // ilimitado, multi-PDV, IA, cashback
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE    // pagamento atrasado
+  CANCELLED
+  SUSPENDED   // bloqueado por inadimplência
+}
+
+enum UserRole {
+  MASTER_ADMIN    // acesso à plataforma toda (você)
+  TENANT_ADMIN    // dono do restaurante
+  MANAGER         // gerente
+  ATTENDANT       // atendente/caixa
+  WAITER          // garçom
+  DELIVERY_PERSON // entregador
+}
+
+enum OrderType {
+  TABLE     // pedido na mesa
+  DELIVERY  // entrega em domicílio
+  PICKUP    // retirada no balcão
+  PDV       // balcão/caixa direto
+}
+
+enum OrderStatus {
+  PENDING           // aguardando confirmação
+  CONFIRMED         // confirmado
+  PREPARING         // em preparo na cozinha
+  READY             // pronto para entrega/retirada
+  OUT_FOR_DELIVERY  // saiu para entrega
+  DELIVERED         // entregue
+  CANCELLED         // cancelado
+  REFUNDED          // reembolsado
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  PARTIAL
+}
+
+enum PaymentMethod {
+  PIX
+  CREDIT_CARD
+  DEBIT_CARD
+  CASH
+  VOUCHER
+  CASHBACK
+}
+
+enum CouponType {
+  PERCENTAGE    // ex: 10% de desconto
+  FIXED         // ex: R$ 5,00 de desconto
+  FREE_DELIVERY // frete grátis
+}
+
+enum TableStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  CLEANING
+}
+
+// ══════════════════════════════════════════════════════════
+// PLATAFORMA (nivel master)
+// ══════════════════════════════════════════════════════════
+
+model Tenant {
+  id                 String             @id @default(cuid())
+  name               String
+  slug               String             @unique // ex: "pizzaria-do-ze" → /menu/pizzaria-do-ze
+  customDomain       String?            @unique // ex: "pedidos.pizzariadoze.com.br"
+  plan               Plan               @default(STARTER)
+  subscriptionStatus SubscriptionStatus @default(TRIAL)
+  trialEndsAt        DateTime?
+
+  // Identidade visual
+  logo               String?
+  primaryColor       String?            @default("#f97316")
+  secondaryColor     String?
+
+  // Dados do estabelecimento
+  phone              String?
+  email              String?
+  cnpj               String?
+  address            Json?              // { street, number, district, city, state, zip }
+
+  // Configurações gerais (JSON flexível para evitar migrations frequentes)
+  settings           Json               @default("{}")
+  // Exemplo de settings:
+  // {
+  //   "orderMinValue": 20,
+  //   "allowScheduledOrders": false,
+  //   "manualOpen": null,      // true = forçado aberto, false = forçado fechado, null = automático
+  //   "closedMessage": "Voltamos amanhã às 11h!",
+  //   "whatsappNotifications": { "onConfirm": true, "onReady": true, "onDelivery": true },
+  //   "reviewsEnabled": true
+  // }
+
+  isActive           Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  // Relações
+  subscription       Subscription?
+  users              User[]
+  pdvs               PDV[]
+  categories         Category[]
+  products           Product[]
+  addonGroups        AddonGroup[]
+  addons             Addon[]
+  customers          Customer[]
+  orders             Order[]
+  coupons            Coupon[]
+  printers           Printer[]
+  deliveryZones      DeliveryZone[]
+  businessHours      BusinessHour[]
+  loyaltyConfig      LoyaltyConfig?
+  cashbackConfig     CashbackConfig?
+  whatsappConfig     WhatsappConfig?
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+  payments           Payment[]
+  reviews            Review[]
+
+  @@index([slug])
+  @@index([customDomain])
+  @@index([isActive])
+}
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  tenantId           String             @unique
+  mercadoPagoSubId   String?            @unique
+  plan               Plan
+  status             SubscriptionStatus
+  amount             Decimal            @db.Decimal(10, 2)
+  currency           String             @default("BRL")
+  currentPeriodStart DateTime @map("billingCycleStart")
+  currentPeriodEnd   DateTime @map("billingCycleEnd")
+  cancelledAt        DateTime?
+  cancelReason       String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  tenant             Tenant             @relation(fields: [tenantId], references: [id])
+}
+
+// ══════════════════════════════════════════════════════════
+// USUÁRIOS E ACESSO
+// ══════════════════════════════════════════════════════════
+
+model User {
+  id                String    @id @default(cuid())
+  tenantId          String?   // null apenas para MASTER_ADMIN
+  name              String
+  email             String
+  passwordHash      String
+  role              UserRole  @default(ATTENDANT)
+  phone             String?
+  avatar            String?
+  isActive          Boolean   @default(true)
+
+  // MFA
+  mfaSecret         String?
+  mfaEnabled        Boolean   @default(false)
+  mfaBackupCodes    String[]  @default([])
+
+  // Sessão / segurança
+  lastLoginAt       DateTime?
+  lastLoginIp       String?
+  passwordChangedAt DateTime?
+  failedLoginCount  Int       @default(0)
+  lockedUntil       DateTime?
+
+  // Refresh token: guardamos o hash, nunca o token em si
+  refreshTokenHash  String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenant            Tenant?   @relation(fields: [tenantId], references: [id])
+  pdvAccess         PDVUser[]
+  ordersCreated     Order[]   @relation("CreatedBy")
+  ordersAsWaiter    Order[]   @relation("AssignedWaiter")
+  tableSessions     TableSession[]
+  auditLogs         AuditLog[]
+
+  @@unique([email, tenantId])
+  @@index([tenantId])
+  @@index([email])
+}
+
+// ══════════════════════════════════════════════════════════
+// MULTI-PDV
+// ══════════════════════════════════════════════════════════
+
+model PDV {
+  id        String    @id @default(cuid())
+  tenantId  String
+  name      String    // ex: "Loja Centro", "Delivery", "Quiosque Shopping"
+  type      String    @default("STORE") // STORE, DELIVERY, KIOSK
+  address   Json?
+  isActive  Boolean   @default(true)
+  settings  Json      @default("{}")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+  users     PDVUser[]
+  tables    Table[]
+  orders    Order[]
+  stocks    Stock[]
+  cashFlows CashFlow[]
+
+  @@index([tenantId])
+}
+
+// Tabela de junção: quais usuários têm acesso a quais PDVs
+model PDVUser {
+  pdvId  String
+  userId String
+  pdv    PDV    @relation(fields: [pdvId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@id([pdvId, userId])
+}
+
+model CashFlow {
+  id        String   @id @default(cuid())
+  tenantId  String
+  pdvId     String
+  type      String   // OPEN, CLOSE, DEPOSIT, WITHDRAWAL
+  amount    Decimal  @db.Decimal(10, 2)
+  notes     String?
+  userId    String
+  createdAt DateTime @default(now())
+
+  pdv       PDV      @relation(fields: [pdvId], references: [id])
+
+  @@index([pdvId])
+  @@index([tenantId])
+}
+
+// ══════════════════════════════════════════════════════════
+// MESAS E GARÇOM
+// ══════════════════════════════════════════════════════════
+
+model Table {
+  id        String      @id @default(cuid())
+  tenantId  String
+  pdvId     String
+  number    Int
+  sector    String      // "Salão", "Varanda", "Área Externa"
+  capacity  Int         @default(4)
+  status    TableStatus @default(AVAILABLE)
+  qrCode    String      @unique // token único que vai na URL do QR Code
+  isActive  Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  pdv       PDV         @relation(fields: [pdvId], references: [id])
+  sessions  TableSession[]
+  orders    Order[]
+
+  @@unique([pdvId, number])
+  @@index([tenantId])
+  @@index([qrCode])
+}
+
+// Uma "sessão de mesa" = abertura até fechamento da conta
+model TableSession {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tableId     String
+  waiterId    String?   // garçom responsável
+  openedAt    DateTime  @default(now())
+  closedAt    DateTime?
+  totalAmount Decimal?  @db.Decimal(10, 2)
+  notes       String?
+
+  table       Table     @relation(fields: [tableId], references: [id])
+  waiter      User?     @relation(fields: [waiterId], references: [id])
+  orders      Order[]
+
+  @@index([tenantId])
+  @@index([tableId])
+}
+
+// ══════════════════════════════════════════════════════════
+// CARDÁPIO
+// ══════════════════════════════════════════════════════════
+
+model Category {
+  id          String    @id @default(cuid())
+  tenantId    String
+  name        String    // "Hambúrgueres", "Pizzas", "Bebidas"
+  description String?
+  image       String?
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+  products    Product[]
+
+  @@index([tenantId])
+}
+
+model Product {
+  id              String    @id @default(cuid())
+  tenantId        String
+  categoryId      String
+  name            String
+  description     String?
+  ingredients     String[]
+  price           Decimal   @db.Decimal(10, 2)
+  comparePrice    Decimal?  @db.Decimal(10, 2) // preço "de" para mostrar desconto
+  image           String?
+  images          String[]
+  sku             String?
+  isFeatured      Boolean   @default(false)
+  isBestSeller    Boolean   @default(false)
+  isActive        Boolean   @default(true)
+  sortOrder       Int       @default(0)
+  soldCount       Int       @default(0)   // contador de vendas para ranking
+  preparationTime Int?                    // minutos estimados de preparo
+  tags            String[]
+  aiDescription   String?   // descrição gerada por IA
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tenant          Tenant             @relation(fields: [tenantId], references: [id])
+  category        Category           @relation(fields: [categoryId], references: [id])
+  addonGroups     ProductAddonGroup[]
+  orderItems      OrderItem[]
+  stocks          Stock[]
+
+  @@index([tenantId])
+  @@index([categoryId])
+  @@index([isActive, tenantId])
+}
+
+// Grupos de adicionais: "Ponto da carne", "Adicionais", "Molhos"
+model AddonGroup {
+  id         String    @id @default(cuid())
+  tenantId   String
+  name       String
+  minSelect  Int       @default(0) // mínimo de seleções (0 = opcional)
+  maxSelect  Int       @default(1) // máximo de seleções
+  isRequired Boolean   @default(false)
+  sortOrder  Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  tenant     Tenant             @relation(fields: [tenantId], references: [id])
+  products   ProductAddonGroup[]
+  addons     Addon[]
+
+  @@index([tenantId])
+}
+
+// Relação N:N entre produtos e grupos de adicionais
+model ProductAddonGroup {
+  productId    String
+  addonGroupId String
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  addonGroup   AddonGroup @relation(fields: [addonGroupId], references: [id], onDelete: Cascade)
+
+  @@id([productId, addonGroupId])
+}
+
+// Itens dentro de um grupo: "Mal passado", "Bacon", "Cheddar"
+model Addon {
+  id           String     @id @default(cuid())
+  tenantId     String
+  addonGroupId String
+  name         String
+  price        Decimal    @db.Decimal(10, 2) @default(0)
+  isActive     Boolean    @default(true)
+  sortOrder    Int        @default(0)
+
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+  addonGroup   AddonGroup @relation(fields: [addonGroupId], references: [id], onDelete: Cascade)
+  orderItemAddons OrderItemAddon[]
+
+  @@index([tenantId])
+  @@index([addonGroupId])
+}
+
+// ══════════════════════════════════════════════════════════
+// ESTOQUE
+// ══════════════════════════════════════════════════════════
+
+model Stock {
+  id          String   @id @default(cuid())
+  tenantId    String
+  pdvId       String
+  productId   String
+  quantity    Decimal  @db.Decimal(10, 3) @default(0)
+  minQuantity Decimal? @db.Decimal(10, 3) // alerta de estoque baixo
+  unit        String   @default("UN")     // UN, KG, L, etc.
+  updatedAt   DateTime @updatedAt
+
+  pdv         PDV      @relation(fields: [pdvId], references: [id])
+  product     Product  @relation(fields: [productId], references: [id])
+
+  @@unique([pdvId, productId])
+  @@index([tenantId])
+}
+
+// ══════════════════════════════════════════════════════════
+// CLIENTES
+// ══════════════════════════════════════════════════════════
+
+model Customer {
+  id              String    @id @default(cuid())
+  tenantId        String
+  name            String?
+  phone           String    // identificador principal (formato: 5511999999999)
+  email           String?
+  cpf             String?
+  address         Json?     // endereço padrão para delivery
+
+  // Verificação por OTP
+  isVerified      Boolean   @default(false)
+  verifiedAt      DateTime?
+  otpCode         String?   // armazenar HASH, nunca o código em si
+  otpExpiresAt    DateTime?
+  otpAttempts     Int       @default(0)
+
+  // Fidelidade e cashback
+  loyaltyPoints   Int       @default(0)
+  cashbackBalance Decimal   @db.Decimal(10, 2) @default(0)
+
+  // Estatísticas
+  totalOrders     Int       @default(0)
+  totalSpent      Decimal   @db.Decimal(10, 2) @default(0)
+  lastOrderAt     DateTime?
+
+  isActive        Boolean   @default(true)
+
+  // LGPD
+  lgpdConsent     Boolean   @default(false)
+  lgpdConsentAt   DateTime?
+  anonymizedAt    DateTime? // se preenchido, dados foram anonimizados
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tenant          Tenant    @relation(fields: [tenantId], references: [id])
+  orders          Order[]
+  loyaltyTxs      LoyaltyTransaction[]
+  cashbackTxs     CashbackTransaction[]
+  reviews         Review[]
+
+  @@unique([phone, tenantId])
+  @@index([tenantId])
+  @@index([phone])
+}
+
+// ══════════════════════════════════════════════════════════
+// PEDIDOS
+// ══════════════════════════════════════════════════════════
+
+model Order {
+  id             String        @id @default(cuid())
+  tenantId       String
+  pdvId          String?
+  tableId        String?
+  tableSessionId String?
+  customerId     String?
+  waiterId       String?       // garçom responsável
+  createdById    String?       // usuário do sistema que criou
+
+  // Número legível do pedido (ex: #0042)
+  // Sequencial por tenant, não global
+  orderNumber    Int
+
+  type           OrderType
+  status         OrderStatus   @default(PENDING)
+  paymentStatus  PaymentStatus @default(PENDING)
+  notes          String?       // observações gerais do pedido
+
+  // ─────────────────────────────────────────────────
+  // VALORES: calculados 100% server-side
+  // NUNCA aceitar estes valores vindos do frontend
+  // ─────────────────────────────────────────────────
+  subtotal       Decimal       @db.Decimal(10, 2)
+  deliveryFee    Decimal       @db.Decimal(10, 2) @default(0)
+  discountAmount Decimal       @db.Decimal(10, 2) @default(0)
+  cashbackUsed   Decimal       @db.Decimal(10, 2) @default(0)
+  total          Decimal       @db.Decimal(10, 2)
+
+  // Cupom aplicado
+  couponId       String?
+  couponCode     String?
+  couponDiscount Decimal?      @db.Decimal(10, 2)
+
+  // Entrega
+  deliveryAddress Json?
+  deliveryBairro  String?
+  estimatedDeliveryAt DateTime?
+
+  // Pagamento em dinheiro
+  changeFor      Decimal?      @db.Decimal(10, 2) // troco para quanto
+
+  // Timestamps de status
+  confirmedAt    DateTime?
+  preparingAt    DateTime?
+  readyAt        DateTime?
+  deliveredAt    DateTime?
+  cancelledAt    DateTime?
+  cancelReason   String?
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  tenant         Tenant        @relation(fields: [tenantId], references: [id])
+  pdv            PDV?          @relation(fields: [pdvId], references: [id])
+  table          Table?        @relation(fields: [tableId], references: [id])
+  tableSession   TableSession? @relation(fields: [tableSessionId], references: [id])
+  customer       Customer?     @relation(fields: [customerId], references: [id])
+  waiter         User?         @relation("AssignedWaiter", fields: [waiterId], references: [id])
+  createdBy      User?         @relation("CreatedBy", fields: [createdById], references: [id])
+  coupon         Coupon?       @relation(fields: [couponId], references: [id])
+  items          OrderItem[]
+  payments       Payment[]
+  statusHistory  OrderStatusHistory[]
+  review         Review?
+
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([pdvId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id           String   @id @default(cuid())
+  orderId      String
+  productId    String
+
+  // Snapshot: guardamos nome e preço no momento do pedido
+  // porque o preço pode mudar depois
+  productName  String
+  productPrice Decimal  @db.Decimal(10, 2)
+
+  quantity     Int
+  unitPrice    Decimal  @db.Decimal(10, 2) // preço unitário + adicionais
+  totalPrice   Decimal  @db.Decimal(10, 2) // unitPrice × quantity
+  notes        String?  // "sem cebola", "bem passado"
+
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product      Product  @relation(fields: [productId], references: [id])
+  addons       OrderItemAddon[]
+
+  @@index([orderId])
+}
+
+model OrderItemAddon {
+  id          String    @id @default(cuid())
+  orderItemId String
+  addonId     String
+  addonName   String    // snapshot do nome no momento do pedido
+  addonPrice  Decimal   @db.Decimal(10, 2)
+
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  addon       Addon     @relation(fields: [addonId], references: [id])
+}
+
+// Histórico de mudanças de status (para rastreabilidade)
+model OrderStatusHistory {
+  id        String      @id @default(cuid())
+  orderId   String
+  status    OrderStatus
+  userId    String?
+  notes     String?
+  createdAt DateTime    @default(now())
+
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+// ══════════════════════════════════════════════════════════
+// PAGAMENTOS
+// ══════════════════════════════════════════════════════════
+
+model Payment {
+  id                String        @id @default(cuid())
+  tenantId          String
+  orderId           String
+  method            PaymentMethod
+  status            PaymentStatus @default(PENDING)
+  amount            Decimal       @db.Decimal(10, 2)
+
+  // Mercado Pago
+  mercadoPagoId     String?       @unique
+  mercadoPagoStatus String?
+  pixQrCode         String?       // código copia-e-cola
+  pixQrCodeBase64   String?       // imagem base64 do QR Code
+  pixExpiresAt      DateTime?
+  installments      Int?
+  cardLastDigits    String?
+
+  // Dinheiro
+  changeAmount      Decimal?      @db.Decimal(10, 2)
+
+  // Dados brutos do webhook (para auditoria)
+  webhookData       Json?
+
+  paidAt            DateTime?
+  failedAt          DateTime?
+  refundedAt        DateTime?
+  refundAmount      Decimal?      @db.Decimal(10, 2)
+  refundReason      String?
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  tenant            Tenant        @relation(fields: [tenantId], references: [id])
+  order             Order         @relation(fields: [orderId], references: [id])
+
+  @@index([tenantId])
+  @@index([orderId])
+  @@index([mercadoPagoId])
+  @@index([status])
+}
+
+// ══════════════════════════════════════════════════════════
+// ENTREGA
+// ══════════════════════════════════════════════════════════
+
+model DeliveryZone {
+  id         String   @id @default(cuid())
+  tenantId   String
+  type       String   // BAIRRO, CEP_RANGE, RADIUS
+  name       String?  // nome amigável: "Centro e adjacências"
+  bairro     String?
+  cepStart   String?
+  cepEnd     String?
+  radiusKm   Decimal? @db.Decimal(6, 2)
+  fee        Decimal  @db.Decimal(10, 2) @default(0)
+  freeAbove  Decimal? @db.Decimal(10, 2) // entrega grátis acima de X
+  minOrder   Decimal? @db.Decimal(10, 2)
+  maxTime    Int?     // tempo máximo em minutos
+  isActive   Boolean  @default(true)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+// ══════════════════════════════════════════════════════════
+// CUPONS
+// ══════════════════════════════════════════════════════════
+
+model Coupon {
+  id                    String     @id @default(cuid())
+  tenantId              String
+  code                  String     // sempre em maiúsculas
+  description           String?
+  type                  CouponType
+  value                 Decimal    @db.Decimal(10, 2) // % ou R$
+  minOrderValue         Decimal?   @db.Decimal(10, 2)
+  maxDiscount           Decimal?   @db.Decimal(10, 2) // teto de desconto em %
+  usageLimit            Int?       // total de usos permitidos
+  usageCount            Int        @default(0)
+  usageLimitPerCustomer Int        @default(1)
+  startsAt              DateTime?
+  expiresAt             DateTime?
+  isActive              Boolean    @default(true)
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+
+  tenant                Tenant     @relation(fields: [tenantId], references: [id])
+  orders                Order[]
+
+  @@unique([code, tenantId])
+  @@index([tenantId])
+}
+
+// ══════════════════════════════════════════════════════════
+// FIDELIDADE E CASHBACK
+// ══════════════════════════════════════════════════════════
+
+model LoyaltyConfig {
+  id              String  @id @default(cuid())
+  tenantId        String  @unique
+  pointsPerReal   Decimal @db.Decimal(10, 2) @default(1) // pontos a cada R$ 1
+  redeemEvery     Int     @default(100) // a cada 100 pontos...
+  redeemValue     Decimal @db.Decimal(10, 2) @default(5) // ...vale R$ 5,00
+  minPointsRedeem Int     @default(100)
+  isActive        Boolean @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant  @relation(fields: [tenantId], references: [id])
+}
+
+model LoyaltyTransaction {
+  id          String   @id @default(cuid())
+  tenantId    String
+  customerId  String
+  orderId     String?
+  type        String   // EARN, REDEEM, EXPIRE, ADJUST
+  points      Int      // positivo = ganhou, negativo = usou
+  balance     Int      // saldo após a transação
+  description String?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  customer    Customer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId])
+  @@index([tenantId])
+}
+
+model CashbackConfig {
+  id            String   @id @default(cuid())
+  tenantId      String   @unique
+  percentage    Decimal  @db.Decimal(5, 2)  // ex: 5.00 = 5%
+  validityDays  Int      @default(30)
+  maxCashback   Decimal? @db.Decimal(10, 2) // teto de cashback por pedido
+  minOrderValue Decimal? @db.Decimal(10, 2)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+}
+
+model CashbackTransaction {
+  id         String   @id @default(cuid())
+  tenantId   String
+  customerId String
+  orderId    String?
+  type       String   // EARN, USE, EXPIRE
+  amount     Decimal  @db.Decimal(10, 2) // positivo = ganhou, negativo = usou
+  balance    Decimal  @db.Decimal(10, 2)
+  expiresAt  DateTime?
+  createdAt  DateTime @default(now())
+
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId])
+  @@index([tenantId])
+}
+
+// ══════════════════════════════════════════════════════════
+// AVALIAÇÕES
+// ══════════════════════════════════════════════════════════
+
+model Review {
+  id          String   @id @default(cuid())
+  tenantId    String
+  orderId     String   @unique
+  customerId  String
+  rating      Int      // 1 a 5
+  comment     String?
+  ownerReply  String?
+  repliedAt   DateTime?
+  isApproved  Boolean  @default(false)
+  approvedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  order       Order    @relation(fields: [orderId], references: [id])
+  customer    Customer @relation(fields: [customerId], references: [id])
+
+  @@index([tenantId])
+}
+
+// ══════════════════════════════════════════════════════════
+// HORÁRIOS DE FUNCIONAMENTO
+// ══════════════════════════════════════════════════════════
+
+model BusinessHour {
+  id        String  @id @default(cuid())
+  tenantId  String
+  dayOfWeek Int     // 0=Domingo, 1=Segunda, ..., 6=Sábado
+  openTime  String  // "11:00"
+  closeTime String  // "23:00"
+  isOpen    Boolean @default(true)
+
+  tenant    Tenant  @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, dayOfWeek])
+}
+
+// ══════════════════════════════════════════════════════════
+// IMPRESSORAS
+// ══════════════════════════════════════════════════════════
+
+model Printer {
+  id         String    @id @default(cuid())
+  tenantId   String
+  pdvId      String?
+  name       String    // "Cozinha", "Bar", "Balcão"
+  token      String    @unique // token de autenticação da impressora
+  sector     String    // KITCHEN, BAR, COUNTER
+  isActive   Boolean   @default(true)
+  lastSeenAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  tenant     Tenant    @relation(fields: [tenantId], references: [id])
+  printJobs  PrintJob[]
+
+  @@index([tenantId])
+  @@index([token])
+}
+
+model PrintJob {
+  id        String   @id @default(cuid())
+  printerId String
+  orderId   String?
+  content   String   // texto formatado para impressora térmica
+  status    String   @default("PENDING") // PENDING, PRINTED, FAILED
+  attempts  Int      @default(0)
+  error     String?
+  createdAt DateTime @default(now())
+  printedAt DateTime?
+
+  printer   Printer  @relation(fields: [printerId], references: [id])
+
+  @@index([printerId, status])
+  @@index([createdAt])
+}
+
+// ══════════════════════════════════════════════════════════
+// WHATSAPP (Evolution API)
+// ══════════════════════════════════════════════════════════
+
+model WhatsappConfig {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  evolutionUrl    String   // URL da instância do tenant
+  evolutionApiKey String   // chave criptografada
+  instanceName    String
+  status          String   @default("DISCONNECTED") // CONNECTED, DISCONNECTED, CONNECTING
+  qrCode          String?  // QR Code atual para conexão
+  lastConnectedAt DateTime?
+  settings        Json     @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+}
+
+// ══════════════════════════════════════════════════════════
+// NOTIFICAÇÕES
+// ══════════════════════════════════════════════════════════
+
+model Notification {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String?  // null = para todos do tenant
+  type      String   // NEW_ORDER, LOW_STOCK, PAYMENT_FAILED, etc.
+  title     String
+  message   String
+  data      Json?    // dados extras (ex: orderId)
+  isRead    Boolean  @default(false)
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, isRead])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ══════════════════════════════════════════════════════════
+// AUDITORIA — LOGS IMUTÁVEIS
+//
+// Regra: nunca deletar ou atualizar registros desta tabela.
+// Apenas INSERT. Usar particionamento por data em produção.
+// ══════════════════════════════════════════════════════════
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String?  // null para ações master
+  userId     String?
+  action     String   // LOGIN, LOGOUT, CREATE_ORDER, CANCEL_ORDER, UPDATE_PRICE...
+  resource   String?  // "orders", "products", "users"
+  resourceId String?  // ID do recurso afetado
+  oldValue   Json?    // estado anterior
+  newValue   Json?    // estado novo
+  ip         String?
+  userAgent  String?
+  pdvId      String?
+  metadata   Json?    // dados extras
+  createdAt  DateTime @default(now())
+
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id])
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([action])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+}

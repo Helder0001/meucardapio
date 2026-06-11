@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build
+.next/
+out/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Prisma
+prisma/migrations/
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+*.pem
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Vercel
+.vercel
+
+# Test coverage
+coverage/
+.nyc_output
+
+# Misc
+*.tsbuildinfo
+next-env.d.ts
+
+.vercel
+
+# Segurança — nunca versionar arquivos com credenciais ou sessões
+cookies.txt
+*.cookies.txt
+*.session
+curl-cookies.txt
