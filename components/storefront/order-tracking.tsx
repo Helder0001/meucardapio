@@ -299,7 +299,7 @@ export function OrderTracking({ order: initialOrder }: OrderTrackingProps) {
     if (isDone) return
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/orders/${order.id}/status`)
+        const res = await fetch(`/api/orders/${order.id}/status?token=${statusToken}`)
         if (res.ok) {
           const data = await res.json()
           setOrder((prev) => ({
