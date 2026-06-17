@@ -105,6 +105,7 @@ export async function registerAction(
             mercadoPagoSubId: mpResult.subscriptionId,
             currentPeriodStart: new Date(),
             currentPeriodEnd: trialEndsAt,
+            amount: 0,  // ← adicionar essa linha
           },
         })
       }
