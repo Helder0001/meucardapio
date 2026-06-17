@@ -1,4 +1,4 @@
-\'use client\'
+'use client'
 
 // components/dashboard/onboarding/onboarding-client.tsx
 // Wizard interativo de 4 passos para configuração inicial do tenant.
