@@ -3,6 +3,7 @@
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/db/client'
 import { OrderTracking } from '@/components/storefront/order-tracking'
+import { generateStatusToken } from '@/app/api/orders/[id]/status/route'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Acompanhar pedido' }
@@ -87,5 +88,7 @@ export default async function OrderPage({ params }: PageProps) {
     })),
   }
 
-  return <OrderTracking order={serialized} />
+  const statusToken = generateStatusToken(order.id)
+
+  return <OrderTracking order={serialized} statusToken={statusToken} />
 }

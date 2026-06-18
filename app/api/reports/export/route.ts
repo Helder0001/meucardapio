@@ -153,7 +153,7 @@ export async function GET(request: Request) {
     }
 
     const xlsxBuffer = buildXlsx({ sheetName, headers, rows, tenantName, startDate, endDate })
-    return new Response(xlsxBuffer, {
+    return new Response(new Uint8Array(xlsxBuffer), {
       headers: {
         'Content-Type':        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${filename}"`,

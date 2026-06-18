@@ -39,6 +39,7 @@ interface Payment {
 }
 
 interface OrderTrackingProps {
+  statusToken: string
   order: {
     id: string
     orderNumber: number
@@ -281,7 +282,7 @@ function PixSection({
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export function OrderTracking({ order: initialOrder }: OrderTrackingProps) {
+export function OrderTracking({ order: initialOrder, statusToken }: OrderTrackingProps) {
   const [order, setOrder] = useState(initialOrder)
   const [isRefreshingPix, setIsRefreshingPix] = useState(false)
 
