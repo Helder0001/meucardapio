@@ -3,13 +3,10 @@
 // components/dashboard/whatsapp-settings.tsx
 
 import { useState, useEffect } from 'react'
-import { Loader2, CheckCircle2, XCircle, RefreshCw, Wifi, WifiOff } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, RefreshCw, Wifi } from 'lucide-react'
 import { toast } from 'sonner'
-import { saveWhatsappConfig } from '@/actions/settings/save-whatsapp'
-import Image from 'next/image'
 
 interface WhatsAppConfig {
-  evolutionUrl: string
   instanceName: string
   status: string
   lastConnectedAt: string | null
@@ -21,17 +18,13 @@ interface WhatsAppSettingsProps {
 }
 
 export function WhatsAppSettings({ tenantId, config }: WhatsAppSettingsProps) {
-  const [evolutionUrl, setEvolutionUrl] = useState(config?.evolutionUrl ?? '')
-  const [apiKey, setApiKey]             = useState('')
-  const [instanceName, setInstanceName] = useState(config?.instanceName ?? '')
-  const [status, setStatus]             = useState(config?.status ?? 'DISCONNECTED')
-  const [qrCode, setQrCode]             = useState<string | null>(null)
+  const [status, setStatus]         = useState(config?.status ?? 'DISCONNECTED')
+  const [qrCode, setQrCode]         = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
-  const [isSaving, setIsSaving]         = useState(false)
 
   const isConnected = status === 'CONNECTED'
 
-  // Polling de status enquanto conectando
+  // Polling enquanto aguarda scan do QR Code
   useEffect(() => {
     if (status !== 'CONNECTING') return
     const interval = setInterval(checkStatus, 3000)
@@ -40,7 +33,7 @@ export function WhatsAppSettings({ tenantId, config }: WhatsAppSettingsProps) {
 
   const checkStatus = async () => {
     try {
-      const res = await fetch('/api/whatsapp/status')
+      const res  = await fetch('/api/whatsapp/status')
       const data = await res.json()
       if (data.status) {
         setStatus(data.status)
@@ -53,17 +46,12 @@ export function WhatsAppSettings({ tenantId, config }: WhatsAppSettingsProps) {
   }
 
   const handleConnect = async () => {
-    if (!evolutionUrl || !apiKey || !instanceName) {
-      toast.error('Preencha todos os campos antes de conectar')
-      return
-    }
-
     setIsConnecting(true)
     try {
-      const res = await fetch('/api/whatsapp/connect', {
+      const res  = await fetch('/api/whatsapp/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ evolutionUrl, apiKey, instanceName }),
+        body: JSON.stringify({ tenantId }),
       })
       const data = await res.json()
 
@@ -81,7 +69,7 @@ export function WhatsAppSettings({ tenantId, config }: WhatsAppSettingsProps) {
         toast.success('WhatsApp já estava conectado!')
       }
     } catch {
-      toast.error('Erro ao conectar. Verifique a URL e a chave da API.')
+      toast.error('Erro ao gerar QR Code. Tente novamente.')
     } finally {
       setIsConnecting(false)
     }
@@ -96,18 +84,6 @@ export function WhatsAppSettings({ tenantId, config }: WhatsAppSettingsProps) {
     } catch {
       toast.error('Erro ao desconectar')
     }
-  }
-
-  const handleSave = async () => {
-    if (!evolutionUrl || !instanceName) {
-      toast.error('Preencha URL e nome da instância')
-      return
-    }
-    setIsSaving(true)
-    const result = await saveWhatsappConfig({ evolutionUrl, apiKey, instanceName })
-    setIsSaving(false)
-    if (result.error) toast.error(result.error)
-    else toast.success('Configurações salvas!')
   }
 
   return (
@@ -129,7 +105,7 @@ export function WhatsAppSettings({ tenantId, config }: WhatsAppSettingsProps) {
         )}
         <div className="flex-1">
           <p className="text-sm font-semibold text-foreground">
-            {isConnected ? 'Conectado' : status === 'CONNECTING' ? 'Aguardando QR Code...' : 'Desconectado'}
+            {isConnected ? 'Conectado' : status === 'CONNECTING' ? 'Aguardando leitura do QR Code...' : 'Desconectado'}
           </p>
           {config?.lastConnectedAt && (
             <p className="text-xs text-muted-foreground">
@@ -174,89 +150,25 @@ export function WhatsAppSettings({ tenantId, config }: WhatsAppSettingsProps) {
         </div>
       )}
 
-      {/* Formulário de configuração */}
-      <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-        <h2 className="font-semibold text-foreground">Configuração da Evolution API</h2>
-
-        <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-sm text-blue-800 dark:text-blue-300">
-          💡 Você precisa de um servidor próprio com a{' '}
-          <a
-            href="https://evolution-api.com"
-            target="_blank"
-            className="underline font-medium"
-          >
-            Evolution API
-          </a>{' '}
-          instalada, ou contratar um serviço gerenciado.
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-1.5">
-            URL da Evolution API *
-          </label>
-          <input
-            type="url"
-            value={evolutionUrl}
-            onChange={(e) => setEvolutionUrl(e.target.value)}
-            placeholder="https://evolution.seuservidor.com"
-            className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-1.5">
-            API Key *
-          </label>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="Chave de autenticação da Evolution API"
-            className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            A chave fica criptografada no banco de dados
+      {/* Botão conectar */}
+      {!isConnected && !qrCode && (
+        <div className="bg-card border border-border rounded-xl p-5">
+          <p className="text-sm text-muted-foreground mb-4">
+            Conecte o WhatsApp do seu restaurante para enviar notificações automáticas aos clientes sobre o status dos pedidos.
           </p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-1.5">
-            Nome da instância *
-          </label>
-          <input
-            type="text"
-            value={instanceName}
-            onChange={(e) => setInstanceName(e.target.value)}
-            placeholder="meu-restaurante"
-            className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-        </div>
-
-        <div className="flex gap-3 pt-2">
           <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex items-center gap-2 px-4 py-2.5 border border-input rounded-lg text-sm font-medium hover:bg-muted transition-colors disabled:opacity-60"
+            onClick={handleConnect}
+            disabled={isConnecting || status === 'CONNECTING'}
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
           >
-            {isSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            Salvar configurações
+            {isConnecting ? (
+              <><Loader2 className="h-4 w-4 animate-spin" /> Gerando QR Code...</>
+            ) : (
+              <><Wifi className="h-4 w-4" /> Conectar WhatsApp</>
+            )}
           </button>
-
-          {!isConnected && (
-            <button
-              onClick={handleConnect}
-              disabled={isConnecting || status === 'CONNECTING'}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
-            >
-              {isConnecting ? (
-                <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Conectando...</>
-              ) : (
-                <><Wifi className="h-3.5 w-3.5" /> Conectar WhatsApp</>
-              )}
-            </button>
-          )}
         </div>
-      </div>
+      )}
 
       {/* Templates de mensagem */}
       <div className="bg-card border border-border rounded-xl p-5 space-y-3">
@@ -266,10 +178,10 @@ export function WhatsAppSettings({ tenantId, config }: WhatsAppSettingsProps) {
         </p>
 
         {[
-          { event: 'Pedido recebido',      template: '🎉 Olá! Seu pedido #{numero} foi recebido! Em breve confirmaremos.' },
-          { event: 'Pedido confirmado',     template: '✅ Pedido #{numero} confirmado! Estamos preparando tudo com carinho.' },
-          { event: 'Saiu para entrega',     template: '🛵 Pedido #{numero} saiu para entrega! Chegará em breve.' },
-          { event: 'Entregue',             template: '🎊 Pedido #{numero} entregue! Bom apetite! Avalie: {link}' },
+          { event: 'Pedido recebido',  template: '🎉 Olá! Seu pedido #{numero} foi recebido! Em breve confirmaremos.' },
+          { event: 'Pedido confirmado', template: '✅ Pedido #{numero} confirmado! Estamos preparando tudo com carinho.' },
+          { event: 'Saiu para entrega', template: '🛵 Pedido #{numero} saiu para entrega! Chegará em breve.' },
+          { event: 'Entregue',         template: '🎊 Pedido #{numero} entregue! Bom apetite! Avalie: {link}' },
         ].map(({ event, template }) => (
           <div key={event} className="border border-border rounded-lg p-3">
             <p className="text-xs font-semibold text-muted-foreground mb-1">{event}</p>

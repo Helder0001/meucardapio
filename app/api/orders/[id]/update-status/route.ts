@@ -24,6 +24,8 @@ const STATUS_TIMESTAMPS: Record<string, string> = {
   CANCELLED: 'cancelledAt',
 }
 
+const WAITER_ALLOWED_STATUSES = ['CONFIRMED', 'CANCELLED', 'DELIVERED']
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -46,10 +48,18 @@ export async function PATCH(
 
   const { status, cancelReason } = parsed.data
   const tenantId = session.user.tenantId
+  const role = session.user.role
+
+  if (role === 'WAITER' && !WAITER_ALLOWED_STATUSES.includes(status)) {
+    return NextResponse.json(
+      { error: 'Garçons só podem confirmar, cancelar ou marcar pedidos como entregues.' },
+      { status: 403 }
+    )
+  }
 
   const order = await prisma.order.findFirst({
     where: { id, tenantId },
-    select: { id: true, status: true, orderNumber: true },
+    select: { id: true, status: true, orderNumber: true, waiterId: true },
   })
 
   if (!order) {
@@ -78,6 +88,7 @@ export async function PATCH(
     status,
     ...(timestampField ? { [timestampField]: new Date() } : {}),
     ...(status === 'CANCELLED' && cancelReason ? { cancelReason } : {}),
+    ...(role === 'WAITER' && !order.waiterId ? { waiterId: session.user.id } : {}),
   }
 
   await prisma.$transaction(async (tx) => {
@@ -85,6 +96,25 @@ export async function PATCH(
     await tx.orderStatusHistory.create({
       data: { orderId: id, status, userId: session.user.id, notes: cancelReason },
     })
+
+    // CORREÇÃO: incrementar soldCount dos produtos ao entregar o pedido.
+    // Feito dentro da mesma transaction para garantir consistência.
+    if (status === 'DELIVERED') {
+      const items = await tx.orderItem.findMany({
+        where: { orderId: id },
+        select: { productId: true, quantity: true },
+      })
+      for (const item of items) {
+        if (item.productId) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { soldCount: { increment: item.quantity } },
+          }).catch(() => {
+            // Produto pode ter sido deletado após o pedido — ignora silenciosamente
+          })
+        }
+      }
+    }
   })
 
   await publishOrderEvent(tenantId, {
@@ -101,10 +131,9 @@ export async function PATCH(
     resource: 'orders',
     resourceId: id,
     oldValue: { status: order.status },
-    newValue: { status },
+    newValue: { status, waiterId: updateData.waiterId ?? order.waiterId },
   })
 
-  // Notificação WhatsApp de mudança de status (fire-and-forget)
   const STATUS_TO_EVENT: Record<string, string> = {
     CONFIRMED:        'ORDER_CONFIRMED',
     PREPARING:        'ORDER_PREPARING',

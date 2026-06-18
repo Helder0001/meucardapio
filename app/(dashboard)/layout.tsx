@@ -1,7 +1,15 @@
 // app/(dashboard)/layout.tsx
 //
 // Layout compartilhado por todas as páginas do dashboard.
-// Server Component: verifica auth + permissões de role no servidor.
+// Server Component: verifica autenticação básica.
+//
+// CORREÇÃO: a restrição de rotas por papel (WAITER/DELIVERY_PERSON só podem
+// acessar /dashboard e /dashboard/orders/**) foi movida para middleware.ts,
+// que roda no Edge antes da renderização e tem acesso confiável ao
+// pathname — a abordagem anterior, baseada em headers() dentro do layout,
+// não funcionava de forma confiável sem um middleware definindo esses
+// headers, então garçons conseguiam acessar Relatórios, Configurações,
+// Mesas etc. diretamente pela URL.
 
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth/session'
@@ -9,30 +17,11 @@ import { Sidebar } from '@/components/dashboard/sidebar'
 import { Header } from '@/components/dashboard/header'
 import { InactivityWarning } from '@/components/shared/inactivity-warning'
 
-// Rotas que o WAITER tem acesso. Tudo fora desta lista redireciona para o kanban.
-const WAITER_ALLOWED_PREFIXES = [
-  '/dashboard/orders/kanban',
-]
-
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
 
   if (!session?.user) redirect('/login')
   if (!session.user.tenantId && session.user.role !== 'MASTER_ADMIN') redirect('/login')
-
-  // Garçom só pode acessar o kanban
-  if (session.user.role === 'WAITER') {
-    // Obtemos o pathname via headers (disponível em App Router server components)
-    const { headers } = await import('next/headers')
-    const headersList = await headers()
-    const pathname = headersList.get('x-invoke-path') ??
-                     headersList.get('next-url') ?? ''
-
-    const allowed = WAITER_ALLOWED_PREFIXES.some((p) => pathname.startsWith(p))
-    if (!allowed && pathname && !pathname.startsWith('/dashboard/orders/kanban')) {
-      redirect('/dashboard/orders/kanban')
-    }
-  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">

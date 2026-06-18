@@ -4,7 +4,7 @@ import { auth } from '@/lib/auth/session'
 import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/db/client'
 import { OrderDetail } from '@/components/dashboard/order-detail'
-import Link from 'next/link'
+import { BackButton } from '@/components/shared/back-button'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Detalhe do Pedido' }
@@ -29,6 +29,9 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           addons: { select: { addonName: true, addonPrice: true } },
         },
       },
+      // CORREÇÃO: retorna TODOS os pagamentos do pedido (não apenas o
+      // primeiro). Pedidos com pagamento dividido (ex: PIX + Dinheiro)
+      // agora aparecem por completo no detalhe do pedido.
       payments: {
         orderBy: { createdAt: 'desc' },
         select: {
@@ -77,15 +80,14 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   return (
     <div className="max-w-3xl space-y-5">
       <div className="flex items-center gap-3">
-        {/* Link simples em vez de history.back() — funciona em Server Component */}
-        <Link href="/dashboard/orders" className="text-muted-foreground hover:text-foreground text-sm">
-          ← Voltar
-        </Link>
+        <BackButton />
         <h1 className="text-2xl font-bold text-foreground">
           Pedido #{String(order.orderNumber).padStart(4, '0')}
         </h1>
       </div>
-      <OrderDetail order={serialized} />
+      {/* CORREÇÃO: garçons (WAITER) só podem confirmar, cancelar ou marcar
+          como entregue — demais transições ficam ocultas. */}
+      <OrderDetail order={serialized} userRole={session.user.role} />
     </div>
   )
 }

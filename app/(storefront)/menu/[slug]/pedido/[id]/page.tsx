@@ -66,6 +66,9 @@ export default async function OrderPage({ params }: PageProps) {
     notFound()
   }
 
+  // ✅ Gerar token HMAC no servidor para autorizar o polling de status
+  const statusToken = generateStatusToken(id)
+
   const serialized = {
     ...order,
     total:          Number(order.total),
@@ -87,8 +90,6 @@ export default async function OrderPage({ params }: PageProps) {
       amount: Number(p.amount),
     })),
   }
-
-  const statusToken = generateStatusToken(order.id)
 
   return <OrderTracking order={serialized} statusToken={statusToken} />
 }

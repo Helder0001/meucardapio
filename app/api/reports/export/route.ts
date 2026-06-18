@@ -5,6 +5,8 @@
 // VULN-NEW-01 CORRIGIDO: $queryRaw usa Prisma.sql para parametrizar datas,
 //   eliminando a interpolação direta de strings não confiáveis em SQL.
 
+export const runtime = 'nodejs'
+
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
@@ -19,6 +21,17 @@ const dateParamSchema = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato inválido — use YYYY-MM-DD')
   .nullable()
   .optional()
+
+
+const METHOD_PT: Record<string, string> = {
+  CASH:        'Dinheiro',
+  CREDIT_CARD: 'Cartão de Crédito',
+  DEBIT_CARD:  'Cartão de Débito',
+  PIX:         'PIX',
+  VOUCHER:     'Voucher',
+  CASHBACK:    'Cashback',
+  TRANSFER:    'Transferência',
+}
 
 export async function GET(request: Request) {
   const session = await auth()
@@ -52,6 +65,12 @@ export async function GET(request: Request) {
 
   const tenant = await prisma.tenant.findFirst({ where: { id: tenantId }, select: { name: true } })
   const tenantName = tenant?.name ?? 'Estabelecimento'
+
+  // CORREÇÃO: qualquer erro inesperado durante a geração do relatório agora
+  // retorna uma resposta JSON com detalhes (em dev) em vez de deixar a exceção
+  // "vazar" como HTML de erro — que o frontend interpreta apenas como
+  // "Erro ao exportar" sem nenhuma pista do que aconteceu.
+  try {
 
   // ─────────────────────────────────────────────────────────────────────────
   // XLSX
@@ -95,7 +114,7 @@ export async function GET(request: Request) {
         fmtN(o.deliveryFee),
         fmtN(o.discountAmount),
         fmtN(o.total),
-        o.payments.map((p) => `${p.method}:R$${Number(p.amount).toFixed(2)}`).join(' | '),
+        o.payments.map((p) => `${METHOD_PT[p.method] ?? p.method}: R$${Number(p.amount).toFixed(2)}`).join(' | '),
       ])
     }
 
@@ -116,18 +135,18 @@ export async function GET(request: Request) {
         SELECT
           DATE(created_at AT TIME ZONE 'America/Sao_Paulo')::text as date,
           COALESCE(SUM(total), 0)::float   as revenue,
-          COUNT(*)::int                    as orders,
+          COALESCE(COUNT(*), 0)::float     as orders,
           COALESCE(AVG(total), 0)::float   as avg_ticket
         FROM "Order"
         WHERE tenant_id = ${tenantId}
-          AND payment_status = 'PAID'
+          AND status NOT IN ('CANCELLED', 'REFUNDED')
           ${startFilter}
           ${endFilter}
         GROUP BY DATE(created_at AT TIME ZONE 'America/Sao_Paulo')
         ORDER BY date DESC
       `)
       headers = ['Data','Faturamento (R$)','Pedidos','Ticket Médio (R$)']
-      rows = data.map((d) => [d.date, d.revenue.toFixed(2), String(d.orders), d.avg_ticket.toFixed(2)])
+      rows = data.map((d) => [String(d.date), Number(d.revenue).toFixed(2), String(Number(d.orders)), Number(d.avg_ticket).toFixed(2)])
     }
 
     else if (type === 'products') {
@@ -136,7 +155,7 @@ export async function GET(request: Request) {
       const items = await prisma.orderItem.groupBy({
         by: ['productId', 'productName'],
         where: {
-          order: { tenantId, paymentStatus: 'PAID', ...(hasKeys(dateFilter) ? { createdAt: dateFilter } : {}) },
+          order: { tenantId, status: { notIn: ['CANCELLED', 'REFUNDED'] }, ...(hasKeys(dateFilter) ? { createdAt: dateFilter } : {}) },
         },
         _sum:   { quantity: true, totalPrice: true },
         _count: { id: true },
@@ -153,6 +172,7 @@ export async function GET(request: Request) {
     }
 
     const xlsxBuffer = buildXlsx({ sheetName, headers, rows, tenantName, startDate, endDate })
+    // CORREÇÃO: converter Buffer para Uint8Array para satisfazer o tipo BodyInit
     return new Response(new Uint8Array(xlsxBuffer), {
       headers: {
         'Content-Type':        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -177,7 +197,11 @@ export async function GET(request: Request) {
           payments: { select: { method: true, amount: true } },
         },
       })
-      const totalRevenue = orders.filter(o => o.paymentStatus === 'PAID').reduce((s, o) => s + Number(o.total), 0)
+      // CORREÇÃO: pedidos pagos em dinheiro/cartão ficam paymentStatus=PENDING até
+  // confirmação manual; considerar faturamento = pedidos não cancelados/reembolsados.
+  const totalRevenue = orders
+    .filter(o => !['CANCELLED', 'REFUNDED'].includes(o.status))
+    .reduce((s, o) => s + Number(o.total), 0)
       const html = buildOrdersPdf({ tenantName, orders, totalRevenue, startDate, endDate })
       return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
     }
@@ -197,11 +221,11 @@ export async function GET(request: Request) {
         SELECT
           DATE(created_at AT TIME ZONE 'America/Sao_Paulo')::text as date,
           COALESCE(SUM(total), 0)::float   as revenue,
-          COUNT(*)::int                    as orders,
+          COALESCE(COUNT(*), 0)::float     as orders,
           COALESCE(AVG(total), 0)::float   as avg_ticket
         FROM "Order"
         WHERE tenant_id = ${tenantId}
-          AND payment_status = 'PAID'
+          AND status NOT IN ('CANCELLED', 'REFUNDED')
           ${startFilterPdf}
           ${endFilterPdf}
         GROUP BY DATE(created_at AT TIME ZONE 'America/Sao_Paulo')
@@ -214,7 +238,7 @@ export async function GET(request: Request) {
     if (type === 'products') {
       const items = await prisma.orderItem.groupBy({
         by: ['productId', 'productName'],
-        where: { order: { tenantId, paymentStatus: 'PAID', ...(hasKeys(dateFilter) ? { createdAt: dateFilter } : {}) } },
+        where: { order: { tenantId, status: { notIn: ['CANCELLED', 'REFUNDED'] }, ...(hasKeys(dateFilter) ? { createdAt: dateFilter } : {}) } },
         _sum: { quantity: true, totalPrice: true },
         _count: { id: true },
         orderBy: { _sum: { quantity: 'desc' } },
@@ -226,6 +250,18 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({ error: 'Formato inválido' }, { status: 400 })
+  } catch (err: any) {
+    console.error('[reports/export] Erro ao gerar relatório:', err)
+    return NextResponse.json(
+      {
+        error:
+          process.env.NODE_ENV === 'development'
+            ? `Erro ao gerar relatório: ${err?.message ?? 'erro desconhecido'}`
+            : 'Erro ao gerar relatório. Tente novamente em alguns instantes.',
+      },
+      { status: 500 }
+    )
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -499,7 +535,7 @@ function buildOrdersPdf({ tenantName, orders, totalRevenue, startDate, endDate }
   startDate: string | null; endDate: string | null
 }) {
   const period = periodLabel(startDate, endDate)
-  const paid   = orders.filter((o) => o.paymentStatus === 'PAID').length
+  const paid   = orders.filter((o) => !['CANCELLED', 'REFUNDED'].includes(o.status)).length
   const avg    = paid > 0 ? totalRevenue / paid : 0
 
   const summary = `<div class="summary">
@@ -516,7 +552,7 @@ function buildOrdersPdf({ tenantName, orders, totalRevenue, startDate, endDate }
     <td>${o.type}</td>
     <td>${o.status}</td>
     <td>${o.paymentStatus}</td>
-    <td>${o.payments?.map((p: any) => p.method).join(', ') ?? '—'}</td>
+    <td>${o.payments?.map((p: any) => METHOD_PT[p.method] ?? p.method).join(', ') ?? '—'}</td>
     <td style="text-align:right;font-weight:bold">${formatCurrency(Number(o.total))}</td>
   </tr>`).join('')
 

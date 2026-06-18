@@ -1,66 +1,58 @@
 // app/api/whatsapp/connect/route.ts
-// VULN-02 CORRIGIDO: API Key agora criptografada com AES-256-GCM (não mais base64)
+// Credenciais da Evolution API ficam em variáveis de ambiente (EVOLUTION_API_URL e EVOLUTION_API_KEY)
+// O cliente NÃO envia URL nem API Key — só o tenantId (já vem da sessão)
 
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/client'
-import { encrypt } from '@/lib/security/crypto'
-import { z } from 'zod'
 
-const schema = z.object({
-  evolutionUrl: z.string().url(),
-  apiKey:       z.string().min(1),
-  instanceName: z.string().min(1).max(50).regex(/^[a-zA-Z0-9_-]+$/, 'Nome inválido'),
-})
+const EVOLUTION_URL = process.env.EVOLUTION_API_URL!
+const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY!
 
-export async function POST(req: Request) {
+export async function POST() {
   const session = await auth()
   if (!session?.user?.tenantId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  let body: unknown
-  try {
-    body = await req.json()
-  } catch {
-    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 })
+  if (!EVOLUTION_URL || !EVOLUTION_KEY) {
+    console.error('[whatsapp/connect] EVOLUTION_API_URL ou EVOLUTION_API_KEY não configurados')
+    return NextResponse.json(
+      { error: 'WhatsApp não configurado. Contate o suporte.' },
+      { status: 503 }
+    )
   }
 
-  const parsed = schema.safeParse(body)
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
-  }
-
-  const { evolutionUrl, apiKey, instanceName } = parsed.data
-  const tenantId = session.user.tenantId
+  // Nome da instância é único por tenant
+  const instanceName = `tenant_${session.user.tenantId}`
 
   try {
-    // Tentar criar/conectar instância
-    const createRes = await fetch(`${evolutionUrl}/instance/create`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: apiKey },
+    // Tentar criar instância
+    const createRes = await fetch(`${EVOLUTION_URL}/instance/create`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', apikey: EVOLUTION_KEY },
       body: JSON.stringify({
         instanceName,
         qrcode:      true,
         integration: 'WHATSAPP-BAILEYS',
       }),
-      signal: AbortSignal.timeout(10_000), // timeout 10s
+      signal: AbortSignal.timeout(10_000),
     })
 
     let qrCode:    string | null = null
     let connected: boolean       = false
 
     if (!createRes.ok) {
-      // Instância pode já existir — tentar conectar
+      // Instância já existe — tentar conectar
       const connectRes = await fetch(
-        `${evolutionUrl}/instance/connect/${instanceName}`,
+        `${EVOLUTION_URL}/instance/connect/${instanceName}`,
         {
-          headers: { apikey: apiKey },
+          headers: { apikey: EVOLUTION_KEY },
           signal:  AbortSignal.timeout(10_000),
         }
       )
       if (!connectRes.ok) {
-        return NextResponse.json({ error: 'Não foi possível conectar à instância' }, { status: 400 })
+        return NextResponse.json({ error: 'Não foi possível gerar o QR Code' }, { status: 400 })
       }
       const connectData = await connectRes.json()
       qrCode    = connectData?.base64?.replace('data:image/png;base64,', '') ?? null
@@ -70,33 +62,27 @@ export async function POST(req: Request) {
       qrCode    = createData?.qrcode?.base64?.replace('data:image/png;base64,', '') ?? null
     }
 
-    // VULN-02 CORRIGIDO: criptografar com AES-256-GCM, não base64
-    const encryptedApiKey = encrypt(apiKey)
-
     await prisma.whatsappConfig.upsert({
-      where:  { tenantId },
+      where:  { tenantId: session.user.tenantId },
       update: {
-        evolutionUrl,
-        evolutionApiKey: encryptedApiKey,
         instanceName,
-        status:          connected ? 'CONNECTED' : 'CONNECTING',
+        status: connected ? 'CONNECTED' : 'CONNECTING',
         ...(connected ? { lastConnectedAt: new Date() } : {}),
       },
       create: {
-        tenantId,
-        evolutionUrl,
-        evolutionApiKey: encryptedApiKey,
+        tenantId:       session.user.tenantId,
+        evolutionUrl:   EVOLUTION_URL,        // salvo apenas para referência interna
+        evolutionApiKey: '',                  // não armazena mais a key do cliente
         instanceName,
-        status:          connected ? 'CONNECTED' : 'CONNECTING',
+        status: connected ? 'CONNECTED' : 'CONNECTING',
       },
     })
 
     return NextResponse.json({ qrCode, status: connected ? 'CONNECTED' : 'CONNECTING' })
   } catch (err) {
-    // VULN-12 CORRIGIDO: não expor stacktrace
     console.error('[whatsapp/connect]', err)
     return NextResponse.json(
-      { error: 'Erro ao conectar. Verifique a URL e a API Key.' },
+      { error: 'Erro ao conectar. Tente novamente.' },
       { status: 500 }
     )
   }

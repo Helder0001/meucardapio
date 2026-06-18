@@ -1,7 +1,6 @@
 'use client'
 
-// app/home-client.tsx — Client Component com toda a UI interativa da landing page
-
+// app/HomePageClient.tsx — toda a UI da landing page (com interatividade)
 import { useState } from 'react'
 import Link from 'next/link'
 import {
@@ -27,7 +26,7 @@ const plans = [
   { name: 'Premium', price: 199, tagline: 'Para redes e franquias', highlight: false, features: ['Tudo do Pro', 'Usuários ilimitados', 'Multi-PDV ilimitado', 'IA (OpenAI + Gemini)', 'Cashback para clientes', 'Domínio próprio', 'SLA de suporte'], cta: 'Falar com vendas' },
 ]
 
-export function HomePageClient() {
+export default function HomePageClient() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   return (
@@ -63,6 +62,7 @@ export function HomePageClient() {
             <Link href="/register" className="hidden sm:block px-4 py-2 bg-orange-500 text-white text-sm font-bold rounded-xl hover:bg-orange-600 active:scale-95 transition-all shadow-sm shadow-orange-200 dark:shadow-none">
               Começar grátis
             </Link>
+            {/* Hamburger mobile */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="md:hidden flex flex-col gap-1.5 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -74,6 +74,7 @@ export function HomePageClient() {
             </button>
           </div>
         </div>
+        {/* Mobile dropdown */}
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950 px-5 py-4 space-y-3">
             <a href="#funcionalidades" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-700 dark:text-gray-300 py-2">Funcionalidades</a>
@@ -88,20 +89,24 @@ export function HomePageClient() {
 
       {/* HERO */}
       <section className="relative overflow-hidden bg-gradient-to-b from-orange-50/60 via-white to-white dark:from-gray-900 dark:via-gray-950 dark:to-gray-950 pt-20 pb-28">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-orange-400/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-orange-400/10 rounded-full blur-3xl animate-pulse-slow pointer-events-none" />
         <div className="relative max-w-5xl mx-auto px-5 text-center">
-          <span className="inline-flex items-center gap-1.5 bg-orange-100 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 text-xs font-semibold px-3 py-1.5 rounded-full">
+
+          <span className="animate-fade-up inline-flex items-center gap-1.5 bg-orange-100 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 text-xs font-semibold px-3 py-1.5 rounded-full">
             ✦ Novo: IA para descrição de produtos
           </span>
-          <h1 className="mt-6 text-5xl sm:text-6xl lg:text-7xl font-black text-gray-900 dark:text-white leading-[1.05] tracking-tight">
+
+          <h1 className="animate-fade-up animate-fade-up-delay-1 mt-6 text-5xl sm:text-6xl lg:text-7xl font-black text-gray-900 dark:text-white leading-[1.05] tracking-tight">
             Seu restaurante{' '}
             <span className="text-gradient">vende mais</span>
             <br className="hidden sm:block" /> no automático
           </h1>
-          <p className="mt-6 text-lg sm:text-xl text-gray-500 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">
+
+          <p className="animate-fade-up animate-fade-up-delay-2 mt-6 text-lg sm:text-xl text-gray-500 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">
             Cardápio digital com QR Code, pedidos online, Kanban em tempo real, WhatsApp automático, PIX e muito mais — tudo em uma plataforma só.
           </p>
-          <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
+
+          <div className="animate-fade-up animate-fade-up-delay-3 mt-10 flex flex-col sm:flex-row gap-3 justify-center">
             <Link href="/register" className="group inline-flex items-center justify-center gap-2 px-8 py-4 bg-orange-500 text-white font-bold rounded-2xl hover:bg-orange-600 active:scale-95 transition-all text-base shadow-lg shadow-orange-200 dark:shadow-orange-900/30">
               Criar conta grátis
               <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
@@ -110,10 +115,12 @@ export function HomePageClient() {
               🌐 Ver demo ao vivo
             </Link>
           </div>
-          <p className="mt-4 text-xs text-gray-400">Trial com cartão · Sem contrato · Cancele quando quiser</p>
+          <p className="animate-fade-up animate-fade-up-delay-4 mt-4 text-xs text-gray-400">
+            Trial com cartão · Sem contrato · Cancele quando quiser
+          </p>
 
           {/* Kanban mock */}
-          <div className="mt-16 relative mx-auto max-w-3xl">
+          <div className="animate-fade-up animate-fade-up-delay-4 mt-16 relative mx-auto max-w-3xl">
             <div className="rounded-3xl border border-gray-200/80 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl shadow-gray-900/10 dark:shadow-black/40 overflow-hidden">
               <div className="flex items-center gap-2 px-5 py-3.5 border-b border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/50">
                 <div className="flex gap-1.5">
@@ -150,14 +157,15 @@ export function HomePageClient() {
                 ))}
               </div>
             </div>
-            <div className="absolute -left-4 top-1/3 hidden sm:flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-3 py-2 shadow-lg">
+            {/* floating notifications */}
+            <div className="absolute -left-4 top-1/3 animate-float hidden sm:flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-3 py-2 shadow-lg">
               <div className="w-7 h-7 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center text-sm">✓</div>
               <div>
                 <p className="text-[10px] text-gray-500 leading-none">Pagamento confirmado</p>
                 <p className="text-xs font-bold text-gray-900 dark:text-white">PIX · R$ 54,90</p>
               </div>
             </div>
-            <div className="absolute -right-4 bottom-1/4 hidden sm:flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-3 py-2 shadow-lg">
+            <div className="absolute -right-4 bottom-1/4 animate-float-delay hidden sm:flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-3 py-2 shadow-lg">
               <div className="w-7 h-7 rounded-xl bg-green-100 dark:bg-green-900/40 flex items-center justify-center text-sm">💬</div>
               <div>
                 <p className="text-[10px] text-gray-500 leading-none">WhatsApp enviado</p>
@@ -184,7 +192,7 @@ export function HomePageClient() {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {features.map((f) => (
-            <div key={f.title} className={`group ${f.bg} rounded-3xl p-5 border border-white/60 dark:border-gray-700/60 cursor-default`}>
+            <div key={f.title} className={`group ${f.bg} rounded-3xl p-5 border border-white/60 dark:border-gray-700/60 card-hover cursor-default`}>
               <div className={`inline-flex w-11 h-11 rounded-2xl bg-gradient-to-br ${f.color} items-center justify-center mb-4 shadow-sm text-xl`}>
                 {f.icon}
               </div>
@@ -193,6 +201,8 @@ export function HomePageClient() {
             </div>
           ))}
         </div>
+
+        {/* Highlight cards */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900 to-gray-800 dark:from-gray-800 dark:to-gray-900 p-8 text-white border border-gray-700">
             <div className="absolute top-0 right-0 w-48 h-48 bg-orange-500/10 rounded-full blur-2xl" />
@@ -232,7 +242,7 @@ export function HomePageClient() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             {plans.map((plan) => (
-              <div key={plan.name} className={`relative rounded-3xl p-7 flex flex-col transition-all ${plan.highlight ? 'bg-gradient-to-b from-orange-500 to-orange-600 text-white shadow-2xl shadow-orange-200 dark:shadow-orange-900/40 scale-[1.03]' : 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700'}`}>
+              <div key={plan.name} className={`relative rounded-3xl p-7 flex flex-col transition-all ${plan.highlight ? 'bg-gradient-to-b from-orange-500 to-orange-600 text-white shadow-2xl shadow-orange-200 dark:shadow-orange-900/40 scale-[1.03]' : 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 card-hover'}`}>
                 {plan.highlight && (
                   <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
                     <span className="bg-white text-orange-600 text-[10px] font-black px-3 py-1.5 rounded-full shadow-sm tracking-wide uppercase">★ Mais popular</span>

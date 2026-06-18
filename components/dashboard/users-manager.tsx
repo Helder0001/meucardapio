@@ -6,7 +6,7 @@ import { useState, useTransition } from 'react'
 import { useFormState, useFormStatus } from 'react-dom'
 import { createUserAction, deactivateUserAction } from '@/actions/users/manage-users'
 import { formatDate, formatRelative } from '@/lib/utils/format'
-import { Plus, X, Loader2, UserX, ShieldCheck } from 'lucide-react'
+import { Plus, X, Loader2, UserX, Info } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -21,11 +21,18 @@ interface UserData {
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  TENANT_ADMIN:    '👑 Administrador',
-  MANAGER:         '🎯 Gerente',
-  ATTENDANT:       '💻 Atendente',
-  WAITER:          '🍽️ Garçom',
-  DELIVERY_PERSON: '🛵 Entregador',
+  TENANT_ADMIN:    'Administrador',
+  MANAGER:         'Gerente',
+  ATTENDANT:       'Atendente',
+  WAITER:          'Garçom',
+  DELIVERY_PERSON: 'Entregador',
+}
+
+const ROLE_DESC: Record<string, string> = {
+  MANAGER:         'Acesso completo exceto configurações de conta e usuários',
+  ATTENDANT:       'Gerencia pedidos e kanban',
+  WAITER:          'Confirmar, cancelar e marcar entregue. Sem relatórios ou configurações',
+  DELIVERY_PERSON: 'Visualiza pedidos para entrega',
 }
 
 const ROLE_COLORS: Record<string, string> = {
@@ -55,15 +62,15 @@ interface UsersManagerProps {
 }
 
 export function UsersManager({ users: initial, currentUserId, canAddMore, plan }: UsersManagerProps) {
-  const [users,    setUsers]    = useState(initial)
-  const [showForm, setShowForm] = useState(false)
-  const [isPending, start]     = useTransition()
-  const [formState, formAction] = useFormState(createUserAction, {})
+  const [users,     setUsers]     = useState(initial)
+  const [showForm,  setShowForm]  = useState(false)
+  const [isPending, start]        = useTransition()
+  const [formState, formAction]   = useFormState(createUserAction, {})
+  const [roleSelected, setRoleSelected] = useState<string>('WAITER')
 
-  // Fechar formulário e recarregar após criar
   if (formState.success && showForm) {
     setShowForm(false)
-    toast.success('Usuário criado! Um email será enviado com as instruções de acesso.')
+    toast.success('Usuário criado! Compartilhe a senha com ele para o primeiro acesso.')
     window.location.reload()
   }
 
@@ -90,6 +97,22 @@ export function UsersManager({ users: initial, currentUserId, canAddMore, plan }
           </p>
         </div>
       )}
+
+      {/* Info permissões garçom */}
+      <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex gap-3">
+        <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+        <div className="text-sm text-blue-700 dark:text-blue-300">
+          <p className="font-semibold">Permissões por função</p>
+          <ul className="mt-1 text-xs space-y-0.5">
+            {Object.entries(ROLE_DESC).map(([role, desc]) => (
+              <li key={role}><span className="font-medium">{ROLE_LABELS[role]}:</span> {desc}</li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-xs opacity-80">
+            Todas as vendas realizadas por garçons ficam registradas nos relatórios com o nome do responsável.
+          </p>
+        </div>
+      </div>
 
       <div className="flex justify-end">
         <button
@@ -132,13 +155,17 @@ export function UsersManager({ users: initial, currentUserId, canAddMore, plan }
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Função *</label>
-              <select name="role" required
+              <select name="role" required value={roleSelected}
+                onChange={(e) => setRoleSelected(e.target.value)}
                 className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
                 <option value="MANAGER">Gerente</option>
                 <option value="ATTENDANT">Atendente</option>
                 <option value="WAITER">Garçom</option>
                 <option value="DELIVERY_PERSON">Entregador</option>
               </select>
+              {ROLE_DESC[roleSelected] && (
+                <p className="mt-1 text-xs text-muted-foreground">{ROLE_DESC[roleSelected]}</p>
+              )}
             </div>
 
             <div>
@@ -171,7 +198,7 @@ export function UsersManager({ users: initial, currentUserId, canAddMore, plan }
           </thead>
           <tbody>
             {users.map((user) => (
-              <tr key={user.id} className="border-b border-border last:border-0">
+              <tr key={user.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -222,6 +249,11 @@ export function UsersManager({ users: initial, currentUserId, canAddMore, plan }
             ))}
           </tbody>
         </table>
+        {users.length === 0 && (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            Nenhum usuário cadastrado ainda.
+          </div>
+        )}
       </div>
     </div>
   )

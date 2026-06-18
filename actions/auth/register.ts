@@ -105,7 +105,7 @@ export async function registerAction(
             mercadoPagoSubId: mpResult.subscriptionId,
             currentPeriodStart: new Date(),
             currentPeriodEnd: trialEndsAt,
-            amount: 0,  // ← adicionar essa linha
+            amount: 49.00,   // <-- CAMPO OBRIGATÓRIO ADICIONADO
           },
         })
       }
@@ -155,7 +155,7 @@ async function createMpSubscription(params: {
         'X-Idempotency-Key': `register-${params.email}-${Date.now()}`,
       },
       body: JSON.stringify({
-        reason: `FoodSaaS — Plano Starter — ${params.tenantName}`,
+        reason: `Meu Cardápio — Plano Starter — ${params.tenantName}`,
         payer_email: params.email,
         card_token_id: params.cardToken,
         auto_recurring: {
@@ -163,7 +163,6 @@ async function createMpSubscription(params: {
           frequency_type: 'months',
           transaction_amount: 49.00,
           currency_id: 'BRL',
-          // 7 dias de trial — primeiro ciclo começa após o trial
           free_trial: { frequency: 7, frequency_type: 'days' },
         },
         back_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
@@ -175,15 +174,14 @@ async function createMpSubscription(params: {
 
     if (!res.ok) {
       const msg = data?.message ?? data?.error ?? 'Cartão recusado'
-      console.error('[register/mp] preapproval error:', data)
-      // Mensagens amigáveis para erros comuns
+      console.error('[register/mp] preapproval error:', JSON.stringify(data))
       if (msg.includes('cc_rejected') || msg.includes('rejected')) {
         return { error: 'Cartão recusado. Verifique os dados ou use outro cartão.' }
       }
       if (msg.includes('invalid') || msg.includes('Invalid')) {
         return { error: 'Dados do cartão inválidos. Verifique e tente novamente.' }
       }
-      return { error: 'Não foi possível validar o cartão. Tente novamente.' }
+      return { error: msg }
     }
 
     return { subscriptionId: String(data.id) }

@@ -65,18 +65,24 @@ const createOrderSchema = z.object({
   deliveryAddress: z.string().max(300).optional(),
   notes: z.string().max(500).optional(),
 })
+  // CORREÇÃO: endereço de entrega agora é obrigatório no servidor para
+  // pedidos do tipo DELIVERY — validação no cart-drawer (cliente) pode ser
+  // contornada, então validamos novamente aqui.
+  .refine(
+    (data) => data.type !== 'DELIVERY' || (data.deliveryAddress && data.deliveryAddress.trim().length >= 5),
+    { message: 'Endereço de entrega é obrigatório para pedidos com entrega', path: ['deliveryAddress'] }
+  )
 
 type CreateOrderInput = z.infer<typeof createOrderSchema>
 
 interface CreateOrderResult {
   orderId?: string
-  statusToken?: string   // <- linha adicionada
+  statusToken?: string          // ← ADICIONADO: token para polling de status
   paymentData?: {
     method: string
     pixQrCode?: string
     pixQrCodeBase64?: string
     total: number
-    // Múltiplos pagamentos: resumo de cada um
     payments?: Array<{ method: string; amount: number }>
   }
   error?: string
@@ -353,8 +359,7 @@ export async function createOrderAction(
 
   return {
     orderId: order.id,
-    // Token para polling de status sem autenticação (válido para este pedido)
-    statusToken,
+    statusToken,                              // ← AGORA VÁLIDO
     paymentData: {
       method: paymentsList[0].method,
       total: calculation.total,
@@ -396,7 +401,7 @@ async function createPixPayment(params: {
       transaction_amount: params.amount,
       payment_method_id: 'pix',
       payer: {
-        email: 'cliente@foodsaas.com',
+        email: 'cliente@meucardapio.com',
         identification: { type: 'CPF', number: '00000000000' },
       },
       description: `Pedido #${params.orderId.slice(-8).toUpperCase()}`,
@@ -423,7 +428,7 @@ async function createPixPayment(params: {
       mercadoPagoStatus: mpData.status,
       pixQrCode: mpData.point_of_interaction?.transaction_data?.qr_code,
       pixQrCodeBase64: mpData.point_of_interaction?.transaction_data?.qr_code_base64,
-      pixExpiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      pixExpiresAt: mpData.date_of_expiration ? new Date(mpData.date_of_expiration) : new Date(Date.now() + 30 * 60 * 1000),
     },
   })
 

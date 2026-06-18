@@ -1,17 +1,35 @@
 // app/api/webhooks/mercadopago/route.ts
-// VERSÃO SEGURA — VULN-03 corrigido
+// VERSÃO SEGURA — VULN-03 corrigido + ajustes de robustez
 //
 // CORREÇÃO VULN-03: Removido completamente o bypass de validação em desenvolvimento.
 // O webhook SEMPRE valida a assinatura, independente do NODE_ENV.
 // Para desenvolvimento: usar ngrok para receber webhooks reais do MP sandbox.
+//
+// AJUSTES NESTA VERSÃO:
+// 1. Race condition: update atômico e condicional (updateMany) para evitar
+//    cashback/pontos de fidelidade duplicados em webhooks concorrentes.
+// 2. Validação de timestamp (ts) na assinatura — proteção contra replay attack.
+// 3. Validação de formato do hash (v1) antes do timingSafeEqual.
+// 4. Efeitos colaterais não-críticos (publishOrderEvent, auditLog) movidos
+//    para after() — rodam depois da resposta, sem arriscar timeout na Vercel.
+//    Cashback e pontos continuam DENTRO da transação (são críticos, precisam
+//    ser atômicos com a confirmação do pagamento).
 
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { prisma } from '@/lib/db/client'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
+import { applyCashback, applyLoyaltyPoints } from '@/lib/loyalty/apply-rewards'
 import crypto from 'crypto'
 
 export const runtime = 'nodejs'
+
+// Janela de tolerância para o timestamp da assinatura (segundos).
+// Webhooks com 'ts' fora dessa janela são rejeitados (proteção contra replay).
+const SIGNATURE_MAX_AGE_SECONDS = 300
+
+// Formato esperado do HMAC SHA-256 em hex: 64 caracteres hexadecimais.
+const HEX_SHA256_REGEX = /^[a-f0-9]{64}$/i
 
 export async function POST(request: Request) {
   try {
@@ -62,6 +80,10 @@ export async function POST(request: Request) {
     // Verificar status atual na API do MP (não confiar apenas no payload)
     const mpPayment = await fetchPaymentFromMP(mercadoPagoId, payment.order.tenantId)
     if (!mpPayment) {
+      // Falha ao consultar a API do MP. Mantemos o 500 de propósito: queremos
+      // que o MP reenvie o webhook depois. Responder 200 aqui faria o
+      // pagamento ficar "perdido" para sempre, sem nenhum retry.
+      console.error('[webhook/mp] Não foi possível verificar pagamento na API do MP', { mercadoPagoId })
       return NextResponse.json({ error: 'Could not verify payment' }, { status: 500 })
     }
 
@@ -69,9 +91,13 @@ export async function POST(request: Request) {
 
     // Processar apenas transições válidas (idempotência)
     if (mpStatus === 'approved' && payment.status !== 'PAID') {
-      await prisma.$transaction(async (tx) => {
-        await tx.payment.update({
-          where: { id: payment.id },
+      const processed = await prisma.$transaction(async (tx) => {
+        // Update atômico e condicional: garante que, mesmo se dois webhooks
+        // chegarem em paralelo (ou o MP reenviar), só um consiga transicionar
+        // o pagamento para PAID. O outro recebe count === 0 e sai sem
+        // duplicar cashback/pontos de fidelidade.
+        const updated = await tx.payment.updateMany({
+          where: { id: payment.id, status: { not: 'PAID' } },
           data: {
             status: 'PAID',
             mercadoPagoStatus: mpStatus,
@@ -79,6 +105,11 @@ export async function POST(request: Request) {
             webhookData: mpPayment as any,
           },
         })
+
+        if (updated.count === 0) {
+          // Outro webhook concorrente já processou este pagamento.
+          return false
+        }
 
         await tx.order.update({
           where: { id: payment.order.id },
@@ -97,23 +128,38 @@ export async function POST(request: Request) {
           await applyCashback(tx, payment.order.tenantId, payment.order.customerId, payment.order.id, Number(payment.order.total))
           await applyLoyaltyPoints(tx, payment.order.tenantId, payment.order.customerId, payment.order.id, Number(payment.order.total))
         }
+
+        return true
       })
 
-      await publishOrderEvent(payment.order.tenantId, {
-        type: 'ORDER_UPDATED',
-        orderId: payment.order.id,
-        orderNumber: payment.order.orderNumber,
-        status: 'CONFIRMED',
-        paymentStatus: 'PAID',
-      })
+      if (processed) {
+        // Efeitos colaterais não-críticos: não precisam ser atômicos com o
+        // pagamento, então rodam depois da resposta ser enviada ao MP — evita
+        // arriscar estourar o tempo de execução da function na Vercel.
+        after(async () => {
+          try {
+            await publishOrderEvent(payment.order.tenantId, {
+              type: 'ORDER_UPDATED',
+              orderId: payment.order.id,
+              orderNumber: payment.order.orderNumber,
+              status: 'CONFIRMED',
+              paymentStatus: 'PAID',
+            })
 
-      await auditLog({
-        tenantId:   payment.order.tenantId,
-        action:     AuditActions.PAYMENT_RECEIVED,
-        resource:   'payments',
-        resourceId: payment.id,
-        newValue:   { method: 'PIX', amount: Number(payment.amount), status: 'PAID' },
-      })
+            await auditLog({
+              tenantId:   payment.order.tenantId,
+              action:     AuditActions.PAYMENT_RECEIVED,
+              resource:   'payments',
+              resourceId: payment.id,
+              newValue:   { method: 'PIX', amount: Number(payment.amount), status: 'PAID' },
+            })
+          } catch (err) {
+            // Já respondemos ao MP, então só logamos — não há mais como
+            // retornar erro pra ninguém aqui.
+            console.error('[webhook/mp] Erro em efeito colateral pós-resposta:', err)
+          }
+        })
+      }
     }
 
     if (mpStatus === 'rejected' && payment.status === 'PENDING') {
@@ -175,6 +221,22 @@ function validateSignature(body: string, signature: string | null, requestId: st
     const { ts, v1 } = parts
     if (!ts || !v1) return false
 
+    // Proteção contra replay attack: rejeita assinaturas antigas demais.
+    // Um atacante que capture uma requisição válida não pode reenviá-la
+    // depois da janela de tolerância.
+    const tsNumber = Number(ts)
+    if (!Number.isFinite(tsNumber)) return false
+    const ageSeconds = Math.abs(Math.floor(Date.now() / 1000) - tsNumber)
+    if (ageSeconds > SIGNATURE_MAX_AGE_SECONDS) {
+      console.warn('[webhook/mp] Assinatura rejeitada: timestamp fora da janela', { ageSeconds })
+      return false
+    }
+
+    // Valida o formato do hash ANTES de converter para Buffer — evita
+    // comparar buffers de tamanhos diferentes (hex inválido/truncado) no
+    // timingSafeEqual.
+    if (!HEX_SHA256_REGEX.test(v1)) return false
+
     let parsedBody: any
     try { parsedBody = JSON.parse(body) } catch { return false }
 
@@ -186,7 +248,6 @@ function validateSignature(body: string, signature: string | null, requestId: st
     const computed = hmac.digest('hex')
 
     // Comparação timing-safe para prevenir timing attacks
-    if (computed.length !== v1.length) return false
     return crypto.timingSafeEqual(
       Buffer.from(computed, 'hex'),
       Buffer.from(v1,       'hex')
@@ -216,37 +277,16 @@ async function fetchPaymentFromMP(mercadoPagoId: string, tenantId: string) {
   }
 }
 
-async function applyCashback(tx: any, tenantId: string, customerId: string, orderId: string, total: number) {
-  const config = await tx.cashbackConfig.findFirst({ where: { tenantId, isActive: true } })
-  if (!config) return
-  const amount  = Math.min((total * Number(config.percentage)) / 100, config.maxCashback ? Number(config.maxCashback) : Infinity)
-  if (amount <= 0) return
-  const customer   = await tx.customer.findFirst({ where: { id: customerId } })
-  const newBalance = Number(customer.cashbackBalance) + amount
-  await tx.customer.update({ where: { id: customerId }, data: { cashbackBalance: newBalance } })
-  await tx.cashbackTransaction.create({
-    data: { tenantId, customerId, orderId, type: 'EARN', amount, balance: newBalance, expiresAt: new Date(Date.now() + config.validityDays * 86400000) },
-  })
-}
-
-async function applyLoyaltyPoints(tx: any, tenantId: string, customerId: string, orderId: string, total: number) {
-  const config = await tx.loyaltyConfig.findFirst({ where: { tenantId, isActive: true } })
-  if (!config) return
-  const points = Math.floor(total * Number(config.pointsPerReal))
-  if (points <= 0) return
-  const customer   = await tx.customer.findFirst({ where: { id: customerId } })
-  const newBalance = customer.loyaltyPoints + points
-  await tx.customer.update({ where: { id: customerId }, data: { loyaltyPoints: newBalance } })
-  await tx.loyaltyTransaction.create({
-    data: { tenantId, customerId, orderId, type: 'EARN', points, balance: newBalance },
-  })
-}
+// applyCashback e applyLoyaltyPoints agora vêm de lib/loyalty/apply-rewards
+// (compartilhado com a rota de confirmação manual de pagamento /api/orders/[id]/mark-paid)
 
 // ── Handler para webhooks de assinatura (preapproval) ────────────────────────
-// Esse bloco é adicionado ao final do arquivo existente para tratar renovações
-// e cancelamentos de planos.
-//
-// NOTA: Integrar ao POST handler existente adicionando o case 'subscription_preapproval'
+// Usa SEMPRE as credenciais da PLATAFORMA (MERCADOPAGO_ACCESS_TOKEN), nunca as
+// credenciais do estabelecimento. Isso está correto por design: a assinatura
+// (preapproval) é a cobrança do plano do Meu Cardápio para o tenant — quem
+// RECEBE esse dinheiro é a plataforma, não o restaurante. As credenciais do
+// estabelecimento (tenant.settings.mercadoPagoAccessToken) servem só para os
+// pagamentos PIX dos clientes finais do restaurante. Não trocar isso.
 
 async function handleSubscriptionWebhook(event: any) {
   const subscriptionId = String(event.data?.id)

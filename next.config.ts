@@ -1,22 +1,31 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  // typedRoutes agora é uma opção de nível raiz (não mais dentro de experimental)
   typedRoutes: false,
 
   images: {
     remotePatterns: [
+      // Domínio do Supabase Storage (bucket público)
       {
         protocol: 'https',
-        hostname: '**.r2.cloudflarestorage.com',
+        hostname: 'fydorsylrlpqrylrxmfk.supabase.co',
+        pathname: '/storage/v1/object/public/**',
+      },
+      // Para desenvolvimento local (se você ainda usar MinIO ou outro)
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '9000',
       },
       {
-        protocol: 'https',
-        hostname: '**.amazonaws.com',
+        protocol: 'http',
+        hostname: '127.0.0.1',
+        port: '9000',
       },
     ],
     formats: ['image/avif', 'image/webp'],
   },
+
   poweredByHeader: false,
 }
 

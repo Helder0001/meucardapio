@@ -1,8 +1,11 @@
 // lib/messaging/evolution.ts
 
 import { prisma } from '@/lib/db/client'
-import { decrypt } from '@/lib/security/crypto'
 import { formatCurrency } from '@/lib/utils/format'
+
+// ✅ Credenciais vêm das env vars — não do banco
+const EVOLUTION_URL = process.env.EVOLUTION_API_URL!
+const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY!
 
 interface SendMessageParams {
   tenantId: string
@@ -11,17 +14,22 @@ interface SendMessageParams {
 }
 
 async function getConfig(tenantId: string) {
+  if (!EVOLUTION_URL || !EVOLUTION_KEY) {
+    console.error('[evolution] EVOLUTION_API_URL ou EVOLUTION_API_KEY não configurados')
+    return null
+  }
+
+  // Só verifica se o tenant tem WhatsApp conectado no banco
   const config = await prisma.whatsappConfig.findFirst({
-    where: { tenantId, status: 'CONNECTED' },
+    where:  { tenantId, status: 'CONNECTED' },
+    select: { instanceName: true },
   })
   if (!config) return null
 
-  try {
-    const apiKey = decrypt(config.evolutionApiKey)
-    return { url: config.evolutionUrl, apiKey, instance: config.instanceName }
-  } catch (err) {
-    console.error('[evolution] Erro ao descriptografar API Key:', err)
-    return null
+  return {
+    url:      EVOLUTION_URL,
+    apiKey:   EVOLUTION_KEY,
+    instance: config.instanceName,
   }
 }
 
@@ -71,15 +79,14 @@ async function buildOrderReceivedMessage(orderId: string): Promise<string | null
   const order = await prisma.order.findFirst({
     where: { id: orderId },
     select: {
-      orderNumber:   true,
-      type:          true,
-      paymentMethod: true,
-      total:         true,
-      subtotal:      true,
-      deliveryFee:   true,
-      discountAmount:true,
-      deliveryBairro:true,
-      notes:         true,
+      orderNumber:    true,
+      type:           true,
+      total:          true,
+      subtotal:       true,
+      deliveryFee:    true,
+      discountAmount: true,
+      deliveryBairro: true,
+      notes:          true,
       tenant: { select: { name: true, slug: true } },
       table:  { select: { number: true, sector: true } },
       items: {
@@ -90,6 +97,9 @@ async function buildOrderReceivedMessage(orderId: string): Promise<string | null
           notes:       true,
           addons: { select: { addonName: true } },
         },
+      },
+      payments: {
+        select: { method: true },
       },
     },
   })
@@ -105,12 +115,21 @@ async function buildOrderReceivedMessage(orderId: string): Promise<string | null
     order.type === 'PICKUP'   ? '🏃 Retirada no local' :
     '🖥 PDV / Balcão'
 
-  // Forma de pagamento
-  const paymentLabel =
-    order.paymentMethod === 'PIX'       ? '⚡ PIX' :
-    order.paymentMethod === 'CASH'      ? '💵 Dinheiro' :
-    order.paymentMethod === 'CARD' || order.paymentMethod === 'CREDIT_CARD' ? '💳 Cartão' :
-    order.paymentMethod ?? 'Não informado'
+  // Forma de pagamento baseada nos registros de pagamento
+  const paymentMethods = order.payments.map(p => p.method)
+  const paymentLabel = paymentMethods.length
+    ? paymentMethods.map(method => {
+        switch (method) {
+          case 'PIX':         return '⚡ PIX'
+          case 'CREDIT_CARD': return '💳 Cartão de Crédito'
+          case 'DEBIT_CARD':  return '💳 Cartão de Débito'
+          case 'CASH':        return '💵 Dinheiro'
+          case 'VOUCHER':     return '🎟️ Voucher'
+          case 'CASHBACK':    return '💰 Cashback'
+          default:            return method
+        }
+      }).join(' + ')
+    : 'Não informado'
 
   // Linha de itens
   const itemLines = order.items.map((item) => {
@@ -123,10 +142,10 @@ async function buildOrderReceivedMessage(orderId: string): Promise<string | null
   }).join('\n')
 
   // Totais
-  const subtotal      = Number(order.subtotal)
-  const deliveryFee   = Number(order.deliveryFee)
-  const discountAmt   = Number(order.discountAmount)
-  const total         = Number(order.total)
+  const subtotal    = Number(order.subtotal)
+  const deliveryFee = Number(order.deliveryFee)
+  const discountAmt = Number(order.discountAmount)
+  const total       = Number(order.total)
 
   let totalsSection = `  Subtotal: ${formatCurrency(subtotal)}`
   if (deliveryFee > 0) totalsSection += `\n  Taxa de entrega: ${formatCurrency(deliveryFee)}`

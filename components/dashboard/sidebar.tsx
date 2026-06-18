@@ -3,11 +3,12 @@
 // components/dashboard/sidebar.tsx
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Users, Table2,
   Truck, BarChart3, Settings, Tag, Star, MessageSquare, Printer,
-  ChevronLeft, ChevronRight, Store,
+  ChevronLeft, ChevronRight, Store, QrCode,
 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -22,6 +23,13 @@ interface NavItem {
   allowedRoles?: string[]
 }
 
+// CORREÇÃO:
+// - WhatsApp apontava para /dashboard/whatsapp (rota inexistente) → corrigido
+//   para /dashboard/settings/whatsapp, que é a página real. Era a causa do
+//   erro "Página não encontrada" ao clicar em WhatsApp.
+// - Multi-PDV apontava para /dashboard/pdv (página não existia) → página
+//   criada. Exigência de plano reduzida de PREMIUM para PRO, já que o plano
+//   Premium foi removido da oferta.
 const navItems: NavItem[] = [
   { label: 'Dashboard',    href: '/dashboard',                    icon: LayoutDashboard },
   { label: 'Pedidos',      href: '/dashboard/orders',             icon: ShoppingBag,
@@ -43,15 +51,17 @@ const navItems: NavItem[] = [
     allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
   { label: 'Fidelidade',   href: '/dashboard/loyalty',            icon: Star,        minPlan: 'PRO',
     allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
-  { label: 'WhatsApp',     href: '/dashboard/whatsapp',           icon: MessageSquare, minPlan: 'PRO',
+  { label: 'WhatsApp',     href: '/dashboard/settings/whatsapp',  icon: MessageSquare, minPlan: 'PRO',
     allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
-  { label: 'Multi-PDV',    href: '/dashboard/pdv',                icon: Store,       minPlan: 'PREMIUM',
+  { label: 'Multi-PDV',    href: '/dashboard/pdv',                icon: Store,       minPlan: 'PRO',
     allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
   { label: 'Avaliações',   href: '/dashboard/reviews',            icon: Star,
     allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
   { label: 'Relatórios',   href: '/dashboard/reports',            icon: BarChart3,
     allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
   { label: 'Impressoras',  href: '/dashboard/printers',           icon: Printer,
+    allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
+  { label: 'Pagamentos',    href: '/dashboard/settings/payments',  icon: QrCode,
     allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
   { label: 'Configurações',href: '/dashboard/settings',           icon: Settings,
     allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
@@ -86,12 +96,24 @@ export function Sidebar({ userRole, tenantSlug, plan }: SidebarProps) {
       'flex flex-col border-r border-border bg-card transition-all duration-300 ease-in-out',
       collapsed ? 'w-16' : 'w-60'
     )}>
-      {/* Logo */}
+      {/* Logo — CORREÇÃO: marca "Meu Cardápio" + logo enviada pelo cliente */}
       <div className={cn('flex items-center h-16 px-4 border-b border-border', collapsed ? 'justify-center' : 'gap-3')}>
-        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-          <span className="text-primary-foreground font-bold text-sm">F</span>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden bg-primary">
+          <Image
+            src="/logo-icon.png"
+            alt="Meu Cardápio"
+            width={32}
+            height={32}
+            className="object-cover w-full h-full"
+            onError={(e) => {
+              const el = e.currentTarget as HTMLImageElement
+              el.style.display = 'none'
+              el.nextElementSibling?.classList.remove('hidden')
+            }}
+          />
+          <span className="hidden text-primary-foreground font-bold text-sm">M</span>
         </div>
-        {!collapsed && <span className="font-semibold text-foreground">FoodSaaS</span>}
+        {!collapsed && <span className="font-semibold text-foreground">Meu Cardápio</span>}
       </div>
 
       {/* Navegação */}

@@ -3,7 +3,7 @@
 // Hook que conecta ao SSE de notificações e dispara:
 //   - Som de alerta quando chega pedido novo
 //   - Notificação Push via Notification API (se o usuário permitiu)
-//   - Badge no título da aba (ex: "(3) FoodSaaS")
+//   - Badge no título da aba (ex: "(3) Meu Cardápio")
 //
 // Uso: colocar no layout do dashboard — conecta uma vez e persiste.
 
@@ -75,8 +75,8 @@ export function useDashboardNotifications({ onNewOrder, soundEnabled = true }: O
     pendingRef.current = Math.max(0, pendingRef.current + delta)
     const count = pendingRef.current
     document.title = count > 0
-      ? `(${count}) FoodSaaS — Dashboard`
-      : 'FoodSaaS — Dashboard'
+      ? `(${count}) Meu Cardápio — Dashboard`
+      : 'Meu Cardápio — Dashboard'
   }, [])
 
   useEffect(() => {
@@ -134,7 +134,7 @@ export function useDashboardNotifications({ onNewOrder, soundEnabled = true }: O
   return {
     clearBadge: () => {
       pendingRef.current = 0
-      document.title = 'FoodSaaS — Dashboard'
+      document.title = 'Meu Cardápio — Dashboard'
     },
   }
 }

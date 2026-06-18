@@ -3,9 +3,10 @@
 // components/dashboard/kanban/kanban-card.tsx
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { formatCurrency, formatRelative, formatOrderNumber } from '@/lib/utils/format'
 import { cn } from '@/lib/utils'
-import { ChevronDown, ChevronUp, User, MapPin, Table2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, User, MapPin, Table2, ExternalLink } from 'lucide-react'
 import type { KanbanOrder } from './kanban-board'
 
 interface KanbanCardProps {
@@ -129,6 +130,19 @@ export function KanbanCard({ order, isDragging, onDragStart }: KanbanCardProps) 
               📝 {order.notes}
             </p>
           )}
+
+          {/* CORREÇÃO: link para o detalhe do pedido — é por aqui que garçons
+              confirmam, cancelam ou marcam como entregue (ações restritas
+              por papel na própria página de detalhe). */}
+          <Link
+            href={`/dashboard/orders/${order.id}`}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center justify-center gap-1.5 mt-2 py-1.5 text-[11px] font-medium text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors"
+          >
+            <ExternalLink className="h-3 w-3" />
+            Abrir pedido
+          </Link>
         </div>
       )}
     </div>

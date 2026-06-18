@@ -29,7 +29,8 @@ export function KanbanNewOrderButton({ tenantId, categories }: Props) {
   const [items, setItems] = useState<OrderItem[]>([])
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerName, setCustomerName] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState<'PIX' | 'CASH' | 'CARD'>('PIX')
+  // CORREÇÃO: separar cartão de crédito e débito (antes era um único "CARD" genérico)
+  const [paymentMethod, setPaymentMethod] = useState<'PIX' | 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD'>('PIX')
   const [notes, setNotes] = useState('')
   const [isPending, start] = useTransition()
   const router = useRouter()
@@ -157,16 +158,21 @@ export function KanbanNewOrderButton({ tenantId, categories }: Props) {
                 </div>
               </div>
 
-              {/* Pagamento */}
+              {/* Pagamento — CORREÇÃO: crédito e débito separados */}
               <div>
                 <label className="block text-xs font-medium text-foreground mb-2">Forma de pagamento</label>
-                <div className="flex gap-2">
-                  {(['PIX', 'CASH', 'CARD'] as const).map((m) => (
-                    <button key={m} onClick={() => setPaymentMethod(m)}
-                      className={`flex-1 py-2 rounded-lg text-xs font-semibold border-2 transition-all ${
-                        paymentMethod === m ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-foreground hover:border-primary/50'
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { value: 'PIX',         label: '⚡ PIX' },
+                    { value: 'CASH',        label: '💵 Dinheiro' },
+                    { value: 'CREDIT_CARD', label: '💳 Crédito' },
+                    { value: 'DEBIT_CARD',  label: '💳 Débito' },
+                  ] as const).map((m) => (
+                    <button key={m.value} onClick={() => setPaymentMethod(m.value)}
+                      className={`py-2 rounded-lg text-xs font-semibold border-2 transition-all ${
+                        paymentMethod === m.value ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-foreground hover:border-primary/50'
                       }`}>
-                      {m === 'PIX' ? '⚡ PIX' : m === 'CASH' ? '💵 Dinheiro' : '💳 Cartão'}
+                      {m.label}
                     </button>
                   ))}
                 </div>

@@ -44,12 +44,17 @@ export function RegisterForm() {
     setCardError('')
     setTokenizing(true)
     try {
+      console.log('[register] iniciando tokenização...')
       const mp = (window as any).MercadoPago
-      if (!mp) throw new Error('SDK não carregado')
+      if (!mp) throw new Error('SDK do Mercado Pago não carregou. Recarregue a página.')
 
-      const mpInstance = new mp(process.env.NEXT_PUBLIC_MP_PUBLIC_KEY)
+      const publicKey = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY
+      console.log('[register] MP public key presente:', !!publicKey)
+
+      const mpInstance = new mp(publicKey)
       const [expMonth, expYear] = cardExpiry.split('/')
 
+      console.log('[register] chamando createCardToken...')
       const result = await mpInstance.createCardToken({
         cardNumber: cardNumber.replace(/\s/g, ''),
         cardholderName: cardName.trim(),
@@ -58,11 +63,14 @@ export function RegisterForm() {
         securityCode: cardCvv,
       })
 
+      console.log('[register] resultado MP:', JSON.stringify(result))
+
       if (result.error) throw new Error(result.error.message ?? 'Cartão inválido')
 
       setCardToken(result.id)
       return result.id
     } catch (err: any) {
+      console.error('[register] erro tokenização:', err)
       setCardError(err.message ?? 'Cartão inválido. Verifique os dados.')
       return null
     } finally {
@@ -72,12 +80,17 @@ export function RegisterForm() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    console.log('[register] form submetido')
 
-    // Tokenize card before submitting
+    // IMPORTANTE: capturar FormData ANTES do await, pois após o await
+    // o e.currentTarget perde a referência ao HTMLFormElement
+    const fd = new FormData(e.currentTarget)
+
     const token = await tokenizeCard()
+    console.log('[register] token obtido:', !!token)
     if (!token) return
 
-    const fd = new FormData(e.currentTarget)
+    console.log('[register] chamando formAction...')
     fd.set('cardToken', token)
     formAction(fd)
   }

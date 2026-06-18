@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth/session'
 import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/db/client'
 import { ProductEditForm } from '@/components/dashboard/product-edit-form'
+import { BackButton } from '@/components/shared/back-button'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Editar Produto' }
@@ -51,9 +52,8 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
   return (
     <div className="max-w-2xl space-y-5">
       <div className="flex items-center gap-3">
-        <button onClick={() => history.back()} className="text-muted-foreground hover:text-foreground text-sm">
-          ← Voltar
-        </button>
+        {/* CORREÇÃO: BackButton é Client Component — não pode ter onClick num Server Component */}
+        <BackButton />
         <h1 className="text-2xl font-bold text-foreground">Editar produto</h1>
       </div>
       <ProductEditForm

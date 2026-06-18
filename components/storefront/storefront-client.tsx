@@ -2,6 +2,7 @@
 // components/storefront/storefront-client.tsx — com todas as correções
 
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { useTheme } from 'next-themes'
 import { useCartStore } from '@/lib/store/cart'
 import { ProductCard } from './product-card'
 import { CartDrawer } from './cart-drawer'
@@ -12,7 +13,7 @@ import {
   Search, X, ShoppingBag, MapPin, Clock, Star,
   ChevronDown, MessageCircle, Flame, Sparkles,
   Info, Instagram, Home as HomeIcon, Clock3, CreditCard,
-  ChevronRight, ArrowLeft, User, LogOut, Settings,
+  ChevronRight, ArrowLeft, User, LogOut, Settings, Moon, Sun,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils/format'
 import Image from 'next/image'
@@ -359,6 +360,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
   const { setTenant, setTable, totalItems, subtotal, customerPhone, customerName } = useCartStore()
 
   const color = tenant.primaryColor ?? '#f97316'
+  const { theme, setTheme } = useTheme()
   const settings = tenant.settings as any ?? {}
   const coverImage: string | null = settings?.coverImage ?? null
   const bannerText: string | null = settings?.tagline ?? null
@@ -508,105 +510,105 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
         </div>
       </div>
 
-      {/* ─── HERO COVER ─── */}
-      <div ref={heroRef} className="relative w-full overflow-hidden" style={{ height: 'clamp(280px, 45vw, 440px)' }}>
-        {/* Foto de capa */}
-        {coverImage ? (
-          <Image src={coverImage} alt={`${tenant.name} capa`} fill className="object-cover" priority />
-        ) : (
-          <div className="absolute inset-0" style={{
-            background: `linear-gradient(135deg, ${color}33 0%, ${color}88 50%, ${color}dd 100%)`,
-          }}>
-            <div className="absolute inset-0 opacity-10"
-              style={{ backgroundImage: `radial-gradient(circle at 2px 2px, ${color} 1px, transparent 0)`, backgroundSize: '24px 24px' }} />
-          </div>
-        )}
+      {/* ─── HERO — estilo DR Doces ─── */}
+      <div ref={heroRef} className="bg-white dark:bg-gray-900">
 
-        {/* Overlay gradiente */}
-        <div className="absolute inset-0 sf-cover-overlay" />
+        {/* Banner — largura total, altura fixa responsiva, sem corte */}
+        <div className="w-full overflow-hidden" style={{ height: 'clamp(120px, 33vw, 220px)' }}>
+          {coverImage ? (
+            <img src={coverImage} alt={`${tenant.name} banner`} className="w-full h-full object-cover object-center" />
+          ) : (
+            <div className="w-full h-full" style={{ background: `linear-gradient(135deg, ${color}55, ${color}cc)` }} />
+          )}
+        </div>
 
-        {/* Conteúdo sobre o cover */}
-        <div className="absolute inset-0 flex flex-col justify-end p-5 sm:p-8">
-          <div className="max-w-3xl mx-auto w-full">
-            <div className="flex items-end gap-4">
-              {/* Logo */}
-              {tenant.logo ? (
-                <img src={tenant.logo} alt={tenant.name}
-                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-white/30 shadow-xl flex-shrink-0" />
-              ) : (
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center text-white font-black text-2xl border-2 border-white/30 shadow-xl flex-shrink-0"
-                  style={{ background: `linear-gradient(135deg, ${color}, ${color}99)` }}>
-                  {tenant.name[0]}
-                </div>
-              )}
-
-              {/* Info */}
-              <div className="flex-1 min-w-0 pb-1">
-                <h1 className="text-xl sm:text-3xl font-black text-white leading-tight drop-shadow-sm mb-1">
-                  {tenant.name}
-                </h1>
-                {bannerText && (
-                  <p className="text-white/80 text-xs sm:text-sm mb-2 line-clamp-1">{bannerText}</p>
-                )}
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${
-                    isOpen ? 'bg-emerald-500/90 text-white' : 'bg-red-500/90 text-white'
-                  }`}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                    {isOpen ? 'Aberto' : 'Fechado'}
-                  </span>
-                  {minDeliveryTime && (
-                    <span className="inline-flex items-center gap-1 text-xs text-white/80">
-                      <Clock className="w-3 h-3" /> {minDeliveryTime}–{minDeliveryTime + 15} min
-                    </span>
-                  )}
-                  {minDeliveryFee !== null && (
-                    <span className="inline-flex items-center gap-1 text-xs text-white/80">
-                      🛵 a partir de {minDeliveryFee === 0 ? 'grátis' : formatCurrency(minDeliveryFee)}
-                    </span>
-                  )}
-                  {tableInfo && (
-                    <span className="inline-flex items-center gap-1 text-xs bg-white/20 text-white px-2 py-0.5 rounded-full">
-                      <MapPin className="w-3 h-3" /> Mesa {tableInfo.number}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Botões ação — desktop */}
-              <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
-                {/* Mais informações */}
-                <button
-                  onClick={() => setInfoModalOpen(true)}
-                  className="flex items-center gap-2 bg-white/15 hover:bg-white/25 backdrop-blur-sm border border-white/20 text-white px-3 py-2 rounded-xl text-xs font-semibold transition-all"
-                >
-                  <Info className="w-4 h-4" />
-                  Mais informações
-                </button>
-                {/* WhatsApp — visível desktop */}
-                {tenant.phone && (
-                  <a
-                    href={`https://wa.me/${tenant.phone.replace(/\D/g, '')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 bg-white/15 hover:bg-white/25 backdrop-blur-sm border border-white/20 text-white px-3 py-2 rounded-xl text-xs font-semibold transition-all"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    WhatsApp
-                  </a>
-                )}
-                {cartCount > 0 && (
-                  <button
-                    onClick={() => setCartOpen(true)}
-                    className="flex items-center gap-2 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
-                    style={{ background: `linear-gradient(135deg, ${color}, ${color}bb)` }}
-                  >
-                    <ShoppingBag className="w-4 h-4" />
-                    {cartCount} · {formatCurrency(cartTotal)}
-                  </button>
-                )}
-              </div>
+        {/* Logo centralizado — sobreposto na borda inferior do banner */}
+        <div className="flex justify-center -mt-10 relative z-10">
+          {tenant.logo ? (
+            <img src={tenant.logo} alt={tenant.name}
+              className="w-20 h-20 rounded-full object-cover border-4 border-white dark:border-gray-900 shadow-lg" />
+          ) : (
+            <div className="w-20 h-20 rounded-full flex items-center justify-center text-white font-black text-2xl border-4 border-white dark:border-gray-900 shadow-lg"
+              style={{ background: `linear-gradient(135deg, ${color}, ${color}99)` }}>
+              {tenant.name[0]}
             </div>
+          )}
+        </div>
+
+        {/* Info centralizada */}
+        <div className="text-center px-4 pt-2 pb-4">
+          <h1 className="text-xl font-black text-gray-900 dark:text-white">{tenant.name}</h1>
+          {bannerText && <p className="text-gray-500 text-sm mt-0.5">{bannerText}</p>}
+
+          <div className="flex items-center justify-center gap-2 mt-1.5 flex-wrap text-sm text-gray-500">
+            {settings?.address && (
+              <span className="flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5" /> {settings.address}
+              </span>
+            )}
+            {settings?.address && <span>•</span>}
+            <button onClick={() => setInfoModalOpen(true)} className="font-semibold text-gray-700 dark:text-gray-300 hover:underline">
+              Mais informações
+            </button>
+          </div>
+
+          <div className="mt-1.5 text-sm text-gray-600 dark:text-gray-400">
+            {isOpen ? (
+              <span className="font-semibold" style={{ color }}>
+                Aberto{minDeliveryTime ? ` · ${minDeliveryTime}–${minDeliveryTime + 15} min` : ''}
+                {minDeliveryFee !== null ? ` · a partir de ${minDeliveryFee === 0 ? 'grátis' : formatCurrency(minDeliveryFee)}` : ''}
+              </span>
+            ) : (
+              <span className="font-semibold text-red-500">Fechado no momento</span>
+            )}
+            {tableInfo && (
+              <span className="flex items-center justify-center gap-1 mt-1">
+                <MapPin className="w-3.5 h-3.5" /> Mesa {tableInfo.number}
+              </span>
+            )}
+          </div>
+
+          {/* Botões — apenas desktop (mobile já tem nav embaixo) */}
+          <div className="hidden sm:flex items-center justify-center gap-2 mt-3 flex-wrap">
+            <button onClick={handleNavHome}
+              className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-all">
+              <HomeIcon className="w-3.5 h-3.5" /> Início
+            </button>
+            <button onClick={handleNavOffers}
+              className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-all">
+              <Flame className="w-3.5 h-3.5" /> Ofertas
+            </button>
+            <button onClick={handleNavOrders}
+              className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-all">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              Pedidos
+            </button>
+            {tenant.phone && (
+              <a href={`https://wa.me/${tenant.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-all">
+                <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+              </a>
+            )}
+            {/* Toggle tema — desktop */}
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+              title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+            >
+              {theme === 'dark'
+                ? <Sun className="w-3.5 h-3.5" />
+                : <Moon className="w-3.5 h-3.5" />
+              }
+              {theme === 'dark' ? 'Claro' : 'Escuro'}
+            </button>
+            <button onClick={() => setCartOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90"
+              style={{ background: `linear-gradient(135deg, ${color}, ${color}bb)` }}>
+              <ShoppingBag className="w-3.5 h-3.5" />
+              {cartCount > 0 ? `Carrinho · ${formatCurrency(cartTotal)}` : 'Carrinho'}
+            </button>
           </div>
         </div>
       </div>
@@ -896,6 +898,18 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
                 <span className="text-[10px] font-semibold">WhatsApp</span>
               </a>
             )}
+
+            {/* Toggle tema — mobile */}
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-2xl transition-colors text-gray-400 hover:text-gray-600"
+            >
+              {theme === 'dark'
+                ? <Sun className="w-5 h-5" />
+                : <Moon className="w-5 h-5" />
+              }
+              <span className="text-[10px] font-semibold">Tema</span>
+            </button>
           </div>
         </div>
       </div>

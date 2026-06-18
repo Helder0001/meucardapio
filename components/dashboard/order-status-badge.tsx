@@ -2,21 +2,30 @@
 
 import { cn } from '@/lib/utils'
 
-const statusConfig: Record<string, { label: string; className: string }> = {
-  PENDING:          { label: 'Pendente',       className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
-  CONFIRMED:        { label: 'Confirmado',     className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-  PREPARING:        { label: 'Preparando',     className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
-  READY:            { label: 'Pronto',         className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
-  OUT_FOR_DELIVERY: { label: 'Saiu p/ entrega', className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
-  DELIVERED:        { label: 'Entregue',       className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
-  CANCELLED:        { label: 'Cancelado',      className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
-  REFUNDED:         { label: 'Reembolsado',    className: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400' },
+const statusConfig: Record<string, { label: string; dot: string; className: string }> = {
+  PENDING:          { label: 'Pendente',         dot: 'bg-amber-400',   className: 'bg-amber-50 text-amber-700 border border-amber-200' },
+  CONFIRMED:        { label: 'Confirmado',        dot: 'bg-blue-400',    className: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  PREPARING:        { label: 'Preparando',        dot: 'bg-orange-400',  className: 'bg-orange-50 text-orange-700 border border-orange-200' },
+  READY:            { label: 'Pronto',            dot: 'bg-emerald-400', className: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+  OUT_FOR_DELIVERY: { label: 'Saiu p/ entrega',   dot: 'bg-violet-400',  className: 'bg-violet-50 text-violet-700 border border-violet-200' },
+  DELIVERED:        { label: 'Entregue',          dot: 'bg-green-400',   className: 'bg-green-50 text-green-700 border border-green-200' },
+  CANCELLED:        { label: 'Cancelado',         dot: 'bg-red-400',     className: 'bg-red-50 text-red-700 border border-red-200' },
+  REFUNDED:         { label: 'Reembolsado',       dot: 'bg-gray-400',    className: 'bg-gray-50 text-gray-600 border border-gray-200' },
 }
 
 export function OrderStatusBadge({ status }: { status: string }) {
-  const config = statusConfig[status] ?? { label: status, className: 'bg-muted text-muted-foreground' }
+  const config = statusConfig[status] ?? {
+    label: status,
+    dot: 'bg-gray-400',
+    className: 'bg-muted text-muted-foreground border border-border',
+  }
+
   return (
-    <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full', config.className)}>
+    <span className={cn(
+      'inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full',
+      config.className
+    )}>
+      <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', config.dot)} />
       {config.label}
     </span>
   )

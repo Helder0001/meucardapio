@@ -1,50 +1,40 @@
 // app/layout.tsx
-//
-// Layout raiz da aplicação.
-// Tudo que renderiza aqui aparece em TODAS as páginas.
 
 import type { Metadata, Viewport } from 'next'
 import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import { Toaster } from 'sonner'
 import { PwaRegister } from '@/components/shared/pwa-register'
+import { ThemeProvider } from '@/components/shared/theme-provider'
 import './globals.css'
 
 export const metadata: Metadata = {
   title: {
-    default: 'FoodSaaS — Cardápio Digital e Delivery',
-    template: '%s | FoodSaaS',
+    default: 'Meu Cardápio — Cardápio Digital',
+    template: '%s | Meu Cardápio',
   },
-  description: 'Plataforma completa para restaurantes, pizzarias e deliveries.',
-  keywords: ['cardápio digital', 'delivery', 'restaurante', 'pedido online'],
-  authors: [{ name: 'FoodSaaS' }],
-  creator: 'FoodSaaS',
-  robots: {
-    index: true,
-    follow: true,
+  description: 'Cardápio digital, pedidos online, delivery, PIX e gestão completa para o seu restaurante.',
+  applicationName: 'Meu Cardápio',
+  icons: {
+    icon: '/logo-icon.png',
+    apple: '/logo-icon.png',
   },
   openGraph: {
-    type: 'website',
+    title: 'Meu Cardápio — Cardápio Digital',
+    description: 'Cardápio digital, pedidos online, delivery, PIX e gestão completa para o seu restaurante.',
+    siteName: 'Meu Cardápio',
+    images: ['/logo-icon.png'],
     locale: 'pt_BR',
-    siteName: 'FoodSaaS',
   },
 }
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#0a0a0a' },
-  ],
+  themeColor: '#f97316',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 5,
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="pt-BR"
@@ -52,16 +42,12 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-screen bg-background font-sans antialiased">
-        {children}
-        {/* Toast notifications globais */}
-        <Toaster
-          position="top-right"
-          richColors
-          closeButton
-          duration={4000}
-        />
-            <PwaRegister />
-    </body>
+        <ThemeProvider>
+          {children}
+          <Toaster position="top-right" richColors closeButton duration={4000} />
+          <PwaRegister />
+        </ThemeProvider>
+      </body>
     </html>
   )
 }
