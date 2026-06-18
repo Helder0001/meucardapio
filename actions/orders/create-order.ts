@@ -70,6 +70,7 @@ type CreateOrderInput = z.infer<typeof createOrderSchema>
 
 interface CreateOrderResult {
   orderId?: string
+  statusToken?: string   // <- linha adicionada
   paymentData?: {
     method: string
     pixQrCode?: string
