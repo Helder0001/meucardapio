@@ -201,6 +201,20 @@ export async function POST(request: Request) {
       })
     }
 
+    // CORREÇÃO: quando o PIX expira (5 min), o MP manda o pagamento como
+    // "cancelled" — sem tratar isso aqui, o pedido ficava travado pra sempre
+    // em "Aguardando confirmação PIX" mesmo depois de expirado.
+    if (mpStatus === 'cancelled' && payment.status === 'PENDING') {
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: { status: 'FAILED', mercadoPagoStatus: mpStatus, failedAt: new Date() },
+      })
+      await prisma.order.update({
+        where: { id: payment.order.id },
+        data: { paymentStatus: 'FAILED' },
+      })
+    }
+
     if (mpStatus === 'refunded') {
       await prisma.payment.update({
         where: { id: payment.id },

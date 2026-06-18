@@ -335,9 +335,15 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
                             </p>
                           )}
                           {!isPaid && p.method === 'PIX' && (
-                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
-                              Aguardando confirmação PIX
-                            </p>
+                            p.pixExpiresAt && new Date(p.pixExpiresAt) < new Date() ? (
+                              <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
+                                PIX expirado — gere um novo código
+                              </p>
+                            ) : (
+                              <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                                Aguardando confirmação PIX
+                              </p>
+                            )
                           )}
                           {!isPaid && isManual && (
                             <p className="text-xs text-muted-foreground mt-0.5">

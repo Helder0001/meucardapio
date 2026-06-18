@@ -47,9 +47,9 @@ export async function sendWhatsAppMessage({ tenantId, phone, message }: SendMess
         method:  'POST',
         headers: { 'Content-Type': 'application/json', apikey: config.apiKey },
         body:    JSON.stringify({
-          number:      fullPhone,
-          options:     { delay: 1200, presence: 'composing' },
-          textMessage: { text: message },
+          number: fullPhone,
+          text:   message,
+          delay:  1200,
         }),
         signal: AbortSignal.timeout(10_000),
       }

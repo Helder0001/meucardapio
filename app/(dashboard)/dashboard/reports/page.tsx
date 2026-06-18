@@ -206,7 +206,14 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   } catch (e) { console.error('[reports] salesByHour error:', e) }
 
   // ── Produtos mais vendidos ───────────────────────────────────────────────
-  const productWhere: any = { order: { ...baseWhere } }
+  // CORREÇÃO: faltava aplicar o filtro de forma de pagamento aqui — antes só
+  // respeitava pdv/tipo/data/produto, então filtrar por pagamento não mudava nada.
+  const productWhere: any = {
+    order: {
+      ...baseWhere,
+      ...(filterPayment ? { payments: { some: { method: filterPayment, status: 'PAID' } } } : {}),
+    },
+  }
   if (filterProduct) productWhere.productId = filterProduct
 
   const topProducts = await prisma.orderItem.groupBy({
@@ -218,15 +225,27 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   })
 
   // ── Vendas por tipo ──────────────────────────────────────────────────────
+  // CORREÇÃO: faltava aplicar os filtros de pagamento e produto — antes só
+  // respeitava pdv/tipo/data, então esses dois filtros não mudavam o gráfico.
   const salesByType = await prisma.order.groupBy({
     by: ['type'],
-    where: baseWhere,
+    where: {
+      ...baseWhere,
+      ...(filterPayment ? { payments: { some: { method: filterPayment, status: 'PAID' } } } : {}),
+      ...(filterProduct ? { items: { some: { productId: filterProduct } } } : {}),
+    },
     _sum: { total: true },
     _count: { id: true },
   })
 
   // ── Vendas por forma de pagamento ────────────────────────────────────────
-  const paymentWhere: any = { order: { ...baseWhere }, status: 'PAID' }
+  const paymentWhere: any = {
+    order: {
+      ...baseWhere,
+      ...(filterProduct ? { items: { some: { productId: filterProduct } } } : {}),
+    },
+    status: 'PAID',
+  }
   if (filterPayment) paymentWhere.method = filterPayment
 
   const salesByPayment = await prisma.payment.groupBy({
