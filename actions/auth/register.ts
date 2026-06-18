@@ -53,6 +53,13 @@ export async function registerAction(
 
   const { tenantName, slug: rawSlug, name, email, password, cardToken } = parsed.data
 
+  // Nome e CPF do titular do cartão — usados no payload da preapproval pra
+  // passar o motor antifraude do MP em produção (CC_VAL_433 sem esses campos)
+  const cardName = (formData.get('cardName') as string | null) ?? ''
+  const cardCpf  = (formData.get('cardCpf')  as string | null) ?? ''
+  const [firstName = '', ...lastParts] = cardName.trim().split(' ')
+  const lastName = lastParts.join(' ')
+
   // 1. Email duplicado
   const exists = await prisma.user.findFirst({ where: { email } })
   if (exists) return { error: 'Este email já está cadastrado.' }
@@ -64,7 +71,7 @@ export async function registerAction(
 
   // 3. Criar assinatura trial no Mercado Pago ANTES de salvar no banco
   //    Se o cartão for inválido, não cria o tenant
-  const mpResult = await createMpSubscription({ tenantName, email, cardToken })
+  const mpResult = await createMpSubscription({ tenantName, email, cardToken, firstName, lastName, cpf: cardCpf })
   if (mpResult.error) return { error: mpResult.error }
 
   const passwordHash = await hashPassword(password)
@@ -138,6 +145,9 @@ async function createMpSubscription(params: {
   tenantName: string
   email: string
   cardToken: string
+  firstName: string
+  lastName: string
+  cpf: string
 }): Promise<{ subscriptionId?: string; error?: string }> {
   const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN
   if (!accessToken) {
@@ -167,6 +177,17 @@ async function createMpSubscription(params: {
         },
         back_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
         status: 'authorized',
+        // CORREÇÃO CC_VAL_433: o antifraude do MP exige dados do pagador no
+        // payload da preapproval em produção. Sem isso, rejeita como alto risco.
+        payer: {
+          email: params.email,
+          first_name: params.firstName || '',
+          last_name:  params.lastName  || '',
+          identification: {
+            type:   'CPF',
+            number: params.cpf || '',
+          },
+        },
       }),
     })
 

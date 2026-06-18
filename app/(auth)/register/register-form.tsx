@@ -112,6 +112,9 @@ export function RegisterForm() {
 
     console.log('[register] chamando formAction...')
     fd.set('cardToken', token)
+    // Passar nome e CPF para o server action usar no payload da preapproval
+    fd.set('cardName', cardName.trim())
+    fd.set('cardCpf', cardCpf.replace(/\D/g, ''))
     formAction(fd)
   }
 
