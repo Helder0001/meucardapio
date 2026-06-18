@@ -78,6 +78,27 @@ export async function POST() {
       },
     })
 
+    // Registrar a webhook na instância — sem isso a Evolution API nunca avisa
+    // este servidor quando a conexão muda de estado (CONNECTION_UPDATE) ou quando
+    // chegam mensagens (MESSAGES_UPSERT), e o status no banco nunca sai de CONNECTING.
+    try {
+      await fetch(`${EVOLUTION_URL}/webhook/set/${instanceName}`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', apikey: EVOLUTION_KEY },
+        body: JSON.stringify({
+          webhook: {
+            enabled: true,
+            url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/evolution`,
+            webhookByEvents: false,
+            events: ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT'],
+          },
+        }),
+        signal: AbortSignal.timeout(10_000),
+      })
+    } catch (webhookErr) {
+      console.error('[whatsapp/connect] Falha ao registrar webhook:', webhookErr)
+    }
+
     return NextResponse.json({ qrCode, status: connected ? 'CONNECTED' : 'CONNECTING' })
   } catch (err) {
     console.error('[whatsapp/connect]', err)
