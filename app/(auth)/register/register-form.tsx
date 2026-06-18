@@ -19,6 +19,7 @@ export function RegisterForm() {
   const [cardName, setCardName]     = useState('')
   const [cardExpiry, setCardExpiry] = useState('')  // MM/AA
   const [cardCvv, setCardCvv]       = useState('')
+  const [cardCpf, setCardCpf]       = useState('')
   const [cardToken, setCardToken]   = useState('')
   const [cardError, setCardError]   = useState('')
   const [tokenizing, setTokenizing] = useState(false)
@@ -40,8 +41,23 @@ export function RegisterForm() {
     return d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d
   }
 
+  const formatCpf = (v: string) => {
+    const d = v.replace(/\D/g, '').slice(0, 11)
+    return d
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+  }
+
   const tokenizeCard = async (): Promise<string | null> => {
     setCardError('')
+
+    const cpfDigits = cardCpf.replace(/\D/g, '')
+    if (cpfDigits.length !== 11) {
+      setCardError('CPF do titular do cartão é obrigatório.')
+      return null
+    }
+
     setTokenizing(true)
     try {
       console.log('[register] iniciando tokenização...')
@@ -61,6 +77,10 @@ export function RegisterForm() {
         cardExpirationMonth: expMonth,
         cardExpirationYear: `20${expYear}`,
         securityCode: cardCvv,
+        // CORREÇÃO: o Mercado Pago Brasil exige identificação (CPF) do titular
+        // pra tokenizar o cartão — sem isso o createCardToken falha.
+        identificationType: 'CPF',
+        identificationNumber: cpfDigits,
       })
 
       console.log('[register] resultado MP:', JSON.stringify(result))
@@ -193,6 +213,14 @@ export function RegisterForm() {
           <input type="text" value={cardName} onChange={(e) => setCardName(e.target.value.toUpperCase())}
             placeholder="JOÃO SILVA"
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">CPF do titular *</label>
+          <input type="text" inputMode="numeric" value={cardCpf}
+            onChange={(e) => setCardCpf(formatCpf(e.target.value))}
+            placeholder="000.000.000-00" maxLength={14}
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-500" />
         </div>
 
         <div className="grid grid-cols-2 gap-3">

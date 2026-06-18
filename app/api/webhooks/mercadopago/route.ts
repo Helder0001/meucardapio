@@ -31,20 +31,60 @@ const SIGNATURE_MAX_AGE_SECONDS = 300
 // Formato esperado do HMAC SHA-256 em hex: 64 caracteres hexadecimais.
 const HEX_SHA256_REGEX = /^[a-f0-9]{64}$/i
 
+async function findPaymentByMpId(mercadoPagoId: string) {
+  return prisma.payment.findFirst({
+    where: { mercadoPagoId },
+    include: {
+      order: {
+        select: {
+          id: true, tenantId: true, orderNumber: true,
+          status: true, customerId: true, total: true,
+        },
+      },
+    },
+  })
+}
+
 export async function POST(request: Request) {
   try {
     const body      = await request.text()
     const signature = request.headers.get('x-signature')
     const requestId = request.headers.get('x-request-id')
 
+    let event: any
+    try {
+      event = JSON.parse(body)
+    } catch {
+      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
+    }
+
+    // Assinatura de pagamentos PIX é gerada pela conta do ESTABELECIMENTO no
+    // Mercado Pago (arquitetura de credenciais duplas), não pela conta da
+    // plataforma. Por isso o secret usado pra validar precisa ser o do tenant
+    // (tenant.settings.mercadoPagoWebhookSecret), não o global. Eventos de
+    // assinatura (cobrança do plano) continuam usando o secret da plataforma.
+    let webhookSecret: string | null | undefined = process.env.MERCADOPAGO_WEBHOOK_SECRET
+
+    // Buscar pagamento no banco (precisamos do tenant antes de validar a assinatura)
+    let payment: Awaited<ReturnType<typeof findPaymentByMpId>> = null
+    if (event.type === 'payment' && event.data?.id) {
+      payment = await findPaymentByMpId(String(event.data.id))
+      if (payment) {
+        const tenant = await prisma.tenant.findFirst({
+          where: { id: payment.order.tenantId },
+          select: { settings: true },
+        })
+        const tenantSecret = (tenant?.settings as any)?.mercadoPagoWebhookSecret
+        if (tenantSecret) webhookSecret = tenantSecret
+      }
+    }
+
     // VULN-03 CORRIGIDO: sem bypass — SEMPRE valida a assinatura
-    if (!validateSignature(body, signature, requestId)) {
+    if (!validateSignature(body, signature, requestId, webhookSecret)) {
       console.warn('[webhook/mp] Assinatura inválida rejeitada')
       // Retornar 401 sem revelar detalhes do erro
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-
-    const event = JSON.parse(body)
 
     // Roteamento por tipo de evento
     if (event.type === 'subscription_preapproval') {
@@ -59,20 +99,8 @@ export async function POST(request: Request) {
 
     const mercadoPagoId = String(event.data.id)
 
-    // Buscar pagamento no banco
-    const payment = await prisma.payment.findFirst({
-      where: { mercadoPagoId },
-      include: {
-        order: {
-          select: {
-            id: true, tenantId: true, orderNumber: true,
-            status: true, customerId: true, total: true,
-          },
-        },
-      },
-    })
-
     if (!payment) {
+
       // Pode ser pagamento de assinatura — ignorar silenciosamente
       return NextResponse.json({ ok: true })
     }
@@ -198,12 +226,15 @@ export async function POST(request: Request) {
 }
 
 // VULN-03 CORRIGIDO: função de validação sem bypass
-function validateSignature(body: string, signature: string | null, requestId: string | null): boolean {
-  const webhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET
-
-  // Se não tiver secret configurado → SEMPRE rejeitar (sem exceção para dev)
+function validateSignature(
+  body: string,
+  signature: string | null,
+  requestId: string | null,
+  webhookSecret: string | null | undefined,
+): boolean {
+  // Se não tiver secret resolvido (nem do tenant, nem o global) → SEMPRE rejeitar
   if (!webhookSecret) {
-    console.error('[webhook/mp] MERCADOPAGO_WEBHOOK_SECRET não configurado!')
+    console.error('[webhook/mp] Nenhum webhook secret configurado (tenant nem plataforma)!')
     return false
   }
 

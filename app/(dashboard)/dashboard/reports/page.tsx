@@ -35,55 +35,55 @@ async function queryRevenueChart(
 
   if (filterPdv && filterSaleType) {
     raw = await prisma.$queryRaw<Row[]>`
-      SELECT DATE(created_at AT TIME ZONE 'America/Sao_Paulo')::text AS date,
+      SELECT DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo')::text AS date,
              COALESCE(SUM(total), 0)::float                          AS revenue,
              COUNT(*)::float                                         AS orders
       FROM "Order"
-      WHERE tenant_id   = ${tenantId}
+      WHERE "tenantId"   = ${tenantId}
         AND status     NOT IN ('CANCELLED', 'REFUNDED')
-        AND created_at >= ${startDate}
-        AND created_at <= ${endDate}
-        AND pdv_id      = ${filterPdv}
+        AND "createdAt" >= ${startDate}
+        AND "createdAt" <= ${endDate}
+        AND "pdvId"      = ${filterPdv}
         AND type::text  = ${filterSaleType}
-      GROUP BY DATE(created_at AT TIME ZONE 'America/Sao_Paulo')
+      GROUP BY DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo')
       ORDER BY date ASC`
   } else if (filterPdv) {
     raw = await prisma.$queryRaw<Row[]>`
-      SELECT DATE(created_at AT TIME ZONE 'America/Sao_Paulo')::text AS date,
+      SELECT DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo')::text AS date,
              COALESCE(SUM(total), 0)::float                          AS revenue,
              COUNT(*)::float                                         AS orders
       FROM "Order"
-      WHERE tenant_id   = ${tenantId}
+      WHERE "tenantId"   = ${tenantId}
         AND status     NOT IN ('CANCELLED', 'REFUNDED')
-        AND created_at >= ${startDate}
-        AND created_at <= ${endDate}
-        AND pdv_id      = ${filterPdv}
-      GROUP BY DATE(created_at AT TIME ZONE 'America/Sao_Paulo')
+        AND "createdAt" >= ${startDate}
+        AND "createdAt" <= ${endDate}
+        AND "pdvId"      = ${filterPdv}
+      GROUP BY DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo')
       ORDER BY date ASC`
   } else if (filterSaleType) {
     raw = await prisma.$queryRaw<Row[]>`
-      SELECT DATE(created_at AT TIME ZONE 'America/Sao_Paulo')::text AS date,
+      SELECT DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo')::text AS date,
              COALESCE(SUM(total), 0)::float                          AS revenue,
              COUNT(*)::float                                         AS orders
       FROM "Order"
-      WHERE tenant_id   = ${tenantId}
+      WHERE "tenantId"   = ${tenantId}
         AND status     NOT IN ('CANCELLED', 'REFUNDED')
-        AND created_at >= ${startDate}
-        AND created_at <= ${endDate}
+        AND "createdAt" >= ${startDate}
+        AND "createdAt" <= ${endDate}
         AND type::text  = ${filterSaleType}
-      GROUP BY DATE(created_at AT TIME ZONE 'America/Sao_Paulo')
+      GROUP BY DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo')
       ORDER BY date ASC`
   } else {
     raw = await prisma.$queryRaw<Row[]>`
-      SELECT DATE(created_at AT TIME ZONE 'America/Sao_Paulo')::text AS date,
+      SELECT DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo')::text AS date,
              COALESCE(SUM(total), 0)::float                          AS revenue,
              COUNT(*)::float                                         AS orders
       FROM "Order"
-      WHERE tenant_id   = ${tenantId}
+      WHERE "tenantId"   = ${tenantId}
         AND status     NOT IN ('CANCELLED', 'REFUNDED')
-        AND created_at >= ${startDate}
-        AND created_at <= ${endDate}
-      GROUP BY DATE(created_at AT TIME ZONE 'America/Sao_Paulo')
+        AND "createdAt" >= ${startDate}
+        AND "createdAt" <= ${endDate}
+      GROUP BY DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo')
       ORDER BY date ASC`
   }
 
@@ -100,51 +100,51 @@ async function queryHourChart(
 
   if (filterPdv && filterSaleType) {
     raw = await prisma.$queryRaw<Row[]>`
-      SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo')::int AS hour,
+      SELECT EXTRACT(HOUR FROM "createdAt" AT TIME ZONE 'America/Sao_Paulo')::int AS hour,
              COUNT(*)::float                                                      AS orders
       FROM "Order"
-      WHERE tenant_id   = ${tenantId}
+      WHERE "tenantId"   = ${tenantId}
         AND status     NOT IN ('CANCELLED', 'REFUNDED')
-        AND created_at >= ${startDate}
-        AND created_at <= ${endDate}
-        AND pdv_id      = ${filterPdv}
+        AND "createdAt" >= ${startDate}
+        AND "createdAt" <= ${endDate}
+        AND "pdvId"      = ${filterPdv}
         AND type::text  = ${filterSaleType}
-      GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo')
+      GROUP BY EXTRACT(HOUR FROM "createdAt" AT TIME ZONE 'America/Sao_Paulo')
       ORDER BY hour`
   } else if (filterPdv) {
     raw = await prisma.$queryRaw<Row[]>`
-      SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo')::int AS hour,
+      SELECT EXTRACT(HOUR FROM "createdAt" AT TIME ZONE 'America/Sao_Paulo')::int AS hour,
              COUNT(*)::float                                                      AS orders
       FROM "Order"
-      WHERE tenant_id   = ${tenantId}
+      WHERE "tenantId"   = ${tenantId}
         AND status     NOT IN ('CANCELLED', 'REFUNDED')
-        AND created_at >= ${startDate}
-        AND created_at <= ${endDate}
-        AND pdv_id      = ${filterPdv}
-      GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo')
+        AND "createdAt" >= ${startDate}
+        AND "createdAt" <= ${endDate}
+        AND "pdvId"      = ${filterPdv}
+      GROUP BY EXTRACT(HOUR FROM "createdAt" AT TIME ZONE 'America/Sao_Paulo')
       ORDER BY hour`
   } else if (filterSaleType) {
     raw = await prisma.$queryRaw<Row[]>`
-      SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo')::int AS hour,
+      SELECT EXTRACT(HOUR FROM "createdAt" AT TIME ZONE 'America/Sao_Paulo')::int AS hour,
              COUNT(*)::float                                                      AS orders
       FROM "Order"
-      WHERE tenant_id   = ${tenantId}
+      WHERE "tenantId"   = ${tenantId}
         AND status     NOT IN ('CANCELLED', 'REFUNDED')
-        AND created_at >= ${startDate}
-        AND created_at <= ${endDate}
+        AND "createdAt" >= ${startDate}
+        AND "createdAt" <= ${endDate}
         AND type::text  = ${filterSaleType}
-      GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo')
+      GROUP BY EXTRACT(HOUR FROM "createdAt" AT TIME ZONE 'America/Sao_Paulo')
       ORDER BY hour`
   } else {
     raw = await prisma.$queryRaw<Row[]>`
-      SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo')::int AS hour,
+      SELECT EXTRACT(HOUR FROM "createdAt" AT TIME ZONE 'America/Sao_Paulo')::int AS hour,
              COUNT(*)::float                                                      AS orders
       FROM "Order"
-      WHERE tenant_id   = ${tenantId}
+      WHERE "tenantId"   = ${tenantId}
         AND status     NOT IN ('CANCELLED', 'REFUNDED')
-        AND created_at >= ${startDate}
-        AND created_at <= ${endDate}
-      GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo')
+        AND "createdAt" >= ${startDate}
+        AND "createdAt" <= ${endDate}
+      GROUP BY EXTRACT(HOUR FROM "createdAt" AT TIME ZONE 'America/Sao_Paulo')
       ORDER BY hour`
   }
 
@@ -226,7 +226,7 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   })
 
   // ── Vendas por forma de pagamento ────────────────────────────────────────
-  const paymentWhere: any = { order: { ...baseWhere } }
+  const paymentWhere: any = { order: { ...baseWhere }, status: 'PAID' }
   if (filterPayment) paymentWhere.method = filterPayment
 
   const salesByPayment = await prisma.payment.groupBy({

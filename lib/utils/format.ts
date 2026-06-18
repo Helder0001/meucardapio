@@ -3,6 +3,9 @@
 
 import { format, formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { formatInTimeZone } from 'date-fns-tz'
+
+const APP_TIMEZONE = 'America/Sao_Paulo'
 
 // Formatar valor monetário em Real brasileiro
 // formatCurrency(29.9) → "R$ 29,90"
@@ -15,16 +18,18 @@ export function formatCurrency(value: number): string {
 
 // Formatar data e hora
 // formatDate(new Date()) → "31/12/2024, 23:59"
+// Sempre no fuso de São Paulo — o servidor (Vercel) roda em UTC, então sem isso
+// os horários aparecem 3h a mais para o usuário.
 export function formatDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date
-  return format(d, "dd/MM/yyyy, HH:mm", { locale: ptBR })
+  return formatInTimeZone(d, APP_TIMEZONE, "dd/MM/yyyy, HH:mm", { locale: ptBR })
 }
 
 // Formatar apenas hora
 // formatTime(new Date()) → "23:59"
 export function formatTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date
-  return format(d, 'HH:mm', { locale: ptBR })
+  return formatInTimeZone(d, APP_TIMEZONE, 'HH:mm', { locale: ptBR })
 }
 
 // Tempo relativo

@@ -407,6 +407,7 @@ async function createPixPayment(params: {
       description: `Pedido #${params.orderId.slice(-8).toUpperCase()}`,
       external_reference: params.orderId,
       notification_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/mercadopago`,
+      date_of_expiration: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
     }),
   })
 
@@ -428,7 +429,7 @@ async function createPixPayment(params: {
       mercadoPagoStatus: mpData.status,
       pixQrCode: mpData.point_of_interaction?.transaction_data?.qr_code,
       pixQrCodeBase64: mpData.point_of_interaction?.transaction_data?.qr_code_base64,
-      pixExpiresAt: mpData.date_of_expiration ? new Date(mpData.date_of_expiration) : new Date(Date.now() + 30 * 60 * 1000),
+      pixExpiresAt: mpData.date_of_expiration ? new Date(mpData.date_of_expiration) : new Date(Date.now() + 5 * 60 * 1000),
     },
   })
 
