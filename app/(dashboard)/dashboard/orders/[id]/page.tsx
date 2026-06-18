@@ -49,6 +49,29 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
   if (!order) notFound()
 
+  // CORREÇÃO: mesma checagem de expiração de PIX usada no polling do cliente
+  // — assim a tela do dashboard também cancela sozinha, sem depender só do
+  // webhook do MP nem do cron diário.
+  const pendingPix = order.payments.find((p) => p.method === 'PIX' && p.status === 'PENDING')
+  if (order.status === 'PENDING' && pendingPix?.pixExpiresAt && pendingPix.pixExpiresAt < new Date()) {
+    await prisma.$transaction([
+      prisma.payment.updateMany({
+        where: { orderId: id, method: 'PIX', status: 'PENDING' },
+        data: { status: 'FAILED', failedAt: new Date() },
+      }),
+      prisma.order.update({
+        where: { id },
+        data: {
+          status: 'CANCELLED', paymentStatus: 'FAILED',
+          cancelledAt: new Date(), cancelReason: 'PIX expirado sem pagamento',
+        },
+      }),
+    ])
+    order.status = 'CANCELLED'
+    order.paymentStatus = 'FAILED'
+    pendingPix.status = 'FAILED'
+  }
+
   const serialized = {
     ...order,
     total:          Number(order.total),

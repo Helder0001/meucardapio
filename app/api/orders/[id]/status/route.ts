@@ -91,6 +91,36 @@ export async function GET(
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
+    // CORREÇÃO: cancelar automaticamente quando o PIX expira, sem depender só
+    // do webhook do MP (que pode demorar/falhar) nem do cron diário (no plano
+    // Hobby da Vercel só roda 1x/dia — muito lento pra uma janela de 5min).
+    const expiredPix = order.payments[0]
+    if (
+      order.status === 'PENDING' &&
+      expiredPix?.status === 'PENDING' &&
+      expiredPix.pixExpiresAt &&
+      expiredPix.pixExpiresAt < new Date()
+    ) {
+      await prisma.$transaction([
+        prisma.payment.updateMany({
+          where: { orderId: id, method: 'PIX', status: 'PENDING' },
+          data: { status: 'FAILED', failedAt: new Date() },
+        }),
+        prisma.order.update({
+          where: { id },
+          data: {
+            status: 'CANCELLED',
+            paymentStatus: 'FAILED',
+            cancelledAt: new Date(),
+            cancelReason: 'PIX expirado sem pagamento',
+          },
+        }),
+      ])
+      order.status = 'CANCELLED'
+      order.paymentStatus = 'FAILED'
+      order.payments[0].status = 'FAILED'
+    }
+
     // Não retornar QR Code de PIX expirado
     const now = new Date()
     const payments = order.payments.map((p) => ({

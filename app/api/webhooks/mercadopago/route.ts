@@ -213,6 +213,20 @@ export async function POST(request: Request) {
         where: { id: payment.order.id },
         data: { paymentStatus: 'FAILED' },
       })
+
+      // CORREÇÃO: cancelar o pedido automaticamente quando o PIX expira —
+      // só se ainda estiver PENDING (não cancela se a loja já confirmou/avançou
+      // o pedido por outro meio, ex.: combinou pagamento em dinheiro na entrega).
+      if (payment.order.status === 'PENDING') {
+        await prisma.order.update({
+          where: { id: payment.order.id },
+          data: {
+            status: 'CANCELLED',
+            cancelledAt: new Date(),
+            cancelReason: 'PIX expirado sem pagamento',
+          },
+        })
+      }
     }
 
     if (mpStatus === 'refunded') {
