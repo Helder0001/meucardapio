@@ -355,9 +355,9 @@ const ORDER_STATUS_COLOR: Record<string, string> = {
 }
 
 function CustomerOrdersSection({
-  customerPhone, customerName, tenantId, color, onLogin,
+  customerPhone, customerName, tenantId, tenantSlug, color, onLogin,
 }: {
-  customerPhone: string; customerName: string; tenantId: string
+  customerPhone: string; customerName: string; tenantId: string; tenantSlug: string
   color: string; onLogin: () => void
 }) {
   const [data, setData]       = React.useState<any>(null)
@@ -409,23 +409,19 @@ function CustomerOrdersSection({
           </button>
         </div>
 
-        {/* Pontos de fidelidade + cashback */}
-        {customer && (customer.loyaltyPoints > 0 || customer.cashbackBalance > 0) && (
+        {/* Pontos de fidelidade + cashback — sempre mostra após carregar */}
+        {customer && (
           <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 grid grid-cols-2 gap-2">
-            {customer.loyaltyPoints > 0 && (
-              <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-center">
-                <p className="text-lg font-black text-amber-600">⭐ {customer.loyaltyPoints}</p>
-                <p className="text-xs text-amber-600/80 font-medium">pontos</p>
-              </div>
-            )}
-            {customer.cashbackBalance > 0 && (
-              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-center">
-                <p className="text-lg font-black text-emerald-600">
-                  💰 R$ {customer.cashbackBalance.toFixed(2).replace('.', ',')}
-                </p>
-                <p className="text-xs text-emerald-600/80 font-medium">cashback</p>
-              </div>
-            )}
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-center">
+              <p className="text-lg font-black text-amber-600">⭐ {customer.loyaltyPoints}</p>
+              <p className="text-xs text-amber-600/80 font-medium">pontos</p>
+            </div>
+            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-center">
+              <p className="text-lg font-black text-emerald-600">
+                💰 R$ {customer.cashbackBalance.toFixed(2).replace('.', ',')}
+              </p>
+              <p className="text-xs text-emerald-600/80 font-medium">cashback</p>
+            </div>
           </div>
         )}
       </div>
@@ -447,7 +443,7 @@ function CustomerOrdersSection({
       )}
 
       {!loading && customer?.orders.map((order: any) => (
-        <a key={order.id} href={`/menu/${tenantId}/pedido/${order.id}`}
+        <a key={order.id} href={`/menu/${tenantSlug}/pedido/${order.id}`}
           className="block bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 active:scale-[0.98] transition-transform">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
@@ -603,7 +599,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
             : '-translate-y-full opacity-0 pointer-events-none'
         }`}
       >
-        <div className="glass-card border-b border-gray-200/60 dark:border-gray-800">
+        <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-b border-gray-200 dark:border-gray-800 shadow-sm">
           <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               {tenant.logo ? (
@@ -750,7 +746,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
       </div>
 
       {/* ─── BARRA DE BUSCA + NAV ─── */}
-      <div className="sticky top-0 z-30 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 shadow-sm shadow-gray-900/5">
+      <div className={`sticky top-0 z-30 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 shadow-sm shadow-gray-900/5 ${activeNav !== 'home' ? 'hidden' : ''}`}>
         <div className="max-w-3xl mx-auto">
           {/* Busca */}
           <div className="px-4 pt-3 pb-2">
@@ -826,6 +822,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
             customerPhone={customerPhone ?? ''}
             customerName={customerName ?? ''}
             tenantId={tenant.id}
+            tenantSlug={tenant.slug}
             color={color}
             onLogin={() => setAuthModalOpen(true)}
           />
