@@ -1,7 +1,7 @@
 'use client'
 // components/storefront/storefront-client.tsx — com todas as correções
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { useTheme } from 'next-themes'
 import { useCartStore } from '@/lib/store/cart'
 import { ProductCard } from './product-card'
@@ -341,6 +341,142 @@ function CustomerAuthModal({
   )
 }
 
+// ─── Aba Meus Pedidos ─────────────────────────────────────────────────────────
+const ORDER_STATUS_LABEL: Record<string, string> = {
+  PENDING: 'Pendente', CONFIRMED: 'Confirmado', PREPARING: 'Preparando',
+  READY: 'Pronto', OUT_FOR_DELIVERY: 'Saiu para entrega', DELIVERED: 'Entregue',
+  CANCELLED: 'Cancelado',
+}
+const ORDER_STATUS_COLOR: Record<string, string> = {
+  PENDING: 'bg-amber-100 text-amber-700', CONFIRMED: 'bg-blue-100 text-blue-700',
+  PREPARING: 'bg-purple-100 text-purple-700', READY: 'bg-emerald-100 text-emerald-700',
+  OUT_FOR_DELIVERY: 'bg-cyan-100 text-cyan-700', DELIVERED: 'bg-green-100 text-green-700',
+  CANCELLED: 'bg-red-100 text-red-600',
+}
+
+function CustomerOrdersSection({
+  customerPhone, customerName, tenantId, color, onLogin,
+}: {
+  customerPhone: string; customerName: string; tenantId: string
+  color: string; onLogin: () => void
+}) {
+  const [data, setData]       = React.useState<any>(null)
+  const [loading, setLoading] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!customerPhone) return
+    setLoading(true)
+    fetch(`/api/storefront/customer?phone=${encodeURIComponent(customerPhone)}&tenantId=${tenantId}`)
+      .then((r) => r.json())
+      .then((d) => setData(d))
+      .finally(() => setLoading(false))
+  }, [customerPhone, tenantId])
+
+  if (!customerPhone) {
+    return (
+      <section className="text-center py-12">
+        <div className="w-16 h-16 rounded-3xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4 text-2xl">👤</div>
+        <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Entre para ver seus pedidos</p>
+        <p className="text-sm text-gray-400 mb-5">Use seu WhatsApp para acompanhar pedidos e pontos de fidelidade</p>
+        <button onClick={onLogin} className="px-6 py-3 rounded-2xl text-white font-bold text-sm"
+          style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}>
+          Entrar / Cadastrar
+        </button>
+      </section>
+    )
+  }
+
+  const customer = data?.customer
+
+  return (
+    <section className="space-y-4">
+      {/* Card do cliente */}
+      <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-black text-base"
+              style={{ background: color }}>
+              {(customerName || '?')[0]?.toUpperCase()}
+            </div>
+            <div>
+              <p className="font-black text-sm text-gray-900 dark:text-white">{customerName || 'Cliente'}</p>
+              <p className="text-xs text-gray-400">{customerPhone}</p>
+            </div>
+          </div>
+          <button onClick={() => useCartStore.getState().setCustomer('', '')}
+            className="text-xs text-red-400 hover:text-red-500 font-semibold flex items-center gap-1">
+            <LogOut className="w-3.5 h-3.5" /> Sair
+          </button>
+        </div>
+
+        {/* Pontos de fidelidade + cashback */}
+        {customer && (customer.loyaltyPoints > 0 || customer.cashbackBalance > 0) && (
+          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 grid grid-cols-2 gap-2">
+            {customer.loyaltyPoints > 0 && (
+              <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-center">
+                <p className="text-lg font-black text-amber-600">⭐ {customer.loyaltyPoints}</p>
+                <p className="text-xs text-amber-600/80 font-medium">pontos</p>
+              </div>
+            )}
+            {customer.cashbackBalance > 0 && (
+              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-center">
+                <p className="text-lg font-black text-emerald-600">
+                  💰 R$ {customer.cashbackBalance.toFixed(2).replace('.', ',')}
+                </p>
+                <p className="text-xs text-emerald-600/80 font-medium">cashback</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Lista de pedidos */}
+      <h2 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
+        <span className="w-6 h-6 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-sm">📋</span>
+        Meus pedidos
+      </h2>
+
+      {loading && (
+        <div className="flex justify-center py-8">
+          <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
+        </div>
+      )}
+
+      {!loading && customer && customer.orders.length === 0 && (
+        <div className="text-center py-8 text-gray-400 text-sm">Nenhum pedido ainda.</div>
+      )}
+
+      {!loading && customer?.orders.map((order: any) => (
+        <a key={order.id} href={`/menu/${tenantId}/pedido/${order.id}`}
+          className="block bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 active:scale-[0.98] transition-transform">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-black text-sm text-gray-900 dark:text-white">#{order.orderNumber}</span>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ORDER_STATUS_COLOR[order.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                  {ORDER_STATUS_LABEL[order.status] ?? order.status}
+                </span>
+              </div>
+              <p className="text-xs text-gray-400 truncate">
+                {order.items.map((i: any) => `${i.quantity}x ${i.productName}`).join(' · ')}
+                {order.items.length === 3 ? ' ...' : ''}
+              </p>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <p className="font-black text-sm" style={{ color }}>
+                R$ {order.total.toFixed(2).replace('.', ',')}
+              </p>
+              <p className="text-xs text-gray-400">
+                {new Date(order.createdAt).toLocaleDateString('pt-BR')}
+              </p>
+            </div>
+          </div>
+        </a>
+      ))}
+    </section>
+  )
+}
+
 export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: StorefrontClientProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null)
@@ -614,7 +750,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
       </div>
 
       {/* ─── BARRA DE BUSCA + NAV ─── */}
-      <div className="sticky top-0 z-40 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 shadow-sm shadow-gray-900/5">
+      <div className="sticky top-0 z-30 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 shadow-sm shadow-gray-900/5">
         <div className="max-w-3xl mx-auto">
           {/* Busca */}
           <div className="px-4 pt-3 pb-2">
@@ -686,49 +822,13 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
 
         {/* ── TELA DE PEDIDOS ── */}
         {activeNav === 'orders' && (
-          <section>
-            <h2 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2 mb-4">
-              <span className="w-6 h-6 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-sm">📋</span>
-              Meus pedidos
-            </h2>
-            {customerPhone ? (
-              <div className="space-y-3">
-                <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-black" style={{ background: color }}>
-                        {(customerName ?? '?')[0]?.toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-black text-sm text-gray-900 dark:text-white">{customerName || 'Cliente'}</p>
-                        <p className="text-xs text-gray-400">{customerPhone}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => { useCartStore.getState().setCustomer('', ''); }}
-                      className="text-xs text-red-400 hover:text-red-500 font-semibold flex items-center gap-1"
-                    >
-                      <LogOut className="w-3.5 h-3.5" /> Sair
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-400 text-center py-4">Histórico de pedidos disponível em breve.</p>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 rounded-3xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4 text-2xl">👤</div>
-                <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Entre para ver seus pedidos</p>
-                <p className="text-sm text-gray-400 mb-5">Use seu WhatsApp para acompanhar pedidos e acumular pontos de fidelidade</p>
-                <button
-                  onClick={() => setAuthModalOpen(true)}
-                  className="px-6 py-3 rounded-2xl text-white font-bold text-sm"
-                  style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}
-                >
-                  Entrar / Cadastrar
-                </button>
-              </div>
-            )}
-          </section>
+          <CustomerOrdersSection
+            customerPhone={customerPhone ?? ''}
+            customerName={customerName ?? ''}
+            tenantId={tenant.id}
+            color={color}
+            onLogin={() => setAuthModalOpen(true)}
+          />
         )}
 
         {/* ── CONTEÚDO HOME ── */}
@@ -833,13 +933,13 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
 
       {/* ─── BOTTOM NAV MOBILE ─── */}
       <div className="fixed bottom-0 left-0 right-0 z-40 sm:hidden">
-        <div className="glass-card border-t border-gray-200/60 dark:border-gray-800">
+        <div className="bg-white/95 dark:bg-gray-950/95 backdrop-blur-md border-t border-gray-200 dark:border-gray-800 shadow-[0_-2px_12px_rgba(0,0,0,0.08)]">
           <div className="flex items-center justify-around px-2 py-2"
             style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}>
             {/* Home */}
             <button
               onClick={handleNavHome}
-              className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-2xl transition-colors ${activeNav === 'home' ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}
+              className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-2xl transition-colors ${activeNav === 'home' ? 'font-bold' : 'text-gray-500 dark:text-gray-400'}`}
               style={activeNav === 'home' ? { color } : undefined}
             >
               <HomeIcon className="w-5 h-5" />
@@ -849,7 +949,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
             {/* Ofertas */}
             <button
               onClick={handleNavOffers}
-              className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-2xl transition-colors ${activeNav === 'offers' ? '' : 'text-gray-400'}`}
+              className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-2xl transition-colors ${activeNav === 'offers' ? 'font-bold' : 'text-gray-500 dark:text-gray-400'}`}
               style={activeNav === 'offers' ? { color } : undefined}
             >
               <Flame className="w-5 h-5" />
@@ -871,13 +971,13 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
                   </span>
                 )}
               </div>
-              <span className="text-[10px] font-semibold text-gray-500 mt-1">Carrinho</span>
+              <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mt-1">Carrinho</span>
             </button>
 
             {/* Pedidos */}
             <button
               onClick={handleNavOrders}
-              className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-2xl transition-colors ${activeNav === 'orders' ? '' : 'text-gray-400'}`}
+              className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-2xl transition-colors ${activeNav === 'orders' ? 'font-bold' : 'text-gray-500 dark:text-gray-400'}`}
               style={activeNav === 'orders' ? { color } : undefined}
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -902,7 +1002,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
             {/* Toggle tema — mobile */}
             <button
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-2xl transition-colors text-gray-400 hover:text-gray-600"
+              className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-2xl transition-colors text-gray-500 dark:text-gray-400 hover:text-gray-700"
             >
               {theme === 'dark'
                 ? <Sun className="w-5 h-5" />
