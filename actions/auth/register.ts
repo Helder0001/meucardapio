@@ -157,6 +157,36 @@ async function createMpSubscription(params: {
   }
 
   try {
+    const payload = {
+      reason: `Meu Cardápio — Plano Starter — ${params.tenantName}`,
+      payer_email: params.email,
+      card_token_id: params.cardToken,
+      auto_recurring: {
+        frequency: 1,
+        frequency_type: 'months',
+        transaction_amount: 49.00,
+        currency_id: 'BRL',
+        free_trial: { frequency: 7, frequency_type: 'days' },
+      },
+      back_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
+      status: 'authorized',
+      payer: {
+        email: params.email,
+        first_name: params.firstName || '',
+        last_name:  params.lastName  || '',
+        identification: {
+          type:   'CPF',
+          number: params.cpf || '',
+        },
+      },
+    }
+
+    // Log do payload (sem o token completo por segurança)
+    console.log('[register/mp] payload:', JSON.stringify({
+      ...payload,
+      card_token_id: payload.card_token_id ? `${payload.card_token_id.slice(0, 8)}...` : null,
+    }))
+
     const res = await fetch('https://api.mercadopago.com/preapproval', {
       method: 'POST',
       headers: {
@@ -164,34 +194,11 @@ async function createMpSubscription(params: {
         'Content-Type': 'application/json',
         'X-Idempotency-Key': `register-${params.email}-${Date.now()}`,
       },
-      body: JSON.stringify({
-        reason: `Meu Cardápio — Plano Starter — ${params.tenantName}`,
-        payer_email: params.email,
-        card_token_id: params.cardToken,
-        auto_recurring: {
-          frequency: 1,
-          frequency_type: 'months',
-          transaction_amount: 49.00,
-          currency_id: 'BRL',
-          free_trial: { frequency: 7, frequency_type: 'days' },
-        },
-        back_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
-        status: 'authorized',
-        // CORREÇÃO CC_VAL_433: o antifraude do MP exige dados do pagador no
-        // payload da preapproval em produção. Sem isso, rejeita como alto risco.
-        payer: {
-          email: params.email,
-          first_name: params.firstName || '',
-          last_name:  params.lastName  || '',
-          identification: {
-            type:   'CPF',
-            number: params.cpf || '',
-          },
-        },
-      }),
+      body: JSON.stringify(payload),
     })
 
     const data = await res.json()
+    console.log('[register/mp] response status:', res.status, 'body:', JSON.stringify(data))
 
     if (!res.ok) {
       const msg = data?.message ?? data?.error ?? 'Cartão recusado'
