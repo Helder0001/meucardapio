@@ -20,6 +20,7 @@ import crypto from 'crypto'
 import { checkAndPublishStockAlerts } from '@/lib/utils/stock-alerts'
 import { prisma } from '@/lib/db/client'
 import { calculateOrder } from '@/lib/utils/order-calculator'
+import { formatCurrency } from '@/lib/utils/format'
 import { getNextOrderNumber } from '@/lib/db/tenant'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { notifyOrderReceived } from '@/lib/messaging/evolution'
@@ -61,7 +62,8 @@ const createOrderSchema = z.object({
   paymentMethod: z.enum(['PIX', 'CASH', 'CARD', 'CREDIT_CARD', 'DEBIT_CARD']).optional(),
   changeFor: z.number().positive().optional(),
 
-  cashbackToUse: z.number().min(0).optional(),
+  cashbackToUse:  z.number().min(0).optional(),
+  pointsToRedeem: z.number().int().min(0).optional(),
   deliveryAddress: z.string().max(300).optional(),
   notes: z.string().max(500).optional(),
 })
@@ -158,7 +160,8 @@ export async function createOrderAction(
     deliveryBairro: data.deliveryBairro,
     deliveryType: data.type === 'DELIVERY' ? 'DELIVERY' : undefined,
     customerId: customer?.id,
-    cashbackToUse: data.cashbackToUse,
+    cashbackToUse:  data.cashbackToUse,
+    pointsToRedeem: data.pointsToRedeem,
   })
 
   if (calculation.errors.length > 0) {
@@ -276,6 +279,25 @@ export async function createOrderAction(
           type: 'USE',
           amount: -calculation.cashbackUsed,
           balance: Number(customer.cashbackBalance) - calculation.cashbackUsed,
+        },
+      })
+    }
+
+    // Debitar pontos resgatados
+    if (calculation.pointsRedeemed > 0 && customer) {
+      await tx.customer.update({
+        where: { id: customer.id },
+        data: { loyaltyPoints: { decrement: calculation.pointsRedeemed } },
+      })
+      await tx.loyaltyTransaction.create({
+        data: {
+          tenantId: data.tenantId,
+          customerId: customer.id,
+          orderId: newOrder.id,
+          type: 'REDEEM',
+          points: -calculation.pointsRedeemed,
+          balance: customer.loyaltyPoints - calculation.pointsRedeemed,
+          description: `Resgate: ${calculation.pointsRedeemed} pts = ${formatCurrency(calculation.pointsDiscount)} de desconto`,
         },
       })
     }

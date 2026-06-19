@@ -71,10 +71,13 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const [deliveryAddress, setDeliveryAddress] = useState('')
 
   // ── Cashback / fidelidade ────────────────────────────────────────────────
-  const [cashbackBalance, setCashbackBalance] = useState(0)       // saldo disponível
+  const [cashbackBalance, setCashbackBalance] = useState(0)
   const [loyaltyPoints, setLoyaltyPoints]     = useState(0)
-  const [cashbackToUse, setCashbackToUse]     = useState(0)       // quanto vai usar
+  const [loyaltyConfig, setLoyaltyConfig]     = useState<{ redeemEvery: number; redeemValue: number; minPointsRedeem: number } | null>(null)
+  const [cashbackToUse, setCashbackToUse]     = useState(0)
   const [useCashback, setUseCashback]         = useState(false)
+  const [pointsToRedeem, setPointsToRedeem]   = useState(0)
+  const [usePoints, setUsePoints]             = useState(false)
 
   const {
     items, couponCode, deliveryType, deliveryBairro, tableId, customerPhone,
@@ -91,6 +94,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
       .then((d) => {
         setCashbackBalance(d.customer?.cashbackBalance ?? 0)
         setLoyaltyPoints(d.customer?.loyaltyPoints ?? 0)
+        setLoyaltyConfig(d.loyaltyConfig ?? null)
       })
       .catch(() => {})
   }, [customerPhone, tenant.id])
@@ -101,7 +105,14 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const deliveryFee = selectedZone
     ? (selectedZone.freeAbove && subtotal() >= selectedZone.freeAbove ? 0 : selectedZone.fee)
     : 0
-  const estimatedTotal = Math.max(0, subtotal() + deliveryFee - couponDiscount - (useCashback ? cashbackToUse : 0))
+  // Desconto de pontos — calcula em R$ baseado no config do lojista
+  const pointsDiscount = (() => {
+    if (!usePoints || !loyaltyConfig || pointsToRedeem <= 0) return 0
+    const blocks = Math.floor(pointsToRedeem / loyaltyConfig.redeemEvery)
+    return blocks * loyaltyConfig.redeemValue
+  })()
+
+  const estimatedTotal = Math.max(0, subtotal() + deliveryFee - couponDiscount - (useCashback ? cashbackToUse : 0) - pointsDiscount)
 
   const stepIndex = STEPS.indexOf(step)
   const isTableOrder = !!(tableId || tableInfo)
@@ -183,7 +194,8 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
         type: isTableOrder ? 'TABLE' : deliveryType === 'DELIVERY' ? 'DELIVERY' : 'PICKUP',
         tableId: tableId ?? undefined,
         couponCode: couponCode ?? undefined,
-        cashbackToUse: useCashback && cashbackToUse > 0 ? cashbackToUse : undefined,
+        cashbackToUse:  useCashback && cashbackToUse > 0 ? cashbackToUse : undefined,
+        pointsToRedeem: usePoints && pointsToRedeem > 0 ? pointsToRedeem : undefined,
         deliveryBairro: deliveryBairro ?? undefined,
         deliveryAddress: deliveryAddress || undefined,
         customerPhone: isTableOrder ? (customerPhone || phone || undefined) : (customerPhone || phone),
@@ -348,11 +360,60 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                     </div>
                   )}
 
-                  {/* Pontos de fidelidade — informativo por enquanto */}
-                  {loyaltyPoints > 0 && (
+                  {/* Pontos de fidelidade — resgate configurável pelo lojista */}
+                  {loyaltyPoints > 0 && loyaltyConfig && loyaltyPoints >= loyaltyConfig.minPointsRedeem && (
                     <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3">
-                      <p className="text-sm font-bold text-amber-700 dark:text-amber-400">⭐ {loyaltyPoints} pontos de fidelidade</p>
-                      <p className="text-xs text-amber-600/80 mt-0.5">Você acumulará mais pontos neste pedido!</p>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-bold text-amber-700 dark:text-amber-400">
+                            ⭐ Usar pontos de fidelidade
+                          </p>
+                          <p className="text-xs text-amber-600/80 mt-0.5">
+                            Você tem <strong>{loyaltyPoints} pts</strong> · A cada {loyaltyConfig.redeemEvery} pts = {formatCurrency(loyaltyConfig.redeemValue)}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const next = !usePoints
+                            setUsePoints(next)
+                            if (next) {
+                              // Máximo de pontos que pode usar sem negativar o pedido
+                              const maxDiscount = subtotal() + deliveryFee - couponDiscount - (useCashback ? cashbackToUse : 0)
+                              const maxBlocks   = Math.floor(maxDiscount / loyaltyConfig.redeemValue)
+                              const available   = Math.floor(loyaltyPoints / loyaltyConfig.redeemEvery)
+                              const blocks      = Math.min(maxBlocks, available)
+                              setPointsToRedeem(blocks * loyaltyConfig.redeemEvery)
+                            } else {
+                              setPointsToRedeem(0)
+                            }
+                          }}
+                          className={`relative w-11 h-6 rounded-full transition-colors ${usePoints ? 'bg-amber-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                        >
+                          <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${usePoints ? 'translate-x-5' : 'translate-x-0'}`} />
+                        </button>
+                      </div>
+
+                      {usePoints && (
+                        <div className="mt-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-amber-700 dark:text-amber-400">
+                              Usando: <strong>{pointsToRedeem} pts</strong> = <strong>{formatCurrency(pointsDiscount)}</strong>
+                            </span>
+                            <span className="text-xs text-amber-600/80">
+                              Restam: {loyaltyPoints - pointsToRedeem} pts
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={Math.floor(loyaltyPoints / loyaltyConfig.redeemEvery) * loyaltyConfig.redeemEvery}
+                            step={loyaltyConfig.redeemEvery}
+                            value={pointsToRedeem}
+                            onChange={(e) => setPointsToRedeem(Number(e.target.value))}
+                            className="w-full accent-amber-500"
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -552,6 +613,11 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                 {useCashback && cashbackToUse > 0 && (
                   <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400 font-semibold">
                     <span>💰 Cashback</span><span>-{formatCurrency(cashbackToUse)}</span>
+                  </div>
+                )}
+                {usePoints && pointsDiscount > 0 && (
+                  <div className="flex justify-between text-sm text-amber-600 dark:text-amber-400 font-semibold">
+                    <span>⭐ Pontos ({pointsToRedeem} pts)</span><span>-{formatCurrency(pointsDiscount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-black text-gray-900 dark:text-gray-100 border-t border-gray-200 dark:border-gray-700 pt-2.5">
