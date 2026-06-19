@@ -1,7 +1,7 @@
 'use client'
 // components/storefront/cart-drawer.tsx — pagamento múltiplo + endereço obrigatório
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, Trash2, Plus, Minus, Tag, Loader2, ArrowRight, ShoppingBag, Truck, Store, MapPin, PlusCircle, MinusCircle } from 'lucide-react'
 import { useCartStore } from '@/lib/store/cart'
 import { formatCurrency } from '@/lib/utils/format'
@@ -70,11 +70,30 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false)
   const [deliveryAddress, setDeliveryAddress] = useState('')
 
+  // ── Cashback / fidelidade ────────────────────────────────────────────────
+  const [cashbackBalance, setCashbackBalance] = useState(0)       // saldo disponível
+  const [loyaltyPoints, setLoyaltyPoints]     = useState(0)
+  const [cashbackToUse, setCashbackToUse]     = useState(0)       // quanto vai usar
+  const [useCashback, setUseCashback]         = useState(false)
+
   const {
     items, couponCode, deliveryType, deliveryBairro, tableId, customerPhone,
     removeItem, updateQuantity, setCoupon, setDeliveryType, setDeliveryBairro,
     setCustomer, subtotal, clearCart,
   } = useCartStore()
+
+  // Buscar saldo de cashback/pontos quando o cliente está identificado
+  useEffect(() => {
+    const phone = customerPhone
+    if (!phone || !tenant.id) { setCashbackBalance(0); setLoyaltyPoints(0); return }
+    fetch(`/api/storefront/customer?phone=${encodeURIComponent(phone)}&tenantId=${tenant.id}`)
+      .then((r) => r.json())
+      .then((d) => {
+        setCashbackBalance(d.customer?.cashbackBalance ?? 0)
+        setLoyaltyPoints(d.customer?.loyaltyPoints ?? 0)
+      })
+      .catch(() => {})
+  }, [customerPhone, tenant.id])
 
   const selectedZone = deliveryBairro
     ? tenant.deliveryZones.find((z) => z.bairro === deliveryBairro)
@@ -82,7 +101,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const deliveryFee = selectedZone
     ? (selectedZone.freeAbove && subtotal() >= selectedZone.freeAbove ? 0 : selectedZone.fee)
     : 0
-  const estimatedTotal = Math.max(0, subtotal() + deliveryFee - couponDiscount)
+  const estimatedTotal = Math.max(0, subtotal() + deliveryFee - couponDiscount - (useCashback ? cashbackToUse : 0))
 
   const stepIndex = STEPS.indexOf(step)
   const isTableOrder = !!(tableId || tableInfo)
@@ -164,6 +183,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
         type: isTableOrder ? 'TABLE' : deliveryType === 'DELIVERY' ? 'DELIVERY' : 'PICKUP',
         tableId: tableId ?? undefined,
         couponCode: couponCode ?? undefined,
+        cashbackToUse: useCashback && cashbackToUse > 0 ? cashbackToUse : undefined,
         deliveryBairro: deliveryBairro ?? undefined,
         deliveryAddress: deliveryAddress || undefined,
         customerPhone: isTableOrder ? (customerPhone || phone || undefined) : (customerPhone || phone),
@@ -272,6 +292,69 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                       </div>
                     )}
                   </div>
+
+                  {/* Cashback — só mostra se o cliente estiver identificado e tiver saldo */}
+                  {cashbackBalance > 0 && (
+                    <div className="pt-2">
+                      <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
+                              💰 Cashback disponível
+                            </p>
+                            <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-0.5">
+                              Saldo: <strong>{formatCurrency(cashbackBalance)}</strong>
+                            </p>
+                          </div>
+                          {/* Toggle */}
+                          <button
+                            onClick={() => {
+                              const next = !useCashback
+                              setUseCashback(next)
+                              if (next) {
+                                // Usar o menor entre saldo disponível e total do pedido
+                                const max = Math.min(cashbackBalance, subtotal() + deliveryFee - couponDiscount)
+                                setCashbackToUse(Math.floor(max * 100) / 100)
+                              } else {
+                                setCashbackToUse(0)
+                              }
+                            }}
+                            className={`relative w-11 h-6 rounded-full transition-colors ${useCashback ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                          >
+                            <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${useCashback ? 'translate-x-5' : 'translate-x-0'}`} />
+                          </button>
+                        </div>
+
+                        {useCashback && (
+                          <div className="mt-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs text-emerald-600 dark:text-emerald-400">Usando: <strong>{formatCurrency(cashbackToUse)}</strong></span>
+                              <span className="text-xs text-emerald-600 dark:text-emerald-400">Máx: {formatCurrency(Math.min(cashbackBalance, subtotal() + deliveryFee - couponDiscount))}</span>
+                            </div>
+                            <input
+                              type="range" min={0}
+                              max={Math.min(cashbackBalance, subtotal() + deliveryFee - couponDiscount)}
+                              step={0.01}
+                              value={cashbackToUse}
+                              onChange={(e) => setCashbackToUse(Number(e.target.value))}
+                              className="w-full accent-emerald-500"
+                            />
+                            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 text-center font-medium">
+                              -({formatCurrency(cashbackToUse)}) no total
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pontos de fidelidade — informativo por enquanto */}
+                  {loyaltyPoints > 0 && (
+                    <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-3">
+                      <p className="text-sm font-bold text-amber-700 dark:text-amber-400">⭐ {loyaltyPoints} pontos de fidelidade</p>
+                      <p className="text-xs text-amber-600/80 mt-0.5">Você acumulará mais pontos neste pedido!</p>
+                    </div>
+                  )}
 
                   {/* Tipo de entrega */}
                   {!isTableOrder && (
@@ -464,6 +547,11 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                 {couponCode && couponDiscount > 0 && (
                   <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400 font-semibold">
                     <span>🏷 Cupom {couponCode}</span><span>-{formatCurrency(couponDiscount)}</span>
+                  </div>
+                )}
+                {useCashback && cashbackToUse > 0 && (
+                  <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400 font-semibold">
+                    <span>💰 Cashback</span><span>-{formatCurrency(cashbackToUse)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-black text-gray-900 dark:text-gray-100 border-t border-gray-200 dark:border-gray-700 pt-2.5">
