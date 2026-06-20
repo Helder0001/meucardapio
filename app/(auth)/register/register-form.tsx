@@ -95,13 +95,14 @@ export function RegisterForm() {
       if (!publicKey) throw new Error('Chave pública do Mercado Pago não configurada.')
 
       // FIX: instanciar corretamente com `new MercadoPago(key, options)`
-      // e chamar createCardToken() diretamente na instância criada
+      // e chamar mp.cardToken.create() — no SDK v2 o método de tokenização
+      // fica no submódulo `cardToken`, não direto na instância `mp`.
       const mp = new MercadoPago(publicKey, { locale: 'pt-BR' })
 
       const [expMonth, expYear] = cardExpiry.split('/')
 
-      console.log('[register] chamando createCardToken...')
-      const result = await mp.createCardToken({
+      console.log('[register] chamando cardToken.create...')
+      const result = await mp.cardToken.create({
         cardNumber: cardNumber.replace(/\s/g, ''),
         cardholderName: cardName.trim(),
         cardExpirationMonth: expMonth,
