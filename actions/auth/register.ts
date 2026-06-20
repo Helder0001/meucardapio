@@ -15,6 +15,10 @@ import { hashPassword } from '@/lib/auth/password'
 import { signIn } from '@/lib/auth/session'
 import { nanoid } from 'nanoid'
 
+// Aumenta o timeout da função para 60s (máximo no plano Hobby da Vercel)
+// necessário pois a API do Mercado Pago /preapproval pode demorar mais que 10s
+export const maxDuration = 60
+
 const registerSchema = z.object({
   tenantName: z.string().min(2).max(100),
   slug:       z.string().min(2).max(50).regex(/^[a-z0-9-]+$/, 'URL inválida — use apenas letras minúsculas, números e hífens').optional(),
@@ -155,10 +159,6 @@ async function createMpSubscription(params: {
     return {}
   }
 
-  // Abort após 8s para não estourar o timeout da Vercel (10s)
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 8000)
-
   try {
     // Trial de 7 dias via start_date atrasado — free_trial não existe em
     // auto_recurring para o endpoint preapproval do MP
@@ -202,22 +202,26 @@ async function createMpSubscription(params: {
         'X-Idempotency-Key': `register-${params.email}-${Date.now()}`,
       },
       body: JSON.stringify(payload),
-      signal: controller.signal,
     })
 
-    clearTimeout(timeoutId)
+    // Lê como texto primeiro para garantir que o log aparece mesmo se não for JSON
+    const rawText = await res.text()
+    console.log('[register/mp] response status:', res.status, 'raw body:', rawText)
 
-    const data = await res.json()
-    console.log('[register/mp] response status:', res.status, 'body:', JSON.stringify(data))
+    let data: any = {}
+    try {
+      data = JSON.parse(rawText)
+    } catch {
+      console.error('[register/mp] body não é JSON válido:', rawText)
+      return { error: 'Resposta inesperada do Mercado Pago. Tente novamente.' }
+    }
 
     if (!res.ok) {
       console.error('[register/mp] preapproval error:', JSON.stringify(data))
 
-      // Extrair mensagem de erro do MP (pode vir em campos diferentes)
       const msg: string = data?.message ?? data?.error ?? 'Erro ao processar cartão'
       const causes: string = JSON.stringify(data?.cause ?? data?.causes ?? '')
 
-      // CC_VAL_433 = token inválido ou gerado com Public Key diferente do Access Token
       if (msg.includes('CC_VAL_433') || causes.includes('CC_VAL_433')) {
         return { error: 'Dados do cartão inválidos. Verifique os dados e tente novamente.' }
       }
@@ -233,11 +237,6 @@ async function createMpSubscription(params: {
 
     return { subscriptionId: String(data.id) }
   } catch (err: any) {
-    clearTimeout(timeoutId)
-    if (err.name === 'AbortError') {
-      console.error('[register/mp] TIMEOUT — requisição abortada após 8s')
-      return { error: 'Tempo limite excedido ao processar cartão. Tente novamente.' }
-    }
     console.error('[register/mp] catch error:', err)
     return { error: 'Erro ao processar cartão. Tente novamente.' }
   }
