@@ -23,18 +23,30 @@ export function RegisterForm() {
   const [cardToken, setCardToken]   = useState('')
   const [cardError, setCardError]   = useState('')
   const [tokenizing, setTokenizing] = useState(false)
+  const [sdkReady, setSdkReady]     = useState(false)
 
   // Load Mercado Pago SDK
   useEffect(() => {
+    // Se o script já foi injetado (ex: StrictMode monta o efeito 2x em dev),
+    // não duplica e só observa o carregamento existente.
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[src="https://sdk.mercadopago.com/js/v2"]'
+    )
+    if (existing) {
+      if ((window as any).MercadoPago) setSdkReady(true)
+      else existing.addEventListener('load', () => setSdkReady(true))
+      return
+    }
+
     const script = document.createElement('script')
     script.src = 'https://sdk.mercadopago.com/js/v2'
     script.async = true
+    script.onload = () => setSdkReady(true)
+    script.onerror = () => setCardError('Não foi possível carregar o Mercado Pago. Verifique sua conexão e recarregue a página.')
     document.head.appendChild(script)
-    return () => {
-      if (document.head.contains(script)) {
-        document.head.removeChild(script)
-      }
-    }
+    // Não removemos o script no cleanup: removê-lo e re-adicioná-lo
+    // (ex: em re-renders do StrictMode) pode deixar `window.MercadoPago`
+    // em estado inconsistente e foi a causa raiz do "Card token service not found".
   }, [])
 
   const formatCardNumber = (v: string) =>
@@ -86,7 +98,10 @@ export function RegisterForm() {
     try {
       console.log('[register] iniciando tokenização...')
 
-      // FIX: aguardar o SDK carregar caso ainda não esteja disponível
+      if (!sdkReady) {
+        throw new Error('O Mercado Pago ainda está carregando. Aguarde um instante e tente novamente.')
+      }
+
       const MercadoPago = (window as any).MercadoPago
       if (!MercadoPago) throw new Error('SDK do Mercado Pago não carregou. Recarregue a página.')
 
@@ -94,15 +109,14 @@ export function RegisterForm() {
       console.log('[register] MP public key presente:', !!publicKey)
       if (!publicKey) throw new Error('Chave pública do Mercado Pago não configurada.')
 
-      // FIX: instanciar corretamente com `new MercadoPago(key, options)`
-      // e chamar mp.cardToken.create() — no SDK v2 o método de tokenização
-      // fica no submódulo `cardToken`, não direto na instância `mp`.
+      // mp.createCardToken é o método correto dos Core Methods do SDK v2
+      // (ver docs oficiais: github.com/mercadopago/sdk-js/blob/main/docs/core-methods.md)
       const mp = new MercadoPago(publicKey, { locale: 'pt-BR' })
 
       const [expMonth, expYear] = cardExpiry.split('/')
 
-      console.log('[register] chamando cardToken.create...')
-      const result = await mp.cardToken.create({
+      console.log('[register] chamando createCardToken...')
+      const result = await mp.createCardToken({
         cardNumber: cardNumber.replace(/\s/g, ''),
         cardholderName: cardName.trim(),
         cardExpirationMonth: expMonth,
@@ -286,10 +300,12 @@ export function RegisterForm() {
       {/* Hidden field for card token */}
       <input type="hidden" name="cardToken" value={cardToken} />
 
-      <button type="submit" disabled={isPending || tokenizing}
+      <button type="submit" disabled={isPending || tokenizing || !sdkReady}
         className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
         {(isPending || tokenizing) ? (
           <><Loader2 className="h-4 w-4 animate-spin" /> {tokenizing ? 'Validando cartão...' : 'Criando conta...'}</>
+        ) : !sdkReady ? (
+          <><Loader2 className="h-4 w-4 animate-spin" /> Carregando...</>
         ) : (
           'Criar conta — 7 dias grátis'
         )}
