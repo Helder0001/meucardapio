@@ -62,12 +62,17 @@ export async function PATCH(
     return NextResponse.json({ error: 'Pedido não encontrado' }, { status: 404 })
   }
 
-  // ATTENDANT: não pode confirmar pagamento em pedidos de delivery
-  if (session.user.role === 'ATTENDANT' && order.type === 'DELIVERY') {
-    return NextResponse.json(
-      { error: 'Atendentes não podem confirmar pagamento de pedidos de delivery.' },
-      { status: 403 }
-    )
+  const isDelivery = order.type === 'DELIVERY'
+  const role = session.user.role
+
+  // STAFF e ATTENDANT: não podem confirmar pagamento de delivery
+  if ((role === 'STAFF' || role === 'ATTENDANT') && isDelivery) {
+    return NextResponse.json({ error: 'Sem permissão para confirmar pagamento de pedidos de delivery.' }, { status: 403 })
+  }
+
+  // DELIVERY_PERSON: só pode confirmar pagamento de delivery (não de outros tipos)
+  if (role === 'DELIVERY_PERSON' && !isDelivery) {
+    return NextResponse.json({ error: 'Entregadores só podem confirmar pagamento de pedidos de delivery.' }, { status: 403 })
   }
 
   const now = new Date()

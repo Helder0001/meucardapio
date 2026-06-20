@@ -55,21 +55,6 @@ export async function PATCH(
   const tenantId = session.user.tenantId
   const role = session.user.role
 
-  if (role === 'STAFF' && !STAFF_ALLOWED_STATUSES.includes(status)) {
-    return NextResponse.json(
-      { error: 'Operadores só podem confirmar, cancelar ou marcar pedidos como entregues.' },
-      { status: 403 }
-    )
-  }
-
-  // ATTENDANT: não pode avançar para OUT_FOR_DELIVERY (isso é do entregador/gerente)
-  if (role === 'ATTENDANT' && status === 'OUT_FOR_DELIVERY') {
-    return NextResponse.json(
-      { error: 'Atendentes não podem marcar pedidos como saiu para entrega.' },
-      { status: 403 }
-    )
-  }
-
   const order = await prisma.order.findFirst({
     where: { id, tenantId },
     select: { id: true, status: true, orderNumber: true, waiterId: true, type: true },
@@ -79,19 +64,31 @@ export async function PATCH(
     return NextResponse.json({ error: 'Pedido não encontrado' }, { status: 404 })
   }
 
-  // DELIVERY_PERSON: só pode mudar OUT_FOR_DELIVERY→DELIVERED em deliveries,
-  // ou PENDING→CONFIRMED e READY→DELIVERED em retiradas/balcão
+  const isDelivery = order.type === 'DELIVERY'
+
+  // DELIVERY_PERSON: só DELIVERY, só OUT_FOR_DELIVERY e DELIVERED
   if (role === 'DELIVERY_PERSON') {
-    const isDelivery = order.type === 'DELIVERY'
-    const allowed = isDelivery
-      ? ['DELIVERED']
-      : ['CONFIRMED', 'DELIVERED', 'CANCELLED']
-    if (!allowed.includes(status)) {
-      return NextResponse.json(
-        { error: 'Sem permissão para esta mudança de status.' },
-        { status: 403 }
-      )
+    if (!isDelivery) {
+      return NextResponse.json({ error: 'Entregadores só atuam em pedidos de delivery.' }, { status: 403 })
     }
+    if (!['OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'].includes(status)) {
+      return NextResponse.json({ error: 'Entregadores só podem marcar saiu para entrega ou entregue.' }, { status: 403 })
+    }
+  }
+
+  // STAFF e ATTENDANT: não podem marcar DELIVERED em pedidos DELIVERY
+  if ((role === 'STAFF' || role === 'ATTENDANT') && isDelivery && status === 'DELIVERED') {
+    return NextResponse.json({ error: 'Sem permissão para marcar pedidos de delivery como entregues.' }, { status: 403 })
+  }
+
+  // ATTENDANT e STAFF: não podem avançar para OUT_FOR_DELIVERY
+  if ((role === 'ATTENDANT' || role === 'STAFF') && status === 'OUT_FOR_DELIVERY') {
+    return NextResponse.json({ error: 'Sem permissão para marcar pedido como saiu para entrega.' }, { status: 403 })
+  }
+
+  // STAFF: só pode confirmar, preparar (via kanban drag?), cancelar — bloqueios mínimos
+  if (role === 'STAFF' && !['CONFIRMED', 'PREPARING', 'READY', 'CANCELLED', 'DELIVERED'].includes(status)) {
+    return NextResponse.json({ error: 'Operação não permitida para este perfil.' }, { status: 403 })
   }
 
   const allowedTransitions: Record<string, string[]> = {

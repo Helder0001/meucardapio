@@ -65,29 +65,39 @@ const NEXT_LABEL: Record<string, string> = {
   OUT_FOR_DELIVERY: 'Marcar como entregue',
 }
 
-// Operador (STAFF): pode confirmar pedido, marcar pronto e marcar entregue.
-// Não pode iniciar preparo (CONFIRMED→PREPARING) — isso é da cozinha/gerente.
-function getStaffAction(status: string): { next: string; label: string } | null {
-  if (status === 'PENDING')          return { next: 'CONFIRMED',        label: 'Confirmar pedido' }
-  if (status === 'READY')            return { next: 'DELIVERED',        label: 'Marcar como entregue' }
-  if (status === 'OUT_FOR_DELIVERY') return { next: 'DELIVERED',        label: 'Marcar como entregue' }
-  return null
-}
+// Regras de avanço de status por role e tipo de pedido:
+//
+// DELIVERY_PERSON → só pedidos DELIVERY, fluxo completo (todas as etapas)
+// STAFF           → todos os tipos EXCETO marcar DELIVERED em DELIVERY
+// ATTENDANT       → todos os tipos EXCETO marcar DELIVERED em DELIVERY
+// MANAGER/ADMIN   → tudo liberado
 
-// Entregador (DELIVERY_PERSON):
-// - Delivery: pode avançar OUT_FOR_DELIVERY → DELIVERED
-// - Retirada/Balcão: pode avançar READY → DELIVERED e PENDING → CONFIRMED
-function getDeliveryPersonAction(
-  status: string, orderType: string
-): { next: string; label: string } | null {
-  if (orderType === 'DELIVERY') {
-    if (status === 'OUT_FOR_DELIVERY') return { next: 'DELIVERED', label: 'Marcar como entregue' }
-    return null
+function getAllowedNextStatus(
+  status: string, orderType: string, role: string
+): { next: string; label: string } | undefined {
+  const isDelivery = orderType === 'DELIVERY'
+
+  // DELIVERY_PERSON: só pedidos DELIVERY, só saiu-p/entrega e entregue
+  if (role === 'DELIVERY_PERSON') {
+    if (!isDelivery) return undefined
+    if (status === 'READY')            return { next: 'OUT_FOR_DELIVERY', label: 'Saiu para entrega' }
+    if (status === 'OUT_FOR_DELIVERY') return { next: 'DELIVERED',        label: 'Marcar como entregue' }
+    return undefined
   }
-  // PICKUP / PDV / TABLE
-  if (status === 'PENDING') return { next: 'CONFIRMED', label: 'Confirmar pedido' }
-  if (status === 'READY')   return { next: 'DELIVERED', label: 'Marcar como entregue' }
-  return null
+
+  // STAFF e ATTENDANT: bloqueado de entregar pedidos delivery
+  if (role === 'STAFF' || role === 'ATTENDANT') {
+    if (isDelivery && (status === 'READY' || status === 'OUT_FOR_DELIVERY')) return undefined
+    const next = getNextStatus(status, orderType)
+    if (!next) return undefined
+    return { next, label: NEXT_LABEL[next] ?? NEXT_LABEL[status] ?? '' }
+  }
+
+  // MANAGER / TENANT_ADMIN: fluxo completo
+  const next = getNextStatus(status, orderType)
+  if (!next) return undefined
+  const label = status === 'READY' && isDelivery ? 'Saiu para entrega' : (NEXT_LABEL[status] ?? '')
+  return { next, label }
 }
 
 export function OrderDetail({ order, userRole }: { order: any; userRole: string }) {
@@ -98,27 +108,29 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
   const isAttendant      = userRole === 'ATTENDANT'
   const isStaff          = userRole === 'STAFF'
   const isDeliveryPerson = userRole === 'DELIVERY_PERSON'
-  const isRestricted     = isStaff || isDeliveryPerson
 
-  const restrictedAction = isStaff
-    ? getStaffAction(status)
-    : isDeliveryPerson
-      ? getDeliveryPersonAction(status, order.type)
-      : null
+  const nextAction   = getAllowedNextStatus(status, order.type, userRole)
+  const advanceTarget = nextAction?.next
+  const advanceLabel  = nextAction?.label
 
-  // Para ATTENDANT em pedidos de delivery: não avança para OUT_FOR_DELIVERY
-  const attendantNextStatus = (isAttendant && order.type === 'DELIVERY' && status === 'READY')
-    ? undefined  // nenhuma ação de avanço — deixa para o entregador
-    : getNextStatus(status, order.type)
-
-  const advanceTarget = isRestricted
-    ? restrictedAction?.next
-    : attendantNextStatus
-  const advanceLabel = isRestricted
-    ? restrictedAction?.label
-    : (status === 'READY' && order.type === 'DELIVERY'
-        ? 'Saiu para entrega'
-        : NEXT_LABEL[status])
+  // Confirmar pagamento manual:
+  // - DELIVERY_PERSON: só após DELIVERED (pedido entregue, cobrança no ato)
+  // - ATTENDANT e STAFF: bloqueados em pedidos DELIVERY
+  // - Admin/Gerente: sempre
+  const canConfirmPayment = (payment: any) => {
+    if (payment.status === 'PAID') return false
+    const isManualMethod = ['CASH', 'CREDIT_CARD', 'DEBIT_CARD'].includes(payment.method)
+    if (!isManualMethod) return false
+    if (isDeliveryPerson) {
+      // Entregador só confirma pagamento de pedidos DELIVERY, e só após entregue
+      return order.type === 'DELIVERY' && status === 'DELIVERED'
+    }
+    if (order.type === 'DELIVERY') {
+      // ATTENDANT e STAFF não confirmam pagamento de delivery
+      if (isAttendant || isStaff) return false
+    }
+    return true
+  }
 
   const advanceStatus = () => {
     const next = advanceTarget
@@ -256,7 +268,7 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
           </div>
         )}
         {/* CORREÇÃO: operador sem ação de avanço disponível neste status */}
-        {!isDone && isRestricted && !advanceTarget && (
+        {!isDone && (isStaff || isDeliveryPerson || isAttendant) && !advanceTarget && (
           <p className="text-xs text-muted-foreground mt-2">
             Este pedido está em preparo na cozinha. Você poderá marcá-lo como entregue quando estiver pronto.
           </p>
@@ -391,14 +403,8 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
                             </p>
                           )}
                         </div>
-                        {/* Confirmar pagamento manual:
-                            - Admin, Gerente: sempre
-                            - Atendente: só em não-delivery
-                            - Operador: sempre
-                            - Entregador: só em não-delivery */}
-                        {!isPaid && isManual &&
-                          !(isAttendant && order.type === 'DELIVERY') &&
-                          !(isDeliveryPerson && order.type === 'DELIVERY') && (
+                        {/* Confirmar pagamento — controlado por canConfirmPayment() */}
+                        {canConfirmPayment(p) && (
                           <button
                             onClick={() => markPaymentPaid(p.id)}
                             disabled={isPending}
