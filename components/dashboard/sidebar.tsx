@@ -30,43 +30,54 @@ interface NavItem {
 // - Multi-PDV apontava para /dashboard/pdv (página não existia) → página
 //   criada. Exigência de plano reduzida de PREMIUM para PRO, já que o plano
 //   Premium foi removido da oferta.
+const ADMIN_ROLES  = ['TENANT_ADMIN']
+const MANAGER_UP   = ['TENANT_ADMIN', 'MANAGER']
+const ATTENDANT_UP = ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT']
+const ORDERS_ROLES = ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'STAFF', 'DELIVERY_PERSON']
+
 const navItems: NavItem[] = [
-  { label: 'Dashboard',    href: '/dashboard',                    icon: LayoutDashboard },
+  // Dashboard — só Admins e Gerentes (outros começam no Kanban)
+  { label: 'Dashboard',    href: '/dashboard',                    icon: LayoutDashboard,
+    allowedRoles: MANAGER_UP },
+  // Pedidos e Kanban — todos os roles operacionais
   { label: 'Pedidos',      href: '/dashboard/orders',             icon: ShoppingBag,
-    allowedRoles: ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT'] },
-  { label: 'Kanban',       href: '/dashboard/orders/kanban',      icon: LayoutDashboard },
+    allowedRoles: ORDERS_ROLES },
+  { label: 'Kanban',       href: '/dashboard/orders/kanban',      icon: LayoutDashboard,
+    allowedRoles: ORDERS_ROLES },
+  // Cardápio
   { label: 'Cardápio',     href: '/dashboard/menu/products',      icon: UtensilsCrossed,
-    allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
+    allowedRoles: MANAGER_UP },
   { label: 'Categorias',   href: '/dashboard/menu/categories',    icon: UtensilsCrossed,
-    allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
+    allowedRoles: MANAGER_UP },
   { label: 'Adicionais',   href: '/dashboard/menu/addons',        icon: UtensilsCrossed,
-    allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
+    allowedRoles: MANAGER_UP },
   { label: 'Mesas',        href: '/dashboard/tables',             icon: Table2,
-    allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
+    allowedRoles: MANAGER_UP },
   { label: 'Clientes',     href: '/dashboard/customers',          icon: Users,
-    allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
+    allowedRoles: MANAGER_UP },
   { label: 'Permissões',   href: '/dashboard/users',              icon: ShieldCheck,
-    allowedRoles: ['TENANT_ADMIN'] },
+    allowedRoles: ADMIN_ROLES },
   { label: 'Delivery',     href: '/dashboard/delivery',           icon: Truck,       minPlan: 'PRO',
-    allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
+    allowedRoles: MANAGER_UP },
   { label: 'Cupons',       href: '/dashboard/coupons',            icon: Tag,         minPlan: 'PRO',
-    allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
+    allowedRoles: MANAGER_UP },
   { label: 'Fidelidade',   href: '/dashboard/loyalty',            icon: Star,        minPlan: 'PRO',
-    allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
+    allowedRoles: MANAGER_UP },
   { label: 'WhatsApp',     href: '/dashboard/settings/whatsapp',  icon: MessageSquare, minPlan: 'PRO',
-    allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
+    allowedRoles: MANAGER_UP },
   { label: 'Multi-PDV',    href: '/dashboard/pdv',                icon: Store,       minPlan: 'PRO',
-    allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
+    allowedRoles: MANAGER_UP },
   { label: 'Avaliações',   href: '/dashboard/reviews',            icon: Star,
-    allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
+    allowedRoles: MANAGER_UP },
   { label: 'Relatórios',   href: '/dashboard/reports',            icon: BarChart3,
-    allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
+    allowedRoles: MANAGER_UP },
   { label: 'Impressoras',  href: '/dashboard/printers',           icon: Printer,
-    allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
-  { label: 'Pagamentos',    href: '/dashboard/settings/payments',  icon: QrCode,
-    allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
+    allowedRoles: MANAGER_UP },
+  { label: 'Pagamentos',   href: '/dashboard/settings/payments',  icon: QrCode,
+    allowedRoles: MANAGER_UP },
+  // Configurações — só Admin (não Atendente, não Gerente de piso)
   { label: 'Configurações',href: '/dashboard/settings',           icon: Settings,
-    allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
+    allowedRoles: ADMIN_ROLES },
 ]
 
 interface SidebarProps {
@@ -158,17 +169,27 @@ export function Sidebar({ userRole, tenantSlug, plan }: SidebarProps) {
         })}
       </nav>
 
-      {/* Badge de role para STAFF */}
-      {!collapsed && userRole === 'STAFF' && (
-        <div className="px-4 py-2 border-t border-border">
-          <span className="text-xs font-medium px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-            🍽️ Modo Operador
-          </span>
-        </div>
-      )}
+      {/* Badge de modo para roles operacionais */}
+      {!collapsed && !['TENANT_ADMIN', 'MASTER_ADMIN'].includes(userRole) && (() => {
+        const modeLabel: Record<string, string> = {
+          MANAGER:         '👔 Modo Gerente',
+          ATTENDANT:       '🧾 Modo Atendente',
+          STAFF:           '🍽️ Modo Operador',
+          DELIVERY_PERSON: '🛵 Modo Entregador',
+        }
+        const label = modeLabel[userRole]
+        if (!label) return null
+        return (
+          <div className="px-4 py-2 border-t border-border">
+            <span className="text-xs font-medium px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+              {label}
+            </span>
+          </div>
+        )
+      })()}
 
-      {/* Plano atual */}
-      {!collapsed && userRole !== 'STAFF' && (
+      {/* Plano atual — só Admin e Gerente */}
+      {!collapsed && ['TENANT_ADMIN', 'MASTER_ADMIN', 'MANAGER'].includes(userRole) && (
         <div className="px-4 py-3 border-t border-border">
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">Plano</span>

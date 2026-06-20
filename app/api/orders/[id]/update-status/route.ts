@@ -64,11 +64,26 @@ export async function PATCH(
 
   const order = await prisma.order.findFirst({
     where: { id, tenantId },
-    select: { id: true, status: true, orderNumber: true, waiterId: true },
+    select: { id: true, status: true, orderNumber: true, waiterId: true, type: true },
   })
 
   if (!order) {
     return NextResponse.json({ error: 'Pedido não encontrado' }, { status: 404 })
+  }
+
+  // DELIVERY_PERSON: só pode mudar OUT_FOR_DELIVERY→DELIVERED em deliveries,
+  // ou PENDING→CONFIRMED e READY→DELIVERED em retiradas/balcão
+  if (role === 'DELIVERY_PERSON') {
+    const isDelivery = order.type === 'DELIVERY'
+    const allowed = isDelivery
+      ? ['DELIVERED']
+      : ['CONFIRMED', 'DELIVERED', 'CANCELLED']
+    if (!allowed.includes(status)) {
+      return NextResponse.json(
+        { error: 'Sem permissão para esta mudança de status.' },
+        { status: 403 }
+      )
+    }
   }
 
   const allowedTransitions: Record<string, string[]> = {

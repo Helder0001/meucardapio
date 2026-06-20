@@ -18,6 +18,12 @@ export default async function DashboardPage() {
   const session = await auth()
   if (!session?.user?.tenantId) redirect('/login')
 
+  const role = session.user.role
+  // Roles sem acesso ao Dashboard → redireciona para o Kanban
+  if (['STAFF', 'DELIVERY_PERSON', 'ATTENDANT'].includes(role)) {
+    redirect('/dashboard/orders/kanban')
+  }
+
   const tenantId = session.user.tenantId
   const now = new Date()
   // FIX: Calcular o início do dia no fuso horário de Brasília (America/Sao_Paulo, UTC-3).

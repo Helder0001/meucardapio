@@ -27,7 +27,7 @@ export async function PATCH(
   }
 
   // Apenas admin, manager e attendant podem confirmar pagamento
-  const allowedRoles = ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'MASTER_ADMIN']
+  const allowedRoles = ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'MASTER_ADMIN', 'STAFF', 'DELIVERY_PERSON']
   if (!allowedRoles.includes(session.user.role)) {
     return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
   }
