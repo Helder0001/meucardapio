@@ -30,7 +30,11 @@ export function RegisterForm() {
     script.src = 'https://sdk.mercadopago.com/js/v2'
     script.async = true
     document.head.appendChild(script)
-    return () => { document.head.removeChild(script) }
+    return () => {
+      if (document.head.contains(script)) {
+        document.head.removeChild(script)
+      }
+    }
   }, [])
 
   const formatCardNumber = (v: string) =>
@@ -58,34 +62,63 @@ export function RegisterForm() {
       return null
     }
 
+    if (!cardNumber.replace(/\s/g, '') || cardNumber.replace(/\s/g, '').length < 13) {
+      setCardError('Número do cartão inválido.')
+      return null
+    }
+
+    if (!cardName.trim()) {
+      setCardError('Nome no cartão é obrigatório.')
+      return null
+    }
+
+    if (!cardExpiry.includes('/') || cardExpiry.length < 5) {
+      setCardError('Data de validade inválida.')
+      return null
+    }
+
+    if (!cardCvv || cardCvv.length < 3) {
+      setCardError('CVV inválido.')
+      return null
+    }
+
     setTokenizing(true)
     try {
       console.log('[register] iniciando tokenização...')
-      const mp = (window as any).MercadoPago
-      if (!mp) throw new Error('SDK do Mercado Pago não carregou. Recarregue a página.')
+
+      // FIX: aguardar o SDK carregar caso ainda não esteja disponível
+      const MercadoPago = (window as any).MercadoPago
+      if (!MercadoPago) throw new Error('SDK do Mercado Pago não carregou. Recarregue a página.')
 
       const publicKey = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY
       console.log('[register] MP public key presente:', !!publicKey)
+      if (!publicKey) throw new Error('Chave pública do Mercado Pago não configurada.')
 
-      const mpInstance = new mp(publicKey)
+      // FIX: instanciar corretamente com `new MercadoPago(key, options)`
+      // e chamar createCardToken() diretamente na instância criada
+      const mp = new MercadoPago(publicKey, { locale: 'pt-BR' })
+
       const [expMonth, expYear] = cardExpiry.split('/')
 
       console.log('[register] chamando createCardToken...')
-      const result = await mpInstance.createCardToken({
+      const result = await mp.createCardToken({
         cardNumber: cardNumber.replace(/\s/g, ''),
         cardholderName: cardName.trim(),
         cardExpirationMonth: expMonth,
         cardExpirationYear: `20${expYear}`,
         securityCode: cardCvv,
-        // CORREÇÃO: o Mercado Pago Brasil exige identificação (CPF) do titular
-        // pra tokenizar o cartão — sem isso o createCardToken falha.
         identificationType: 'CPF',
         identificationNumber: cpfDigits,
       })
 
       console.log('[register] resultado MP:', JSON.stringify(result))
 
-      if (result.error) throw new Error(result.error.message ?? 'Cartão inválido')
+      // FIX: o SDK v2 retorna erros em result.cause[], não em result.error
+      if (!result?.id) {
+        const cause = result?.cause?.[0]
+        const msg = cause?.description ?? cause?.code ?? 'Cartão inválido. Verifique os dados.'
+        throw new Error(msg)
+      }
 
       setCardToken(result.id)
       return result.id
