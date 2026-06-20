@@ -23,7 +23,7 @@ const roleLabels: Record<string, string> = {
   TENANT_ADMIN:    'Administrador',
   MANAGER:         'Gerente',
   ATTENDANT:       'Atendente',
-  WAITER:          'Garçom',
+  STAFF:          'Operador',
   DELIVERY_PERSON: 'Entregador',
 }
 

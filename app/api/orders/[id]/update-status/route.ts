@@ -8,6 +8,11 @@ import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { notifyOrderStatus } from '@/lib/messaging/evolution'
 import { z } from 'zod'
 
+const ROLE_LABELS: Record<string, string> = {
+  TENANT_ADMIN: 'Administrador', MANAGER: 'Gerente',
+  ATTENDANT: 'Atendente', STAFF: 'Operador', DELIVERY_PERSON: 'Entregador',
+}
+
 const updateSchema = z.object({
   status: z.enum([
     'PENDING', 'CONFIRMED', 'PREPARING',
@@ -24,7 +29,7 @@ const STATUS_TIMESTAMPS: Record<string, string> = {
   CANCELLED: 'cancelledAt',
 }
 
-const WAITER_ALLOWED_STATUSES = ['CONFIRMED', 'CANCELLED', 'DELIVERED']
+const STAFF_ALLOWED_STATUSES = ['CONFIRMED', 'CANCELLED', 'DELIVERED']
 
 export async function PATCH(
   request: Request,
@@ -50,9 +55,9 @@ export async function PATCH(
   const tenantId = session.user.tenantId
   const role = session.user.role
 
-  if (role === 'WAITER' && !WAITER_ALLOWED_STATUSES.includes(status)) {
+  if (role === 'STAFF' && !STAFF_ALLOWED_STATUSES.includes(status)) {
     return NextResponse.json(
-      { error: 'Garçons só podem confirmar, cancelar ou marcar pedidos como entregues.' },
+      { error: 'Operadores só podem confirmar, cancelar ou marcar pedidos como entregues.' },
       { status: 403 }
     )
   }
@@ -88,13 +93,20 @@ export async function PATCH(
     status,
     ...(timestampField ? { [timestampField]: new Date() } : {}),
     ...(status === 'CANCELLED' && cancelReason ? { cancelReason } : {}),
-    ...(role === 'WAITER' && !order.waiterId ? { waiterId: session.user.id } : {}),
+    ...(role === 'STAFF' && !order.waiterId ? { waiterId: session.user.id } : {}),
   }
 
   await prisma.$transaction(async (tx) => {
     await tx.order.update({ where: { id }, data: updateData })
     await tx.orderStatusHistory.create({
-      data: { orderId: id, status, userId: session.user.id, notes: cancelReason },
+      data: {
+        orderId: id,
+        status,
+        userId: session.user.id,
+        notes: cancelReason
+          ? cancelReason
+          : `Alterado por ${session.user.name ?? session.user.email} (${ROLE_LABELS[role] ?? role})`,
+      },
     })
 
     // CORREÇÃO: incrementar soldCount dos produtos ao entregar o pedido.

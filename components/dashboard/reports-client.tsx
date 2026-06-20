@@ -35,11 +35,13 @@ interface ReportsClientProps {
   // Listas para os filtros
   pdvList:     Array<{ id: string; name: string }>
   productList: Array<{ id: string; name: string }>
+  userList:    Array<{ id: string; name: string; role: string }>
   // Valores atuais dos filtros
   filterPdv:      string
   filterPayment:  string
   filterProduct:  string
   filterSaleType: string
+  filterUser:     string
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -47,6 +49,11 @@ const TYPE_LABELS: Record<string, string> = {
   TABLE:    '🍽️ Mesa',
   PICKUP:   '🏪 Retirada',
   PDV:      '💳 Balcão',
+}
+
+const ROLE_LABELS_SHORT: Record<string, string> = {
+  TENANT_ADMIN: 'Admin', MANAGER: 'Gerente',
+  ATTENDANT: 'Atendente', STAFF: 'Operador', DELIVERY_PERSON: 'Entregador',
 }
 
 const METHOD_LABELS: Record<string, string> = {
@@ -118,8 +125,8 @@ const SelectFilter = ({
 export function ReportsClient({
   revenueChart, topProducts, salesByType, salesByPayment,
   salesByHour, summary, startDate, endDate,
-  pdvList, productList,
-  filterPdv, filterPayment, filterProduct, filterSaleType,
+  pdvList, productList, userList,
+  filterPdv, filterPayment, filterProduct, filterSaleType, filterUser,
 }: ReportsClientProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -132,19 +139,21 @@ export function ReportsClient({
   const [payment,  setPayment]  = useState(filterPayment)
   const [product,  setProduct]  = useState(filterProduct)
   const [saleType, setSaleType] = useState(filterSaleType)
+  const [user,     setUser]     = useState(filterUser)
   const [showAdvanced, setShowAdvanced] = useState(
-    !!(filterPdv || filterPayment || filterProduct || filterSaleType)
+    !!(filterPdv || filterPayment || filterProduct || filterSaleType || filterUser)
   )
 
   const growthPositive = summary.revenueGrowth > 0
   const growthNeutral  = summary.revenueGrowth === 0
 
-  const buildUrl = (s: string, e: string, p = pdv, pay = payment, prod = product, st = saleType) => {
+  const buildUrl = (s: string, e: string, p = pdv, pay = payment, prod = product, st = saleType, u = user) => {
     const q = new URLSearchParams({ start: s, end: e })
     if (p)   q.set('pdv',      p)
     if (pay) q.set('payment',  pay)
     if (prod)q.set('product',  prod)
     if (st)  q.set('saleType', st)
+    if (u)   q.set('user',     u)
     return `/dashboard/reports?${q.toString()}`
   }
 
@@ -171,7 +180,7 @@ export function ReportsClient({
   }
 
   const clearAdvanced = () => {
-    setPdv(''); setPayment(''); setProduct(''); setSaleType('')
+    setPdv(''); setPayment(''); setProduct(''); setSaleType(''); setUser('')
     startTransition(() => router.push(buildUrl(start, end, '', '', '', '')))
   }
 
@@ -315,6 +324,20 @@ export function ReportsClient({
                 options={[
                   { value: '', label: 'Todos os produtos' },
                   ...productList.map((p) => ({ value: p.id, label: p.name })),
+                ]}
+              />
+
+              {/* Usuário / Operador */}
+              <SelectFilter
+                label="Usuário"
+                value={user}
+                onChange={setUser}
+                options={[
+                  { value: '', label: 'Todos os usuários' },
+                  ...userList.map((u) => ({
+                    value: u.id,
+                    label: `${u.name} (${ROLE_LABELS_SHORT[u.role] ?? u.role})`,
+                  })),
                 ]}
               />
 

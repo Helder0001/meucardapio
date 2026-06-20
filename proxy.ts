@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 
-const RESTRICTED_ROLES = ['WAITER', 'DELIVERY_PERSON'];
+const RESTRICTED_ROLES = ['STAFF', 'DELIVERY_PERSON'];
 
 const ALLOWED_EXACT = ['/dashboard'];
 
@@ -172,7 +172,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // =========================
-  // Restrição WAITER/DELIVERY
+  // Restrição STAFF/DELIVERY
   // =========================
   if (
     pathname.startsWith('/dashboard') &&

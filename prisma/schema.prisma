@@ -36,7 +36,7 @@ enum UserRole {
   TENANT_ADMIN    // dono do restaurante
   MANAGER         // gerente
   ATTENDANT       // atendente/caixa
-  WAITER          // garçom
+  STAFF           // operador (ex-garçom) — acesso limitado a pedidos
   DELIVERY_PERSON // entregador
 }
 

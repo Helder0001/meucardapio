@@ -24,22 +24,29 @@ const ROLE_LABELS: Record<string, string> = {
   TENANT_ADMIN:    'Administrador',
   MANAGER:         'Gerente',
   ATTENDANT:       'Atendente',
-  WAITER:          'Garçom',
+  STAFF:           'Operador',
   DELIVERY_PERSON: 'Entregador',
 }
 
 const ROLE_DESC: Record<string, string> = {
-  MANAGER:         'Acesso completo exceto configurações de conta e usuários',
-  ATTENDANT:       'Gerencia pedidos e kanban',
-  WAITER:          'Confirmar, cancelar e marcar entregue. Sem relatórios ou configurações',
-  DELIVERY_PERSON: 'Visualiza pedidos para entrega',
+  MANAGER:         'Acesso total: pedidos, kanban, cardápio, relatórios, clientes e configurações (exceto usuários e conta)',
+  ATTENDANT:       'Pedidos e kanban — pode criar, confirmar, preparar e entregar pedidos',
+  STAFF:           'Acesso mínimo: só pode confirmar pagamento, cancelar e marcar como entregue',
+  DELIVERY_PERSON: 'Visualiza apenas pedidos prontos para entrega',
+}
+
+const ROLE_PERMISSIONS: Record<string, string[]> = {
+  MANAGER:         ['Gerenciar pedidos', 'Editar cardápio', 'Ver relatórios', 'Gerenciar clientes', 'Configurações gerais'],
+  ATTENDANT:       ['Gerenciar pedidos', 'Kanban', 'Criar pedidos no PDV'],
+  STAFF:           ['Confirmar pagamento', 'Cancelar pedido', 'Marcar como entregue'],
+  DELIVERY_PERSON: ['Ver pedidos prontos'],
 }
 
 const ROLE_COLORS: Record<string, string> = {
   TENANT_ADMIN:    'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   MANAGER:         'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   ATTENDANT:       'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-  WAITER:          'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  STAFF:          'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
   DELIVERY_PERSON: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
 }
 
@@ -66,7 +73,7 @@ export function UsersManager({ users: initial, currentUserId, canAddMore, plan }
   const [showForm,  setShowForm]  = useState(false)
   const [isPending, start]        = useTransition()
   const [formState, formAction]   = useFormState(createUserAction, {})
-  const [roleSelected, setRoleSelected] = useState<string>('WAITER')
+  const [roleSelected, setRoleSelected] = useState<string>('STAFF')
 
   if (formState.success && showForm) {
     setShowForm(false)
@@ -98,7 +105,7 @@ export function UsersManager({ users: initial, currentUserId, canAddMore, plan }
         </div>
       )}
 
-      {/* Info permissões garçom */}
+      {/* Info permissões operador */}
       <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex gap-3">
         <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
         <div className="text-sm text-blue-700 dark:text-blue-300">
@@ -160,11 +167,20 @@ export function UsersManager({ users: initial, currentUserId, canAddMore, plan }
                 className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
                 <option value="MANAGER">Gerente</option>
                 <option value="ATTENDANT">Atendente</option>
-                <option value="WAITER">Garçom</option>
+                <option value="STAFF">Operador</option>
                 <option value="DELIVERY_PERSON">Entregador</option>
               </select>
-              {ROLE_DESC[roleSelected] && (
-                <p className="mt-1 text-xs text-muted-foreground">{ROLE_DESC[roleSelected]}</p>
+              {roleSelected && (
+                <div className="mt-2 p-3 rounded-lg bg-muted/50 space-y-1.5">
+                  <p className="text-xs text-muted-foreground">{ROLE_DESC[roleSelected]}</p>
+                  {ROLE_PERMISSIONS[roleSelected] && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {ROLE_PERMISSIONS[roleSelected].map((p) => (
+                        <span key={p} className="text-[11px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">✓ {p}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 

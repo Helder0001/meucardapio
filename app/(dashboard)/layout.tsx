@@ -3,7 +3,7 @@
 // Layout compartilhado por todas as páginas do dashboard.
 // Server Component: verifica autenticação básica.
 //
-// CORREÇÃO: a restrição de rotas por papel (WAITER/DELIVERY_PERSON só podem
+// CORREÇÃO: a restrição de rotas por papel (STAFF/DELIVERY_PERSON só podem
 // acessar /dashboard e /dashboard/orders/**) foi movida para middleware.ts,
 // que roda no Edge antes da renderização e tem acesso confiável ao
 // pathname — a abordagem anterior, baseada em headers() dentro do layout,

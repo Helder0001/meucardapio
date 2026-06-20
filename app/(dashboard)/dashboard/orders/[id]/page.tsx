@@ -42,7 +42,10 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       },
       statusHistory: {
         orderBy: { createdAt: 'asc' },
-        select: { status: true, createdAt: true, notes: true },
+        select: {
+          status: true, createdAt: true, notes: true,
+          user: { select: { name: true, role: true } },
+        },
       },
     },
   })
@@ -108,7 +111,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           Pedido #{String(order.orderNumber).padStart(4, '0')}
         </h1>
       </div>
-      {/* CORREÇÃO: garçons (WAITER) só podem confirmar, cancelar ou marcar
+      {/* CORREÇÃO: garçons (STAFF) só podem confirmar, cancelar ou marcar
           como entregue — demais transições ficam ocultas. */}
       <OrderDetail order={serialized} userRole={session.user.role} />
     </div>

@@ -37,7 +37,7 @@ const TYPE_LABELS: Record<string, string> = {
 const ROLE_LABELS: Record<string, string> = {
   MANAGER: 'Gerente',
   ATTENDANT: 'Atendente',
-  WAITER: 'Garçom',
+  STAFF: 'Operador',
 }
 
 function SubmitBtn({ label }: { label: string }) {
@@ -201,7 +201,7 @@ export function PdvManager({ pdvs: initial, users, hasAccess }: { pdvs: PdvItem[
                 <div className="border-t border-border p-4">
                   <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Equipe vinculada a este PDV</p>
                   {users.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nenhum atendente/garçom cadastrado ainda.</p>
+                    <p className="text-sm text-muted-foreground">Nenhum atendente/operador cadastrado ainda.</p>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {users.map((u) => {

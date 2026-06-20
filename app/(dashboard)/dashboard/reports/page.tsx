@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic'
 interface PageProps {
   searchParams: Promise<{
     start?: string; end?: string
-    pdv?: string; payment?: string; product?: string; saleType?: string
+    pdv?: string; payment?: string; product?: string; saleType?: string; user?: string
   }>
 }
 
@@ -169,6 +169,7 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   const filterPayment  = params.payment  || ''
   const filterProduct  = params.product  || ''
   const filterSaleType = params.saleType || ''
+  const filterUser     = params.user     || ''
 
   // Cláusula base para Prisma ORM
   const baseWhere: any = {
@@ -176,11 +177,14 @@ export default async function ReportsPage({ searchParams }: PageProps) {
     status: PAID_STATUS_FILTER,
     createdAt: { gte: startDate, lte: endDate },
   }
-  if (filterPdv)      baseWhere.pdvId = filterPdv
-  if (filterSaleType) baseWhere.type  = filterSaleType as OrderType
+  if (filterPdv)      baseWhere.pdvId    = filterPdv
+  if (filterSaleType) baseWhere.type     = filterSaleType as OrderType
+  if (filterUser)     baseWhere.statusHistory = {
+    some: { userId: filterUser }
+  }
 
   // ── Listas para os selects ───────────────────────────────────────────────
-  const [pdvList, productList] = await Promise.all([
+  const [pdvList, productList, userList] = await Promise.all([
     prisma.pDV.findMany({
       where: { tenantId },
       select: { id: true, name: true },
@@ -189,6 +193,11 @@ export default async function ReportsPage({ searchParams }: PageProps) {
     prisma.product.findMany({
       where: { tenantId },
       select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.user.findMany({
+      where: { tenantId, isActive: true },
+      select: { id: true, name: true, role: true },
       orderBy: { name: 'asc' },
     }),
   ])
@@ -308,10 +317,12 @@ export default async function ReportsPage({ searchParams }: PageProps) {
       endDate={endDate.toISOString().slice(0, 10)}
       pdvList={pdvList}
       productList={productList}
+      userList={userList}
       filterPdv={filterPdv}
       filterPayment={filterPayment}
       filterProduct={filterProduct}
       filterSaleType={filterSaleType}
+      filterUser={filterUser}
     />
   )
 }

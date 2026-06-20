@@ -3,7 +3,7 @@
 // RBAC (Role-Based Access Control)
 //
 // Hierarquia de permissões (maior número = mais poder):
-// MASTER_ADMIN (100) > TENANT_ADMIN (80) > MANAGER (60) > ATTENDANT (40) > WAITER (20) > DELIVERY_PERSON (10)
+// MASTER_ADMIN (100) > TENANT_ADMIN (80) > MANAGER (60) > ATTENDANT (40) > STAFF (20) > DELIVERY_PERSON (10)
 //
 // Uso nas Server Actions:
 //   await requireRole(session, 'MANAGER')
@@ -17,7 +17,7 @@ export type UserRole =
   | 'TENANT_ADMIN'
   | 'MANAGER'
   | 'ATTENDANT'
-  | 'WAITER'
+  | 'STAFF'
   | 'DELIVERY_PERSON'
 
 const ROLE_LEVEL: Record<UserRole, number> = {
@@ -25,15 +25,15 @@ const ROLE_LEVEL: Record<UserRole, number> = {
   TENANT_ADMIN: 80,
   MANAGER: 60,
   ATTENDANT: 40,
-  WAITER: 20,
+  STAFF: 20,
   DELIVERY_PERSON: 10,
 }
 
 // O que cada role pode fazer
 export const PERMISSIONS = {
   // Pedidos
-  'orders:create': ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'WAITER'],
-  'orders:view': ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'WAITER'],
+  'orders:create': ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'STAFF'],
+  'orders:view': ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'STAFF'],
   'orders:cancel': ['TENANT_ADMIN', 'MANAGER'],
   'orders:refund': ['TENANT_ADMIN', 'MANAGER'],
 

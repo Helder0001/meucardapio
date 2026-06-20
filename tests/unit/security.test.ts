@@ -16,15 +16,15 @@ describe('RBAC', () => {
     expect(hasPermission('MASTER_ADMIN', 'master:access')).toBe(true)
     expect(hasPermission('MASTER_ADMIN', 'orders:cancel')).toBe(true)
   })
-  it('WAITER nao pode cancelar pedidos', () => {
-    expect(hasPermission('WAITER', 'orders:cancel')).toBe(false)
+  it('STAFF nao pode cancelar pedidos', () => {
+    expect(hasPermission('STAFF', 'orders:cancel')).toBe(false)
   })
   it('DELIVERY_PERSON nao acessa relatorios', () => {
     expect(hasPermission('DELIVERY_PERSON', 'reports:view')).toBe(false)
   })
   it('hierarquia de roles correta', () => {
     expect(hasRole('MASTER_ADMIN', 'TENANT_ADMIN')).toBe(true)
-    expect(hasRole('WAITER', 'MANAGER')).toBe(false)
+    expect(hasRole('STAFF', 'MANAGER')).toBe(false)
   })
 })
 

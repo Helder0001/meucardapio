@@ -8,7 +8,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Users, Table2,
   Truck, BarChart3, Settings, Tag, Star, MessageSquare, Printer,
-  ChevronLeft, ChevronRight, Store, QrCode,
+  ChevronLeft, ChevronRight, Store, QrCode, ShieldCheck,
 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -45,6 +45,8 @@ const navItems: NavItem[] = [
     allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
   { label: 'Clientes',     href: '/dashboard/customers',          icon: Users,
     allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
+  { label: 'Permissões',   href: '/dashboard/users',              icon: ShieldCheck,
+    allowedRoles: ['TENANT_ADMIN'] },
   { label: 'Delivery',     href: '/dashboard/delivery',           icon: Truck,       minPlan: 'PRO',
     allowedRoles: ['TENANT_ADMIN', 'MANAGER'] },
   { label: 'Cupons',       href: '/dashboard/coupons',            icon: Tag,         minPlan: 'PRO',
@@ -156,17 +158,17 @@ export function Sidebar({ userRole, tenantSlug, plan }: SidebarProps) {
         })}
       </nav>
 
-      {/* Badge de role para WAITER */}
-      {!collapsed && userRole === 'WAITER' && (
+      {/* Badge de role para STAFF */}
+      {!collapsed && userRole === 'STAFF' && (
         <div className="px-4 py-2 border-t border-border">
           <span className="text-xs font-medium px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-            🍽️ Modo Garçom
+            🍽️ Modo Operador
           </span>
         </div>
       )}
 
       {/* Plano atual */}
-      {!collapsed && userRole !== 'WAITER' && (
+      {!collapsed && userRole !== 'STAFF' && (
         <div className="px-4 py-3 border-t border-border">
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">Plano</span>

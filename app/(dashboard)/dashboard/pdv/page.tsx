@@ -37,7 +37,7 @@ export default async function PdvPage() {
       },
     }),
     prisma.user.findMany({
-      where: { tenantId, isActive: true, role: { in: ['ATTENDANT', 'WAITER', 'MANAGER'] } },
+      where: { tenantId, isActive: true, role: { in: ['ATTENDANT', 'STAFF', 'MANAGER'] } },
       select: { id: true, name: true, email: true, role: true },
       orderBy: { name: 'asc' },
     }),

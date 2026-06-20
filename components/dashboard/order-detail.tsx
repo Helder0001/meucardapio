@@ -58,10 +58,10 @@ const NEXT_LABEL: Record<string, string> = {
   OUT_FOR_DELIVERY: 'Marcar como entregue',
 }
 
-// CORREÇÃO: garçons (WAITER) só podem confirmar, cancelar ou marcar como
-// entregue. Para os demais status (preparo, pronto, etc.) o garçom não tem
+// CORREÇÃO: garçons (STAFF) só podem confirmar, cancelar ou marcar como
+// entregue. Para os demais status (preparo, pronto, etc.) o operador não tem
 // nenhuma ação de avanço disponível — apenas cancelar.
-function getWaiterAction(status: string): { next: string; label: string } | null {
+function getStaffUserAction(status: string): { next: string; label: string } | null {
   if (status === 'PENDING')          return { next: 'CONFIRMED', label: 'Confirmar pedido' }
   if (status === 'READY')            return { next: 'DELIVERED', label: 'Marcar como entregue' }
   if (status === 'OUT_FOR_DELIVERY') return { next: 'DELIVERED', label: 'Marcar como entregue' }
@@ -73,12 +73,12 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
   const [payments, setPayments] = useState<any[]>(order.payments)
   const [isPending, start]      = useTransition()
 
-  const isWaiter = userRole === 'WAITER'
-  // CORREÇÃO: para garçons, a ação de avanço é restrita (ver getWaiterAction).
+  const isStaffUser = userRole === 'STAFF'
+  // CORREÇÃO: para garçons, a ação de avanço é restrita (ver getStaffUserAction).
   // Para os demais papéis, mantém o fluxo completo (NEXT_STATUS/NEXT_LABEL).
-  const waiterAction = isWaiter ? getWaiterAction(status) : null
-  const advanceTarget = isWaiter ? waiterAction?.next : NEXT_STATUS[status]
-  const advanceLabel  = isWaiter ? waiterAction?.label : NEXT_LABEL[status]
+  const waiterAction = isStaffUser ? getStaffUserAction(status) : null
+  const advanceTarget = isStaffUser ? waiterAction?.next : NEXT_STATUS[status]
+  const advanceLabel  = isStaffUser ? waiterAction?.label : NEXT_LABEL[status]
 
   const advanceStatus = () => {
     const next = advanceTarget
@@ -215,8 +215,8 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
             </button>
           </div>
         )}
-        {/* CORREÇÃO: garçom sem ação de avanço disponível neste status */}
-        {!isDone && isWaiter && !advanceTarget && (
+        {/* CORREÇÃO: operador sem ação de avanço disponível neste status */}
+        {!isDone && isStaffUser && !advanceTarget && (
           <p className="text-xs text-muted-foreground mt-2">
             Este pedido está em preparo na cozinha. Você poderá marcá-lo como entregue quando estiver pronto.
           </p>
@@ -353,7 +353,7 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
                         </div>
                         {/* Botão para confirmar pagamento manual — CORREÇÃO: oculto para
                             garçons, já que a API bloqueia essa ação para esse papel. */}
-                        {!isPaid && isManual && !isWaiter && (
+                        {!isPaid && isManual && !isStaffUser && (
                           <button
                             onClick={() => markPaymentPaid(p.id)}
                             disabled={isPending}
@@ -378,7 +378,7 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
           {/* Meta */}
           <div className="bg-card border border-border rounded-xl p-4 text-xs text-muted-foreground space-y-1">
             <p>Criado: {formatDate(order.createdAt)}</p>
-            {order.waiter    && <p>Garçom: <span className="font-medium text-foreground">{order.waiter.name}</span></p>}
+            {order.waiter    && <p>Operador: <span className="font-medium text-foreground">{order.waiter.name}</span></p>}
             {order.createdBy && !order.waiter && <p>Operador: <span className="font-medium text-foreground">{order.createdBy.name}</span></p>}
             {order.pdv       && <p>PDV: {order.pdv.name}</p>}
             {order.deliveryBairro && <p>Bairro: {order.deliveryBairro}</p>}
@@ -396,7 +396,14 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
                     <div>
                       <span className="font-medium text-foreground">{STATUS_PT[h.status] ?? h.status}</span>
                       <span className="text-muted-foreground ml-1.5">{formatDate(h.createdAt)}</span>
-                      {h.notes && <p className="text-muted-foreground italic">{h.notes}</p>}
+                      {h.user && (
+                        <span className="ml-1.5 text-muted-foreground">
+                          · por <span className="font-medium text-foreground">{h.user.name}</span>
+                        </span>
+                      )}
+                      {h.notes && !h.notes.startsWith('Alterado por') && (
+                        <p className="text-muted-foreground italic mt-0.5">{h.notes}</p>
+                      )}
                     </div>
                   </div>
                 ))}

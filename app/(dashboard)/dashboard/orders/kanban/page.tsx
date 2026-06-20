@@ -13,7 +13,7 @@ export default async function KanbanPage() {
   const session = await auth()
   if (!session?.user?.tenantId) redirect('/login')
 
-  const isWaiter = session.user.role === 'WAITER'
+  const isStaffUser = session.user.role === 'STAFF'
 
   const categories = await prisma.category.findMany({
     where: { tenantId: session.user.tenantId, isActive: true },
@@ -34,7 +34,7 @@ export default async function KanbanPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Kanban de Pedidos</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            {isWaiter
+            {isStaffUser
               ? 'Visualize os pedidos e registre novos pedidos de mesa'
               : 'Arraste os pedidos para atualizar o status em tempo real'}
           </p>
@@ -44,7 +44,7 @@ export default async function KanbanPage() {
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             Ao vivo
           </div>
-          {/* Garçom pode criar novos pedidos */}
+          {/* Operador pode criar novos pedidos */}
           <KanbanNewOrderButton
             tenantId={session.user.tenantId}
             categories={categories.map(c => ({
@@ -55,8 +55,8 @@ export default async function KanbanPage() {
         </div>
       </div>
 
-      {/* readOnly=true desabilita arrastar cards para garçom */}
-      <KanbanBoard tenantId={session.user.tenantId} readOnly={isWaiter} />
+      {/* readOnly=true desabilita arrastar cards para operador */}
+      <KanbanBoard tenantId={session.user.tenantId} readOnly={isStaffUser} />
     </div>
   )
 }

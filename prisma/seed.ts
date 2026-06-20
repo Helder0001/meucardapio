@@ -49,17 +49,17 @@ async function main() {
   })
   console.log('✅ Admin criado:', admin.email)
 
-  // 3. Criar garçom de exemplo
-  const waiterHash = await hashPassword('Garcom@123')
+  // 3. Criar operador de exemplo
+  const staffUserHash = await hashPassword('Garcom@123')
   await prisma.user.upsert({
-    where: { email_tenantId: { email: 'garcom@pizzariadojose.com', tenantId: tenant.id } },
+    where: { email_tenantId: { email: 'staff@pizzariadojose.com', tenantId: tenant.id } },
     update: {},
     create: {
       tenantId: tenant.id,
-      name: 'Carlos Garçom',
-      email: 'garcom@pizzariadojose.com',
-      passwordHash: waiterHash,
-      role: 'WAITER',
+      name: 'Carlos Operador',
+      email: 'staff@pizzariadojose.com',
+      passwordHash: staffUserHash,
+      role: 'STAFF',
     },
   })
 
