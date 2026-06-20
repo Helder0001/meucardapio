@@ -151,14 +151,17 @@ async function createMpSubscription(params: {
 }): Promise<{ subscriptionId?: string; error?: string }> {
   const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN
   if (!accessToken) {
-    // Modo dev sem MP configurado — permitir cadastro sem cartão
     console.warn('[register] MERCADOPAGO_ACCESS_TOKEN not set — skipping card validation')
     return {}
   }
 
+  // Abort após 8s para não estourar o timeout da Vercel (10s)
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 8000)
+
   try {
-    // FIX: trial de 7 dias via start_date atrasado, não via free_trial dentro
-    // de auto_recurring (campo que não existe nesse endpoint do MP)
+    // Trial de 7 dias via start_date atrasado — free_trial não existe em
+    // auto_recurring para o endpoint preapproval do MP
     const startDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
     const payload = {
@@ -170,17 +173,14 @@ async function createMpSubscription(params: {
         frequency_type: 'months',
         transaction_amount: 49.00,
         currency_id: 'BRL',
-        // REMOVIDO: free_trial não existe em auto_recurring para preapproval
-        // O trial é controlado pelo start_date abaixo
       },
-      // FIX: adiar início da cobrança em 7 dias = trial gratuito
       start_date: startDate.toISOString(),
       back_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
       status: 'authorized',
       payer: {
         email: params.email,
-        first_name: params.firstName || '',
-        last_name:  params.lastName  || '',
+        first_name: params.firstName || 'Nome',
+        last_name:  params.lastName  || 'Sobrenome',
         identification: {
           type:   'CPF',
           number: params.cpf || '',
@@ -188,7 +188,7 @@ async function createMpSubscription(params: {
       },
     }
 
-    // Log do payload (sem o token completo por segurança)
+    // Log do payload (token truncado por segurança)
     console.log('[register/mp] payload:', JSON.stringify({
       ...payload,
       card_token_id: payload.card_token_id ? `${payload.card_token_id.slice(0, 8)}...` : null,
@@ -202,26 +202,43 @@ async function createMpSubscription(params: {
         'X-Idempotency-Key': `register-${params.email}-${Date.now()}`,
       },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     })
+
+    clearTimeout(timeoutId)
 
     const data = await res.json()
     console.log('[register/mp] response status:', res.status, 'body:', JSON.stringify(data))
 
     if (!res.ok) {
-      const msg = data?.message ?? data?.error ?? 'Cartão recusado'
       console.error('[register/mp] preapproval error:', JSON.stringify(data))
+
+      // Extrair mensagem de erro do MP (pode vir em campos diferentes)
+      const msg: string = data?.message ?? data?.error ?? 'Erro ao processar cartão'
+      const causes: string = JSON.stringify(data?.cause ?? data?.causes ?? '')
+
+      // CC_VAL_433 = token inválido ou gerado com Public Key diferente do Access Token
+      if (msg.includes('CC_VAL_433') || causes.includes('CC_VAL_433')) {
+        return { error: 'Dados do cartão inválidos. Verifique os dados e tente novamente.' }
+      }
       if (msg.includes('cc_rejected') || msg.includes('rejected')) {
         return { error: 'Cartão recusado. Verifique os dados ou use outro cartão.' }
       }
       if (msg.includes('invalid') || msg.includes('Invalid')) {
         return { error: 'Dados do cartão inválidos. Verifique e tente novamente.' }
       }
+
       return { error: msg }
     }
 
     return { subscriptionId: String(data.id) }
-  } catch (err) {
-    console.error('[register/mp]', err)
+  } catch (err: any) {
+    clearTimeout(timeoutId)
+    if (err.name === 'AbortError') {
+      console.error('[register/mp] TIMEOUT — requisição abortada após 8s')
+      return { error: 'Tempo limite excedido ao processar cartão. Tente novamente.' }
+    }
+    console.error('[register/mp] catch error:', err)
     return { error: 'Erro ao processar cartão. Tente novamente.' }
   }
 }
