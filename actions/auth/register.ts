@@ -5,7 +5,7 @@
 // Fluxo:
 // 1. Validar dados + cardToken (tokenizado no frontend via MP SDK)
 // 2. Verificar email duplicado
-// 3. Criar assinatura trial no Mercado Pago (preapproval com start_date +7 dias)
+// 3. Chamar /api/mp/preapproval (API Route com maxDuration=60) para criar assinatura trial
 // 4. Criar tenant + admin + PDV + horários (transação)
 // 5. Login automático
 
@@ -54,7 +54,7 @@ export async function registerAction(
   const { tenantName, slug: rawSlug, name, email, password, cardToken } = parsed.data
 
   // Nome e CPF do titular do cartão — usados no payload da preapproval pra
-  // passar o motor antifraude do MP em produção (CC_VAL_433 sem esses campos)
+  // passar o motor antifraude do MP em produção
   const cardName = (formData.get('cardName') as string | null) ?? ''
   const cardCpf  = (formData.get('cardCpf')  as string | null) ?? ''
   const [firstName = '', ...lastParts] = cardName.trim().split(' ')
@@ -69,8 +69,8 @@ export async function registerAction(
   const existingSlug = await prisma.tenant.findUnique({ where: { slug } })
   if (existingSlug) slug = `${slug}-${nanoid(4)}`
 
-  // 3. Criar assinatura trial no Mercado Pago ANTES de salvar no banco
-  //    Se o cartão for inválido, não cria o tenant
+  // 3. Criar assinatura trial no Mercado Pago via API Route dedicada
+  //    (usa maxDuration=60 — Server Actions não suportam essa configuração)
   const mpResult = await createMpSubscription({ tenantName, email, cardToken, firstName, lastName, cpf: cardCpf })
   if (mpResult.error) return { error: mpResult.error }
 
@@ -102,7 +102,6 @@ export async function registerAction(
         },
       })
 
-      // Salvar referência da assinatura MP
       if (mpResult.subscriptionId) {
         await tx.subscription.create({
           data: {
@@ -140,7 +139,7 @@ export async function registerAction(
   }
 }
 
-// ── Cria a preapproval (assinatura recorrente) no Mercado Pago ────────────────
+// ── Chama a API Route /api/mp/preapproval que tem maxDuration=60 ──────────────
 async function createMpSubscription(params: {
   tenantName: string
   email: string
@@ -149,91 +148,50 @@ async function createMpSubscription(params: {
   lastName: string
   cpf: string
 }): Promise<{ subscriptionId?: string; error?: string }> {
-  const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN
-  if (!accessToken) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL
+  if (!appUrl) {
+    console.error('[register] NEXT_PUBLIC_APP_URL não configurado')
+    return { error: 'Configuração do servidor inválida.' }
+  }
+
+  // Se MERCADOPAGO_ACCESS_TOKEN não estiver configurado, pula validação (dev local)
+  if (!process.env.MERCADOPAGO_ACCESS_TOKEN) {
     console.warn('[register] MERCADOPAGO_ACCESS_TOKEN not set — skipping card validation')
     return {}
   }
 
   try {
-    // Trial de 7 dias via start_date atrasado — free_trial não existe em
-    // auto_recurring para o endpoint preapproval do MP
-    const startDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    console.log('[register] chamando /api/mp/preapproval...')
 
-    const payload = {
-      reason: `Meu Cardápio — Plano Starter — ${params.tenantName}`,
-      payer_email: params.email,
-      card_token_id: params.cardToken,
-      auto_recurring: {
-        frequency: 1,
-        frequency_type: 'months',
-        transaction_amount: 49.00,
-        currency_id: 'BRL',
-      },
-      start_date: startDate.toISOString(),
-      back_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
-      status: 'authorized',
-      payer: {
-        email: params.email,
-        first_name: params.firstName || 'Nome',
-        last_name:  params.lastName  || 'Sobrenome',
-        identification: {
-          type:   'CPF',
-          number: params.cpf || '',
-        },
-      },
-    }
-
-    // Log do payload (token truncado por segurança)
-    console.log('[register/mp] payload:', JSON.stringify({
-      ...payload,
-      card_token_id: payload.card_token_id ? `${payload.card_token_id.slice(0, 8)}...` : null,
-    }))
-
-    const res = await fetch('https://api.mercadopago.com/preapproval', {
+    const res = await fetch(`${appUrl}/api/mp/preapproval`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'X-Idempotency-Key': `register-${params.email}-${Date.now()}`,
-      },
-      body: JSON.stringify(payload),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reason: `Meu Cardápio — Plano Starter — ${params.tenantName}`,
+        payer_email: params.email,
+        card_token_id: params.cardToken,
+        payer: {
+          email: params.email,
+          first_name: params.firstName || 'Nome',
+          last_name:  params.lastName  || 'Sobrenome',
+          identification: {
+            type:   'CPF',
+            number: params.cpf || '',
+          },
+        },
+      }),
     })
 
-    // Lê como texto primeiro para garantir que o log aparece mesmo se não for JSON
-    const rawText = await res.text()
-    console.log('[register/mp] response status:', res.status, 'raw body:', rawText)
-
-    let data: any = {}
-    try {
-      data = JSON.parse(rawText)
-    } catch {
-      console.error('[register/mp] body não é JSON válido:', rawText)
-      return { error: 'Resposta inesperada do Mercado Pago. Tente novamente.' }
-    }
+    const data = await res.json()
+    console.log('[register] /api/mp/preapproval response:', res.status, JSON.stringify(data))
 
     if (!res.ok) {
-      console.error('[register/mp] preapproval error:', JSON.stringify(data))
-
-      const msg: string = data?.message ?? data?.error ?? 'Erro ao processar cartão'
-      const causes: string = JSON.stringify(data?.cause ?? data?.causes ?? '')
-
-      if (msg.includes('CC_VAL_433') || causes.includes('CC_VAL_433')) {
-        return { error: 'Dados do cartão inválidos. Verifique os dados e tente novamente.' }
-      }
-      if (msg.includes('cc_rejected') || msg.includes('rejected')) {
-        return { error: 'Cartão recusado. Verifique os dados ou use outro cartão.' }
-      }
-      if (msg.includes('invalid') || msg.includes('Invalid')) {
-        return { error: 'Dados do cartão inválidos. Verifique e tente novamente.' }
-      }
-
-      return { error: msg }
+      return { error: data.error ?? 'Erro ao processar cartão. Tente novamente.' }
     }
 
-    return { subscriptionId: String(data.id) }
+    return { subscriptionId: data.subscriptionId }
   } catch (err: any) {
-    console.error('[register/mp] catch error:', err)
+    console.error('[register] erro ao chamar /api/mp/preapproval:', err)
     return { error: 'Erro ao processar cartão. Tente novamente.' }
   }
 }
