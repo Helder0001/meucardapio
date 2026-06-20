@@ -216,6 +216,12 @@ export function KanbanBoard({ tenantId, readOnly = false }: KanbanBoardProps) {
   const ordersByStatus = (status: string) =>
     filteredOrders.filter((o) => o.status === status)
 
+  // OUT_FOR_DELIVERY só é relevante para delivery — esconde em mesa/retirada/balcão
+  const visibleColumns = COLUMNS.filter((col) => {
+    if (col.key === 'OUT_FOR_DELIVERY') return filter === 'ALL' || filter === 'DELIVERY'
+    return true
+  })
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
@@ -276,7 +282,7 @@ export function KanbanBoard({ tenantId, readOnly = false }: KanbanBoardProps) {
 
       {/* Colunas do kanban */}
       <div className="flex gap-4 overflow-x-auto pb-4">
-        {COLUMNS.map((col) => (
+        {visibleColumns.map((col) => (
           <KanbanColumn
             key={col.key}
             column={col}

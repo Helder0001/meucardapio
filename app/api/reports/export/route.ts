@@ -121,32 +121,33 @@ export async function GET(request: Request) {
     else if (type === 'revenue') {
       filename  = `faturamento-${todayStr()}.xlsx`
       sheetName = 'Faturamento'
-      // VULN-NEW-01 CORRIGIDO: datas parametrizadas com Prisma.sql, nunca interpoladas como string
-      const startFilter = startDate
-        ? Prisma.sql`AND created_at >= ${new Date(startDate)}::timestamptz`
-        : Prisma.empty
-      const endFilter = endDate
-        ? Prisma.sql`AND created_at <= ${new Date(endDate + 'T23:59:59')}::timestamptz`
-        : Prisma.empty
 
-      const data = await prisma.$queryRaw<Array<{
-        date: string; revenue: number; orders: number; avg_ticket: number
-      }>>(Prisma.sql`
-        SELECT
-          DATE(created_at AT TIME ZONE 'America/Sao_Paulo')::text as date,
-          COALESCE(SUM(total), 0)::float   as revenue,
-          COALESCE(COUNT(*), 0)::float     as orders,
-          COALESCE(AVG(total), 0)::float   as avg_ticket
-        FROM "Order"
-        WHERE tenant_id = ${tenantId}
-          AND status NOT IN ('CANCELLED', 'REFUNDED')
-          ${startFilter}
-          ${endFilter}
-        GROUP BY DATE(created_at AT TIME ZONE 'America/Sao_Paulo')
-        ORDER BY date DESC
-      `)
+      const revenueOrders = await prisma.order.findMany({
+        where: {
+          tenantId,
+          status: { notIn: ['CANCELLED', 'REFUNDED'] },
+          ...(hasKeys(dateFilter) ? { createdAt: dateFilter } : {}),
+        },
+        select: { total: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      })
+
+      // Agrupar por dia no fuso de São Paulo
+      const byDay = new Map<string, { revenue: number; orders: number }>()
+      for (const o of revenueOrders) {
+        const day = new Date(o.createdAt).toLocaleDateString('pt-BR', {
+          timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+        }).split('/').reverse().join('-')
+        const cur = byDay.get(day) ?? { revenue: 0, orders: 0 }
+        cur.revenue += Number(o.total)
+        cur.orders  += 1
+        byDay.set(day, cur)
+      }
+
       headers = ['Data','Faturamento (R$)','Pedidos','Ticket Médio (R$)']
-      rows = data.map((d) => [String(d.date), Number(d.revenue).toFixed(2), String(Number(d.orders)), Number(d.avg_ticket).toFixed(2)])
+      rows = Array.from(byDay.entries())
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .map(([date, d]) => [date, d.revenue.toFixed(2), String(d.orders), (d.revenue / d.orders).toFixed(2)])
     }
 
     else if (type === 'products') {
@@ -207,30 +208,31 @@ export async function GET(request: Request) {
     }
 
     if (type === 'revenue') {
-      // VULN-NEW-01 CORRIGIDO: reutiliza os filtros parametrizados já construídos acima
-      const startFilterPdf = startDate
-        ? Prisma.sql`AND created_at >= ${new Date(startDate)}::timestamptz`
-        : Prisma.empty
-      const endFilterPdf = endDate
-        ? Prisma.sql`AND created_at <= ${new Date(endDate + 'T23:59:59')}::timestamptz`
-        : Prisma.empty
+      const revenueOrdersPdf = await prisma.order.findMany({
+        where: {
+          tenantId,
+          status: { notIn: ['CANCELLED', 'REFUNDED'] },
+          ...(hasKeys(dateFilter) ? { createdAt: dateFilter } : {}),
+        },
+        select: { total: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      })
 
-      const data = await prisma.$queryRaw<Array<{
-        date: string; revenue: number; orders: number; avg_ticket: number
-      }>>(Prisma.sql`
-        SELECT
-          DATE(created_at AT TIME ZONE 'America/Sao_Paulo')::text as date,
-          COALESCE(SUM(total), 0)::float   as revenue,
-          COALESCE(COUNT(*), 0)::float     as orders,
-          COALESCE(AVG(total), 0)::float   as avg_ticket
-        FROM "Order"
-        WHERE tenant_id = ${tenantId}
-          AND status NOT IN ('CANCELLED', 'REFUNDED')
-          ${startFilterPdf}
-          ${endFilterPdf}
-        GROUP BY DATE(created_at AT TIME ZONE 'America/Sao_Paulo')
-        ORDER BY date DESC
-      `)
+      const byDayPdf = new Map<string, { revenue: number; orders: number }>()
+      for (const o of revenueOrdersPdf) {
+        const day = new Date(o.createdAt).toLocaleDateString('pt-BR', {
+          timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+        }).split('/').reverse().join('-')
+        const cur = byDayPdf.get(day) ?? { revenue: 0, orders: 0 }
+        cur.revenue += Number(o.total)
+        cur.orders  += 1
+        byDayPdf.set(day, cur)
+      }
+
+      const data = Array.from(byDayPdf.entries())
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .map(([date, d]) => ({ date, revenue: d.revenue, orders: d.orders, avg_ticket: d.revenue / d.orders }))
+
       const html = buildRevenuePdf({ tenantName, data, startDate, endDate })
       return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
     }

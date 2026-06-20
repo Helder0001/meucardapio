@@ -50,11 +50,18 @@ const NEXT_STATUS: Record<string, string> = {
   OUT_FOR_DELIVERY: 'DELIVERED',
 }
 
+// Para pedidos que não são delivery (mesa, retirada, balcão),
+// pula OUT_FOR_DELIVERY e vai direto de READY para DELIVERED.
+function getNextStatus(currentStatus: string, orderType: string): string | undefined {
+  if (currentStatus === 'READY' && orderType !== 'DELIVERY') return 'DELIVERED'
+  return NEXT_STATUS[currentStatus]
+}
+
 const NEXT_LABEL: Record<string, string> = {
   PENDING:          'Confirmar pedido',
   CONFIRMED:        'Iniciar preparo',
   PREPARING:        'Marcar como pronto',
-  READY:            'Saiu para entrega',
+  READY:            'Marcar como entregue',   // label genérico — sobrescrito abaixo para delivery
   OUT_FOR_DELIVERY: 'Marcar como entregue',
 }
 
@@ -74,11 +81,15 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
   const [isPending, start]      = useTransition()
 
   const isStaffUser = userRole === 'STAFF'
-  // CORREÇÃO: para garçons, a ação de avanço é restrita (ver getStaffUserAction).
-  // Para os demais papéis, mantém o fluxo completo (NEXT_STATUS/NEXT_LABEL).
   const waiterAction = isStaffUser ? getStaffUserAction(status) : null
-  const advanceTarget = isStaffUser ? waiterAction?.next : NEXT_STATUS[status]
-  const advanceLabel  = isStaffUser ? waiterAction?.label : NEXT_LABEL[status]
+  const advanceTarget = isStaffUser
+    ? waiterAction?.next
+    : getNextStatus(status, order.type)
+  const advanceLabel = isStaffUser
+    ? waiterAction?.label
+    : (status === 'READY' && order.type === 'DELIVERY'
+        ? 'Saiu para entrega'
+        : NEXT_LABEL[status])
 
   const advanceStatus = () => {
     const next = advanceTarget
