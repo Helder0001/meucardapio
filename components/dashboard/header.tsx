@@ -7,6 +7,7 @@ import { signOut } from 'next-auth/react'
 import { useState, useEffect } from 'react'
 import { useTheme } from 'next-themes'
 import Link from 'next/link'
+import Image from 'next/image'
 import { cn } from '@/lib/utils'
 
 interface HeaderProps {
@@ -76,14 +77,21 @@ export function Header({ user }: HeaderProps) {
 
   return (
     <header
-      className="h-16 bg-card border-b border-border flex items-center justify-between px-6 flex-shrink-0"
+      className="h-14 md:h-16 bg-card border-b border-border flex items-center justify-between px-3 md:px-6 flex-shrink-0 gap-2"
       style={{ boxShadow: '0 1px 0 hsl(var(--border))' }}
     >
-      {/* Esquerda */}
-      <div />
+      {/* Mobile: show app name; Desktop: empty left side */}
+      <div className="flex items-center gap-2 md:hidden">
+        <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center overflow-hidden flex-shrink-0">
+          <Image src="/logo-icon.png" alt="" width={28} height={28} className="object-cover w-full h-full"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display='none' }} />
+        </div>
+        <span className="font-semibold text-sm text-foreground">Meu Cardápio</span>
+      </div>
+      <div className="hidden md:block" />
 
       {/* Direita */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 md:gap-2">
         {/* Ver cardápio */}
         {user.tenantSlug && (
           <Link

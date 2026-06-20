@@ -30,10 +30,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
         tenantSlug={session.user.tenantSlug ?? ''}
         plan={session.user.plan ?? 'STARTER'}
       />
-      <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex flex-col flex-1 overflow-hidden min-w-0">
         <Header user={session.user} />
         <main className="flex-1 overflow-y-auto">
-          <div className="container-app py-6">
+          <div className="container-app py-4 md:py-6 pb-24 md:pb-6">
             {children}
           </div>
         </main>

@@ -45,9 +45,9 @@ export function QuickActions({ tenantId, pendingCount }: QuickActionsProps) {
   ]
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
       {actions.map((action) => {
-        const baseClass = 'flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl transition-all duration-150'
+        const baseClass = 'flex items-center justify-center gap-2 px-4 py-3 md:py-2.5 text-sm font-medium rounded-xl transition-all duration-150'
 
         let cls = baseClass
         if (action.primary) {

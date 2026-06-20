@@ -58,21 +58,21 @@ export function MetricsCards({ metrics }: MetricsCardsProps) {
   const items = cards(metrics)
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
       {items.map((card) => (
         <div
           key={card.label}
-          className={`bg-card border border-border border-l-4 ${card.accent} rounded-xl p-5 transition-shadow hover:shadow-md`}
+          className={`bg-card border border-border border-l-4 ${card.accent} rounded-xl p-3.5 md:p-5 transition-shadow hover:shadow-md`}
           style={{ boxShadow: 'var(--shadow-card)' }}
         >
-          <div className="flex items-start justify-between mb-4">
-            <p className="text-sm font-medium text-muted-foreground">{card.label}</p>
-            <div className={`w-9 h-9 rounded-lg ${card.iconBg} flex items-center justify-center flex-shrink-0`}>
-              <card.icon className={`h-4 w-4 ${card.iconColor}`} />
+          <div className="flex items-start justify-between mb-2 md:mb-4">
+            <p className="text-xs md:text-sm font-medium text-muted-foreground leading-snug">{card.label}</p>
+            <div className={`w-7 h-7 md:w-9 md:h-9 rounded-lg ${card.iconBg} flex items-center justify-center flex-shrink-0 ml-1`}>
+              <card.icon className={`h-3.5 w-3.5 md:h-4 md:w-4 ${card.iconColor}`} />
             </div>
           </div>
-          <p className="text-2xl font-bold text-foreground tracking-tight">{card.value}</p>
-          <p className="text-xs text-muted-foreground mt-1.5">{card.sub}</p>
+          <p className="text-base md:text-2xl font-bold text-foreground tracking-tight">{card.value}</p>
+          <p className="text-xs text-muted-foreground mt-1">{card.sub}</p>
         </div>
       ))}
     </div>
