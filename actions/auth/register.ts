@@ -15,10 +15,6 @@ import { hashPassword } from '@/lib/auth/password'
 import { signIn } from '@/lib/auth/session'
 import { nanoid } from 'nanoid'
 
-// Aumenta o timeout da função para 60s (máximo no plano Hobby da Vercel)
-// necessário pois a API do Mercado Pago /preapproval pode demorar mais que 10s
-export const maxDuration = 60
-
 const registerSchema = z.object({
   tenantName: z.string().min(2).max(100),
   slug:       z.string().min(2).max(50).regex(/^[a-z0-9-]+$/, 'URL inválida — use apenas letras minúsculas, números e hífens').optional(),
