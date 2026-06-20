@@ -99,8 +99,8 @@ export function UsersManager({ users: initial, currentUserId, canAddMore, plan }
           <p className="font-semibold">Limite de usuários atingido</p>
           <p className="text-xs mt-0.5">
             Faça upgrade do plano para adicionar mais usuários.
-            {plan === 'STARTER' && ' O plano Starter suporta apenas 1 usuário.'}
-            {plan === 'PRO'     && ' O plano Pro suporta até 5 usuários.'}
+            {plan === 'STARTER' && ' O plano Starter suporta até 3 usuários.'}
+            {plan === 'PRO'     && ' O plano Pro suporta até 10 usuários.'}
           </p>
         </div>
       )}
@@ -116,7 +116,7 @@ export function UsersManager({ users: initial, currentUserId, canAddMore, plan }
             ))}
           </ul>
           <p className="mt-1.5 text-xs opacity-80">
-            Todas as vendas realizadas por garçons ficam registradas nos relatórios com o nome do responsável.
+            Todas as ações realizadas pelos usuários (confirmação de pagamento, mudança de status) ficam registradas no histórico de cada pedido.
           </p>
         </div>
       </div>

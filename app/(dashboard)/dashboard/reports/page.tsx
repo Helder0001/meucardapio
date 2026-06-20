@@ -179,8 +179,9 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   }
   if (filterPdv)      baseWhere.pdvId    = filterPdv
   if (filterSaleType) baseWhere.type     = filterSaleType as OrderType
-  if (filterUser)     baseWhere.statusHistory = {
-    some: { userId: filterUser }
+  if (filterUser) {
+    // Filtra pedidos onde esse usuário tocou (mudou status ou confirmou pagamento)
+    baseWhere.statusHistory = { some: { userId: filterUser } }
   }
 
   // ── Listas para os selects ───────────────────────────────────────────────

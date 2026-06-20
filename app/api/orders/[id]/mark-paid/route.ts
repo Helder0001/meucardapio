@@ -100,9 +100,16 @@ export async function PATCH(
       })
       becamePaid = true
 
-      // CORREÇÃO: cashback e pontos de fidelidade agora também são
-      // creditados quando o pagamento é confirmado manualmente
-      // (dinheiro/cartão de crédito/débito), não apenas via PIX/webhook.
+      // Registrar no histórico quem confirmou o pagamento
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId,
+          status: order.status as any,
+          userId: session.user.id,
+          notes: `Pagamento confirmado manualmente por ${session.user.name ?? session.user.email}`,
+        },
+      })
+
       if (order.customerId) {
         await applyOrderRewards(tx, tenantId, order.customerId, orderId, Number(order.total))
       }
