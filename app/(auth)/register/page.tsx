@@ -11,6 +11,10 @@ export const metadata: Metadata = {
   description: 'Comece seu teste grátis de 7 dias',
 }
 
+// Aumenta o timeout para 60s (máximo no plano Hobby da Vercel)
+// necessário pois a API do Mercado Pago /preapproval pode demorar mais que 10s
+export const maxDuration = 60
+
 const benefits = [
   'Cardápio digital com QR Code',
   'Pedidos por WhatsApp e online',
