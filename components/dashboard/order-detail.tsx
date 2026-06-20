@@ -95,6 +95,7 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
   const [payments, setPayments] = useState<any[]>(order.payments)
   const [isPending, start]      = useTransition()
 
+  const isAttendant      = userRole === 'ATTENDANT'
   const isStaff          = userRole === 'STAFF'
   const isDeliveryPerson = userRole === 'DELIVERY_PERSON'
   const isRestricted     = isStaff || isDeliveryPerson
@@ -105,9 +106,14 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
       ? getDeliveryPersonAction(status, order.type)
       : null
 
+  // Para ATTENDANT em pedidos de delivery: não avança para OUT_FOR_DELIVERY
+  const attendantNextStatus = (isAttendant && order.type === 'DELIVERY' && status === 'READY')
+    ? undefined  // nenhuma ação de avanço — deixa para o entregador
+    : getNextStatus(status, order.type)
+
   const advanceTarget = isRestricted
     ? restrictedAction?.next
-    : getNextStatus(status, order.type)
+    : attendantNextStatus
   const advanceLabel = isRestricted
     ? restrictedAction?.label
     : (status === 'READY' && order.type === 'DELIVERY'
@@ -386,10 +392,13 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
                           )}
                         </div>
                         {/* Confirmar pagamento manual:
-                            - Admin, Gerente, Atendente: sempre podem
-                            - Operador (STAFF): pode confirmar
-                            - Entregador: pode só em pedidos não-delivery */}
-                        {!isPaid && isManual && !(isDeliveryPerson && order.type === 'DELIVERY') && (
+                            - Admin, Gerente: sempre
+                            - Atendente: só em não-delivery
+                            - Operador: sempre
+                            - Entregador: só em não-delivery */}
+                        {!isPaid && isManual &&
+                          !(isAttendant && order.type === 'DELIVERY') &&
+                          !(isDeliveryPerson && order.type === 'DELIVERY') && (
                           <button
                             onClick={() => markPaymentPaid(p.id)}
                             disabled={isPending}

@@ -62,6 +62,14 @@ export async function PATCH(
     )
   }
 
+  // ATTENDANT: não pode avançar para OUT_FOR_DELIVERY (isso é do entregador/gerente)
+  if (role === 'ATTENDANT' && status === 'OUT_FOR_DELIVERY') {
+    return NextResponse.json(
+      { error: 'Atendentes não podem marcar pedidos como saiu para entrega.' },
+      { status: 403 }
+    )
+  }
+
   const order = await prisma.order.findFirst({
     where: { id, tenantId },
     select: { id: true, status: true, orderNumber: true, waiterId: true, type: true },

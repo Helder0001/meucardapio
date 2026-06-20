@@ -50,6 +50,7 @@ export async function PATCH(
       orderNumber: true,
       paymentStatus: true,
       status: true,
+      type: true,
       total: true,
       customerId: true,
       payments: {
@@ -59,6 +60,14 @@ export async function PATCH(
   })
   if (!order) {
     return NextResponse.json({ error: 'Pedido não encontrado' }, { status: 404 })
+  }
+
+  // ATTENDANT: não pode confirmar pagamento em pedidos de delivery
+  if (session.user.role === 'ATTENDANT' && order.type === 'DELIVERY') {
+    return NextResponse.json(
+      { error: 'Atendentes não podem confirmar pagamento de pedidos de delivery.' },
+      { status: 403 }
+    )
   }
 
   const now = new Date()

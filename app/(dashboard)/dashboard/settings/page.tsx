@@ -11,6 +11,7 @@ export const metadata: Metadata = { title: 'Configurações' }
 export default async function SettingsPage() {
   const session = await auth()
   if (!session?.user?.tenantId) redirect('/login')
+  if (!['TENANT_ADMIN', 'MASTER_ADMIN'].includes(session.user.role)) redirect('/dashboard')
 
   const tenant = await prisma.tenant.findFirst({
     where: { id: session.user.tenantId },

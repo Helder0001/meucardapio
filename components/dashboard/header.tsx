@@ -199,14 +199,16 @@ export function Header({ user }: HeaderProps) {
                   Meu perfil
                 </Link>
 
-                <Link
-                  href="/dashboard/settings"
-                  className="flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  <Settings className="h-4 w-4 text-muted-foreground" />
-                  Configurações
-                </Link>
+                {['TENANT_ADMIN', 'MASTER_ADMIN'].includes(user.role) && (
+                  <Link
+                    href="/dashboard/settings"
+                    className="flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    <Settings className="h-4 w-4 text-muted-foreground" />
+                    Configurações
+                  </Link>
+                )}
 
                 {/* Tema no menu do usuário (alternativa para mobile) */}
                 <button

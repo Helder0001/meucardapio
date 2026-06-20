@@ -13,7 +13,8 @@ export default async function KanbanPage() {
   const session = await auth()
   if (!session?.user?.tenantId) redirect('/login')
 
-  const isStaffUser = session.user.role === 'STAFF'
+  const role = session.user.role
+  const isDeliveryPerson = role === 'DELIVERY_PERSON'
 
   const categories = await prisma.category.findMany({
     where: { tenantId: session.user.tenantId, isActive: true },
@@ -34,8 +35,8 @@ export default async function KanbanPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Kanban de Pedidos</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            {isStaffUser
-              ? 'Visualize os pedidos e registre novos pedidos de mesa'
+            {isDeliveryPerson
+              ? 'Seus pedidos de delivery'
               : 'Arraste os pedidos para atualizar o status em tempo real'}
           </p>
         </div>
@@ -44,19 +45,25 @@ export default async function KanbanPage() {
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             Ao vivo
           </div>
-          {/* Operador pode criar novos pedidos */}
-          <KanbanNewOrderButton
-            tenantId={session.user.tenantId}
-            categories={categories.map(c => ({
-              ...c,
-              products: c.products.map(p => ({ ...p, price: Number(p.price) }))
-            }))}
-          />
+          {/* Novo pedido — oculto para entregadores */}
+          {!isDeliveryPerson && (
+            <KanbanNewOrderButton
+              tenantId={session.user.tenantId}
+              categories={categories.map(c => ({
+                ...c,
+                products: c.products.map(p => ({ ...p, price: Number(p.price) }))
+              }))}
+            />
+          )}
         </div>
       </div>
 
       {/* readOnly=true desabilita arrastar cards para operador */}
-      <KanbanBoard tenantId={session.user.tenantId} readOnly={isStaffUser} />
+      <KanbanBoard
+        tenantId={session.user.tenantId}
+        userRole={role}
+        lockedFilter={isDeliveryPerson ? 'DELIVERY' : undefined}
+      />
     </div>
   )
 }
