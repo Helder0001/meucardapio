@@ -5,8 +5,8 @@
 // Fluxo:
 // 1. Validar dados + cardToken (tokenizado no frontend via MP SDK)
 // 2. Verificar email duplicado
-// 3. Criar tenant + admin + PDV + horários (transação)
-// 4. Criar assinatura de trial com cartão no Mercado Pago (preapproval)
+// 3. Criar assinatura trial no Mercado Pago (preapproval com start_date +7 dias)
+// 4. Criar tenant + admin + PDV + horários (transação)
 // 5. Login automático
 
 import { z } from 'zod'
@@ -112,7 +112,7 @@ export async function registerAction(
             mercadoPagoSubId: mpResult.subscriptionId,
             currentPeriodStart: new Date(),
             currentPeriodEnd: trialEndsAt,
-            amount: 49.00,   // <-- CAMPO OBRIGATÓRIO ADICIONADO
+            amount: 49.00,
           },
         })
       }
@@ -157,6 +157,10 @@ async function createMpSubscription(params: {
   }
 
   try {
+    // FIX: trial de 7 dias via start_date atrasado, não via free_trial dentro
+    // de auto_recurring (campo que não existe nesse endpoint do MP)
+    const startDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+
     const payload = {
       reason: `Meu Cardápio — Plano Starter — ${params.tenantName}`,
       payer_email: params.email,
@@ -166,8 +170,11 @@ async function createMpSubscription(params: {
         frequency_type: 'months',
         transaction_amount: 49.00,
         currency_id: 'BRL',
-        free_trial: { frequency: 7, frequency_type: 'days' },
+        // REMOVIDO: free_trial não existe em auto_recurring para preapproval
+        // O trial é controlado pelo start_date abaixo
       },
+      // FIX: adiar início da cobrança em 7 dias = trial gratuito
+      start_date: startDate.toISOString(),
       back_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
       status: 'authorized',
       payer: {
