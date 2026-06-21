@@ -24,16 +24,11 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       pdv:       { select: { name: true } },
       createdBy: { select: { name: true } },
       coupon:    { select: { code: true, type: true, value: true } },
-      deliveryAddress: true,
-      deliveryBairro:  true,
       items: {
         include: {
           addons: { select: { addonName: true, addonPrice: true } },
         },
       },
-      // CORREÇÃO: retorna TODOS os pagamentos do pedido (não apenas o
-      // primeiro). Pedidos com pagamento dividido (ex: PIX + Dinheiro)
-      // agora aparecem por completo no detalhe do pedido.
       payments: {
         orderBy: { createdAt: 'desc' },
         select: {
