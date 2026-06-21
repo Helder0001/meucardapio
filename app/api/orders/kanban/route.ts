@@ -31,16 +31,32 @@ export async function GET(request: Request) {
   }
 
   const tenantId = session.user.tenantId
+  const userId   = session.user.id
+  const role     = session.user.role
+
+  // Multi-PDV isolation: se o usuário está vinculado a PDV(s) específicos,
+  // só vê pedidos desses PDVs (ou sem PDV, se for balcão online).
+  // Admin e Gerente veem tudo.
+  let pdvFilter: { pdvId: string | null } | { pdvId: { in: string[] } } | undefined
+  if (!['TENANT_ADMIN', 'MASTER_ADMIN', 'MANAGER'].includes(role)) {
+    const pdvAccess = await prisma.pDVUser.findMany({
+      where: { userId },
+      select: { pdvId: true },
+    })
+    if (pdvAccess.length > 0) {
+      pdvFilter = { pdvId: { in: pdvAccess.map((p) => p.pdvId) } }
+    }
+  }
 
   // 2. Buscar estado inicial dos pedidos ativos
   const activeOrders = await prisma.order.findMany({
     where: {
       tenantId,
+      ...(pdvFilter ?? {}),
       status: {
         notIn: ['DELIVERED', 'CANCELLED', 'REFUNDED'],
       },
       createdAt: {
-        // Apenas pedidos das últimas 12 horas
         gte: new Date(Date.now() - 12 * 60 * 60 * 1000),
       },
     },

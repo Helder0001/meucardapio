@@ -85,12 +85,12 @@ function getAllowedNextStatus(
     return undefined
   }
 
-  // STAFF e ATTENDANT: bloqueado de entregar pedidos delivery
-  if (role === 'STAFF' || role === 'ATTENDANT') {
-    if (isDelivery && (status === 'READY' || status === 'OUT_FOR_DELIVERY')) return undefined
-    const next = getNextStatus(status, orderType)
-    if (!next) return undefined
-    return { next, label: NEXT_LABEL[next] ?? NEXT_LABEL[status] ?? '' }
+  // STAFF: pode confirmar, preparar, pronto — mas NÃO entregue
+  if (role === 'STAFF') {
+    if (['PENDING', 'CONFIRMED', 'PREPARING'].includes(status)) {
+      return { next: getNextStatus(status, orderType)!, label: NEXT_LABEL[status] }
+    }
+    return undefined // READY e OUT_FOR_DELIVERY: sem ação de avanço
   }
 
   // MANAGER / TENANT_ADMIN: fluxo completo
@@ -257,14 +257,17 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
                 {advanceLabel}
               </button>
             )}
-            <button
-              onClick={cancelOrder}
-              disabled={isPending}
-              className="flex items-center gap-2 px-4 py-2.5 border border-destructive/30 text-destructive text-sm font-medium rounded-lg hover:bg-destructive/5 disabled:opacity-60 transition-colors"
-            >
-              <XCircle className="h-4 w-4" />
-              Cancelar
-            </button>
+            {/* Cancelar — Atendente não pode cancelar */}
+            {!isAttendant && (
+              <button
+                onClick={cancelOrder}
+                disabled={isPending}
+                className="flex items-center gap-2 px-4 py-2.5 border border-destructive/30 text-destructive text-sm font-medium rounded-lg hover:bg-destructive/5 disabled:opacity-60 transition-colors"
+              >
+                <XCircle className="h-4 w-4" />
+                Cancelar
+              </button>
+            )}
           </div>
         )}
         {/* CORREÇÃO: operador sem ação de avanço disponível neste status */}
@@ -426,14 +429,32 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
             )}
           </div>
 
-          {/* Meta */}
+          {/* Meta + Endereço de entrega */}
           <div className="bg-card border border-border rounded-xl p-4 text-xs text-muted-foreground space-y-1">
             <p>Criado: {formatDate(order.createdAt)}</p>
             {order.waiter    && <p>Operador: <span className="font-medium text-foreground">{order.waiter.name}</span></p>}
             {order.createdBy && !order.waiter && <p>Operador: <span className="font-medium text-foreground">{order.createdBy.name}</span></p>}
             {order.pdv       && <p>PDV: {order.pdv.name}</p>}
-            {order.deliveryBairro && <p>Bairro: {order.deliveryBairro}</p>}
-            {order.cancelReason   && <p className="text-destructive">Cancelado: {order.cancelReason}</p>}
+            {order.type === 'DELIVERY' && (
+              <div className="mt-2 pt-2 border-t border-border">
+                <p className="font-semibold text-foreground mb-1">🛵 Endereço de entrega</p>
+                {order.deliveryAddress && (() => {
+                  const addr = typeof order.deliveryAddress === 'object' ? order.deliveryAddress as any : {}
+                  return (
+                    <div className="space-y-0.5">
+                      {addr.street && <p>{addr.street}{addr.number ? `, ${addr.number}` : ''}{addr.complement ? ` — ${addr.complement}` : ''}</p>}
+                      {(addr.neighborhood || order.deliveryBairro) && <p>Bairro: {addr.neighborhood ?? order.deliveryBairro}</p>}
+                      {addr.city && <p>{addr.city}{addr.state ? ` — ${addr.state}` : ''}</p>}
+                      {addr.reference && <p className="italic">Ref: {addr.reference}</p>}
+                    </div>
+                  )
+                })()}
+                {!order.deliveryAddress && order.deliveryBairro && (
+                  <p>Bairro: {order.deliveryBairro}</p>
+                )}
+              </div>
+            )}
+            {order.cancelReason && <p className="text-destructive">Cancelado: {order.cancelReason}</p>}
           </div>
 
           {/* Histórico de status */}

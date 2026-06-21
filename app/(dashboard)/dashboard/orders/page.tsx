@@ -17,6 +17,7 @@ interface PageProps {
     status?: string
     type?: string
     paymentStatus?: string
+    payment?: string
     q?: string
   }>
 }
@@ -34,11 +35,32 @@ export default async function OrdersPage({ searchParams }: PageProps) {
   // CORREÇÃO: suporte a busca por número de pedido além de nome/telefone
   const qNum = params.q && !isNaN(Number(params.q)) ? Number(params.q) : null
 
+  const role = session.user.role
+  const isDeliveryPerson = role === 'DELIVERY_PERSON'
+
+  // Multi-PDV isolation
+  let pdvFilter: object = {}
+  if (!['TENANT_ADMIN', 'MASTER_ADMIN', 'MANAGER'].includes(role)) {
+    const pdvAccess = await prisma.pDVUser.findMany({
+      where: { userId: session.user.id },
+      select: { pdvId: true },
+    })
+    if (pdvAccess.length > 0) {
+      pdvFilter = { pdvId: { in: pdvAccess.map((p) => p.pdvId) } }
+    }
+  }
+
   const where = {
     tenantId,
+    ...pdvFilter,
+    // Entregador só vê pedidos do tipo DELIVERY
+    ...(isDeliveryPerson ? { type: 'DELIVERY' as const } : {}),
     ...(params.status        ? { status:        params.status        as any } : {}),
-    ...(params.type          ? { type:           params.type          as any } : {}),
+    ...(params.type && !isDeliveryPerson ? { type: params.type as any } : {}),
     ...(params.paymentStatus ? { paymentStatus:  params.paymentStatus as any } : {}),
+    ...(params.payment       ? {
+      payments: { some: { method: params.payment as any } }
+    } : {}),
     ...(params.q
       ? qNum !== null
         ? { orderNumber: qNum }

@@ -57,14 +57,38 @@ export async function PATCH(
 
   const order = await prisma.order.findFirst({
     where: { id, tenantId },
-    select: { id: true, status: true, orderNumber: true, waiterId: true, type: true },
+    select: { id: true, status: true, orderNumber: true, waiterId: true, type: true, pdvId: true },
   })
 
   if (!order) {
     return NextResponse.json({ error: 'Pedido não encontrado' }, { status: 404 })
   }
 
+  // Multi-PDV isolation: usuários restritos só podem alterar pedidos do seu PDV
+  if (!['TENANT_ADMIN', 'MASTER_ADMIN', 'MANAGER'].includes(role)) {
+    const pdvAccess = await prisma.pDVUser.findMany({
+      where: { userId: session.user.id },
+      select: { pdvId: true },
+    })
+    if (pdvAccess.length > 0 && order.pdvId) {
+      const allowed = pdvAccess.map((p) => p.pdvId)
+      if (!allowed.includes(order.pdvId)) {
+        return NextResponse.json({ error: 'Sem permissão para este pedido.' }, { status: 403 })
+      }
+    }
+  }
+
   const isDelivery = order.type === 'DELIVERY'
+
+  // STAFF: não pode marcar como DELIVERED
+  if (role === 'STAFF' && status === 'DELIVERED') {
+    return NextResponse.json({ error: 'Operadores não podem marcar pedidos como entregues.' }, { status: 403 })
+  }
+
+  // ATTENDANT: não pode cancelar pedidos
+  if (role === 'ATTENDANT' && status === 'CANCELLED') {
+    return NextResponse.json({ error: 'Atendentes não podem cancelar pedidos.' }, { status: 403 })
+  }
 
   // DELIVERY_PERSON: só DELIVERY, só OUT_FOR_DELIVERY e DELIVERED
   if (role === 'DELIVERY_PERSON') {

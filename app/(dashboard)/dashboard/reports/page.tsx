@@ -180,8 +180,14 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   if (filterPdv)      baseWhere.pdvId    = filterPdv
   if (filterSaleType) baseWhere.type     = filterSaleType as OrderType
   if (filterUser) {
-    // Filtra pedidos onde esse usuário tocou (mudou status ou confirmou pagamento)
-    baseWhere.statusHistory = { some: { userId: filterUser } }
+    // Filtra pedidos onde esse usuário confirmou pagamento
+    // (nota de histórico contém "Pagamento confirmado manualmente")
+    baseWhere.statusHistory = {
+      some: {
+        userId: filterUser,
+        notes: { contains: 'Pagamento confirmado' },
+      },
+    }
   }
 
   // ── Listas para os selects ───────────────────────────────────────────────

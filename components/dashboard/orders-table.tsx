@@ -141,7 +141,7 @@ export function OrdersTable({ orders, total, page, pageSize, currentFilters }: O
           ))}
         </select>
 
-        {/* NOVO: filtro de status de pagamento */}
+        {/* Filtro de status de pagamento */}
         <select
           value={currentFilters.paymentStatus ?? ''}
           onChange={(e) => updateFilter('paymentStatus', e.target.value)}
@@ -150,6 +150,19 @@ export function OrdersTable({ orders, total, page, pageSize, currentFilters }: O
           {PAYMENT_STATUS_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
+        </select>
+
+        {/* Filtro de forma de pagamento */}
+        <select
+          value={currentFilters.payment ?? ''}
+          onChange={(e) => updateFilter('payment', e.target.value)}
+          className="px-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+        >
+          <option value="">Todas as formas</option>
+          <option value="PIX">⚡ PIX</option>
+          <option value="CREDIT_CARD">💳 Crédito</option>
+          <option value="DEBIT_CARD">💳 Débito</option>
+          <option value="CASH">💵 Dinheiro</option>
         </select>
 
         {/* Link para kanban */}

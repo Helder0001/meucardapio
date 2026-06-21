@@ -24,6 +24,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       pdv:       { select: { name: true } },
       createdBy: { select: { name: true } },
       coupon:    { select: { code: true, type: true, value: true } },
+      deliveryAddress: true,
+      deliveryBairro:  true,
       items: {
         include: {
           addons: { select: { addonName: true, addonPrice: true } },

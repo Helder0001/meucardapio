@@ -30,16 +30,16 @@ const ROLE_LABELS: Record<string, string> = {
 
 const ROLE_DESC: Record<string, string> = {
   MANAGER:         'Acesso total: pedidos, kanban, cardápio, relatórios, clientes e configurações (exceto usuários e conta)',
-  ATTENDANT:       'Pedidos e kanban — pode criar, confirmar, preparar e entregar pedidos',
-  STAFF:           'Acesso mínimo: só pode confirmar pagamento, cancelar e marcar como entregue',
-  DELIVERY_PERSON: 'Visualiza apenas pedidos prontos para entrega',
+  ATTENDANT:       'Gerencia pedidos e kanban. Não pode cancelar pedidos nem confirmar ou entregar pedidos delivery',
+  STAFF:           'Confirma pedidos e avança até Pronto. Não pode cancelar nem marcar como entregue',
+  DELIVERY_PERSON: 'Somente pedidos Delivery: muda para Saiu/Entregue e confirma pagamento após entrega',
 }
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   MANAGER:         ['Gerenciar pedidos', 'Editar cardápio', 'Ver relatórios', 'Gerenciar clientes', 'Configurações gerais'],
   ATTENDANT:       ['Gerenciar pedidos', 'Kanban', 'Criar pedidos no PDV'],
-  STAFF:           ['Confirmar pagamento', 'Cancelar pedido', 'Marcar como entregue'],
-  DELIVERY_PERSON: ['Ver pedidos prontos'],
+  STAFF:           ['Confirmar pedido', 'Iniciar preparo', 'Marcar como pronto'],
+  DELIVERY_PERSON: ['Ver pedidos Delivery', 'Saiu para entrega', 'Marcar como entregue', 'Confirmar pagamento pós-entrega'],
 }
 
 const ROLE_COLORS: Record<string, string> = {
