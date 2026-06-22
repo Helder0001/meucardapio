@@ -14,6 +14,8 @@ interface Category { id: string; name: string; products: Product[] }
 
 interface Props {
   tenantId: string
+  pdvId?: string
+  createdByUserId?: string
   categories: Category[]
 }
 
@@ -29,7 +31,7 @@ interface PaymentEntry { method: PaymentMethodType; amount: number }
 
 interface PixData { qrCode: string; qrCodeBase64: string }
 
-export function KanbanNewOrderButton({ tenantId, categories }: Props) {
+export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categories }: Props) {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<OrderItem[]>([])
   const [customerPhone, setCustomerPhone] = useState('')
@@ -98,6 +100,8 @@ export function KanbanNewOrderButton({ tenantId, categories }: Props) {
           tenantId,
           items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, addonIds: [] })),
           type: 'PDV',
+          pdvId,
+          createdByUserId,
           customerPhone: customerPhone || undefined,
           customerName: customerName || undefined,
           payments: payNow ? finalPayments : undefined,

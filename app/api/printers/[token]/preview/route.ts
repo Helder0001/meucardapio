@@ -14,7 +14,7 @@ export async function GET(
   const { token } = await params
 
   const printer = await prisma.printer.findFirst({
-    where: { token, isActive: true },
+    where: { token },   // sem isActive — permite testar mesmo com impressora "offline"
     select: { id: true, name: true, sector: true },
   })
 

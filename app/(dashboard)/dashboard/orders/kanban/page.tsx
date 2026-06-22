@@ -16,6 +16,14 @@ export default async function KanbanPage() {
   const role = session.user.role
   const isDeliveryPerson = role === 'DELIVERY_PERSON'
 
+  // Descobrir o PDV do usuário (para associar ao pedido criado)
+  const userPdv = !['TENANT_ADMIN', 'MASTER_ADMIN', 'MANAGER'].includes(role)
+    ? await prisma.pDVUser.findFirst({
+        where: { userId: session.user.id },
+        select: { pdvId: true },
+      })
+    : null
+
   const categories = await prisma.category.findMany({
     where: { tenantId: session.user.tenantId, isActive: true },
     select: {
@@ -49,6 +57,8 @@ export default async function KanbanPage() {
           {!isDeliveryPerson && (
             <KanbanNewOrderButton
               tenantId={session.user.tenantId}
+              pdvId={userPdv?.pdvId}
+              createdByUserId={session.user.id}
               categories={categories.map(c => ({
                 ...c,
                 products: c.products.map(p => ({ ...p, price: Number(p.price) }))

@@ -50,6 +50,8 @@ const createOrderSchema = z.object({
   })).min(1, 'Carrinho vazio'),
   type: z.enum(['TABLE', 'DELIVERY', 'PICKUP', 'PDV']),
   tableId: z.string().cuid().optional(),
+  pdvId: z.string().cuid().optional(),            // PDV que criou o pedido
+  createdByUserId: z.string().cuid().optional(),   // usuário que criou
   couponCode: z.string().max(50).optional(),
   deliveryBairro: z.string().max(100).optional(),
   customerPhone: z.string().min(10).max(20).optional(),
@@ -110,9 +112,10 @@ export async function createOrderAction(
         ? [{ method: data.paymentMethod, amount: 0 /* será preenchido com o total calculado */, changeFor: data.changeFor }]
         : []
 
-  if (paymentsList.length === 0) {
+  if (paymentsList.length === 0 && data.type !== 'PDV') {
     return { error: 'Informe pelo menos uma forma de pagamento' }
   }
+  // PDV sem pagamento = "cobrar no final" — pedido criado sem pagamento registrado
 
   // 2. Verificar se tenant existe e está ativo
   const tenant = await prisma.tenant.findFirst({
@@ -196,6 +199,8 @@ export async function createOrderAction(
         status: 'PENDING',
         paymentStatus: 'PENDING',
         tableId: data.tableId,
+        pdvId: data.pdvId,
+        createdById: data.createdByUserId,
         customerId: customer?.id,
         couponId: calculation.coupon?.id,
         couponCode: calculation.coupon?.code,
