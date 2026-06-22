@@ -90,6 +90,11 @@ export async function PATCH(
     return NextResponse.json({ error: 'Atendentes não podem cancelar pedidos.' }, { status: 403 })
   }
 
+  // DELIVERY_PERSON: não pode cancelar
+  if (role === 'DELIVERY_PERSON' && status === 'CANCELLED') {
+    return NextResponse.json({ error: 'Entregadores não podem cancelar pedidos.' }, { status: 403 })
+  }
+
   // DELIVERY_PERSON: só DELIVERY, só OUT_FOR_DELIVERY e DELIVERED
   if (role === 'DELIVERY_PERSON') {
     if (!isDelivery) {

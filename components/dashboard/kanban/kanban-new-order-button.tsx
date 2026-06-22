@@ -37,6 +37,7 @@ export function KanbanNewOrderButton({ tenantId, categories }: Props) {
   // CORREÇÃO: suporta múltiplas formas de pagamento no mesmo pedido (split)
   const [payments, setPayments] = useState<PaymentEntry[]>([{ method: 'PIX', amount: 0 }])
   const [notes, setNotes] = useState('')
+  const [payNow, setPayNow] = useState(true)   // pagar agora ou deixar pendente (pagar no final)
   const [isPending, start] = useTransition()
   const [pixData, setPixData] = useState<PixData | null>(null)
   const [copied, setCopied] = useState(false)
@@ -99,7 +100,7 @@ export function KanbanNewOrderButton({ tenantId, categories }: Props) {
           type: 'PDV',
           customerPhone: customerPhone || undefined,
           customerName: customerName || undefined,
-          payments: finalPayments,
+          payments: payNow ? finalPayments : undefined,
           notes: notes || undefined,
         })
         if (result.error) { toast.error(result.error); return }
@@ -126,6 +127,7 @@ export function KanbanNewOrderButton({ tenantId, categories }: Props) {
     setOpen(false)
     setItems([]); setCustomerPhone(''); setCustomerName(''); setNotes('')
     setPayments([{ method: 'PIX', amount: 0 }])
+    setPayNow(true)
     setPixData(null); setCopied(false)
   }
 
@@ -251,65 +253,83 @@ export function KanbanNewOrderButton({ tenantId, categories }: Props) {
                 </div>
               </div>
 
-              {/* Pagamento — CORREÇÃO: suporta dividir em mais de uma forma */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-xs font-medium text-foreground">Forma de pagamento</label>
-                  {payments.length === 1 && (
-                    <button onClick={addPaymentRow} className="text-xs font-medium text-primary hover:underline">
-                      + Dividir pagamento
-                    </button>
+              {/* Quando pagar — pagar agora ou deixar para o final */}
+              <div className="flex items-center justify-between rounded-xl border border-border p-3 bg-muted/30">
+                <div>
+                  <p className="text-xs font-semibold text-foreground">Cobrar agora?</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {payNow ? 'Pagamento registrado na criação do pedido' : 'Pedido fica pendente — cobra no final'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setPayNow((v) => !v)}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${payNow ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'}`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${payNow ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+              </div>
+
+              {/* Forma de pagamento — só aparece se cobrar agora */}
+              {payNow && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-medium text-foreground">Forma de pagamento</label>
+                    {payments.length === 1 && (
+                      <button onClick={addPaymentRow} className="text-xs font-medium text-primary hover:underline">
+                        + Dividir pagamento
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    {payments.map((p, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <select
+                          value={p.method}
+                          onChange={(e) => updatePaymentMethod(idx, e.target.value as PaymentMethodType)}
+                          className="flex-1 px-2.5 py-2 text-xs font-medium border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                        >
+                          <option value="PIX">⚡ PIX</option>
+                          <option value="CASH">💵 Dinheiro</option>
+                          <option value="CREDIT_CARD">💳 Crédito</option>
+                          <option value="DEBIT_CARD">💳 Débito</option>
+                        </select>
+
+                        {payments.length > 1 && (
+                          <input
+                            type="number" min="0" step="0.01"
+                            value={p.amount || ''}
+                            onChange={(e) => updatePaymentAmount(idx, Number(e.target.value))}
+                            placeholder="0,00"
+                            className="w-24 px-2.5 py-2 text-xs border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                          />
+                        )}
+
+                        {payments.length > 1 && (
+                          <button onClick={() => removePaymentRow(idx)} className="w-7 h-7 flex-shrink-0 rounded-md bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {payments.length > 1 && (
+                    <div className="flex justify-between text-xs mt-2">
+                      <button onClick={addPaymentRow} className="font-medium text-primary hover:underline">
+                        + Adicionar outra forma
+                      </button>
+                      <span className={remaining === 0 ? 'text-emerald-600 font-semibold' : 'text-amber-600 font-semibold'}>
+                        {remaining > 0
+                          ? `Faltam ${formatCurrency(remaining)}`
+                          : remaining < 0
+                            ? `Excede em ${formatCurrency(-remaining)}`
+                            : 'Valores OK ✓'}
+                      </span>
+                    </div>
                   )}
                 </div>
-
-                <div className="space-y-2">
-                  {payments.map((p, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <select
-                        value={p.method}
-                        onChange={(e) => updatePaymentMethod(idx, e.target.value as PaymentMethodType)}
-                        className="flex-1 px-2.5 py-2 text-xs font-medium border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-                      >
-                        <option value="PIX">⚡ PIX</option>
-                        <option value="CASH">💵 Dinheiro</option>
-                        <option value="CREDIT_CARD">💳 Crédito</option>
-                        <option value="DEBIT_CARD">💳 Débito</option>
-                      </select>
-
-                      {payments.length > 1 && (
-                        <input
-                          type="number" min="0" step="0.01"
-                          value={p.amount || ''}
-                          onChange={(e) => updatePaymentAmount(idx, Number(e.target.value))}
-                          placeholder="0,00"
-                          className="w-24 px-2.5 py-2 text-xs border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-                        />
-                      )}
-
-                      {payments.length > 1 && (
-                        <button onClick={() => removePaymentRow(idx)} className="w-7 h-7 flex-shrink-0 rounded-md bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground">
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {payments.length > 1 && (
-                  <div className="flex justify-between text-xs mt-2">
-                    <button onClick={addPaymentRow} className="font-medium text-primary hover:underline">
-                      + Adicionar outra forma
-                    </button>
-                    <span className={remaining === 0 ? 'text-emerald-600 font-semibold' : 'text-amber-600 font-semibold'}>
-                      {remaining > 0
-                        ? `Faltam ${formatCurrency(remaining)}`
-                        : remaining < 0
-                          ? `Excede em ${formatCurrency(-remaining)}`
-                          : 'Valores OK ✓'}
-                    </span>
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* Observações */}
               <div>

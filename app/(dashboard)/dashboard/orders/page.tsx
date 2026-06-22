@@ -43,10 +43,14 @@ export default async function OrdersPage({ searchParams }: PageProps) {
   if (!['TENANT_ADMIN', 'MASTER_ADMIN', 'MANAGER'].includes(role)) {
     const pdvAccess = await prisma.pDVUser.findMany({
       where: { userId: session.user.id },
-      select: { pdvId: true },
+      select: { pdvId: true, pdv: { select: { type: true } } },
     })
     if (pdvAccess.length > 0) {
-      pdvFilter = { pdvId: { in: pdvAccess.map((p) => p.pdvId) } }
+      const pdvIds = pdvAccess.map((p) => p.pdvId)
+      const hasDeliveryPdv = pdvAccess.some((p) => p.pdv.type === 'DELIVERY')
+      pdvFilter = hasDeliveryPdv
+        ? { OR: [{ pdvId: { in: pdvIds } }, { pdvId: null, type: 'DELIVERY' }] }
+        : { pdvId: { in: pdvIds } }
     }
   }
 
@@ -92,6 +96,7 @@ export default async function OrdersPage({ searchParams }: PageProps) {
         table:    { select: { number: true } },
         waiter:   { select: { name: true } },
         pdv:      { select: { name: true } },
+        payments: { select: { method: true }, take: 3 },
         _count:   { select: { items: true } },
       },
     }),

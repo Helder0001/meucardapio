@@ -154,18 +154,28 @@ export function PrintersManager({ printers: initial }: { printers: PrinterData[]
                   </p>
                 )}
 
-                {/* Token URL */}
+                {/* Token URL + Botões */}
                 <div className="flex gap-2">
                   <div className="flex-1 bg-muted rounded-lg px-3 py-2 text-xs font-mono text-muted-foreground truncate">
                     /api/printers/{p.token.slice(0, 8)}...
                   </div>
                   <button onClick={() => copyToken(p.token)}
-                    className="p-2 border border-input rounded-lg hover:bg-muted transition-colors">
+                    className="p-2 border border-input rounded-lg hover:bg-muted transition-colors"
+                    title="Copiar URL">
                     {copied === p.token
                       ? <Check className="h-3.5 w-3.5 text-emerald-500" />
                       : <Copy className="h-3.5 w-3.5 text-muted-foreground" />
                     }
                   </button>
+                  <a
+                    href={`/api/printers/${p.token}/preview`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Abrir simulador de impressora"
+                    className="p-2 border border-input rounded-lg hover:bg-primary/10 hover:border-primary/30 transition-colors text-xs font-medium text-primary flex items-center gap-1"
+                  >
+                    🖨️ Testar
+                  </a>
                   <button onClick={() => handleDelete(p.id)} disabled={isPending}
                     className="p-2 border border-input rounded-lg hover:bg-destructive/10 hover:border-destructive/30 transition-colors disabled:opacity-40">
                     <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />

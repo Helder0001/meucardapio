@@ -25,130 +25,67 @@ const PAID_STATUS_FILTER = { notIn: ['CANCELLED', 'REFUNDED'] as OrderStatus[] }
 // Variantes separadas por combinação de filtros opcionais para evitar composição
 // dinâmica de Prisma.sql que pode corromper os índices de bind parameters.
 
+// Helper para construir filtro de PDV compatível com null (pedidos online)
+function buildPdvWhere(filterPdv: string, filterSaleType: string) {
+  const pdvCondition = filterPdv === 'null'
+    ? { pdvId: null }
+    : filterPdv
+      ? { pdvId: filterPdv }
+      : {}
+  const typeCondition = filterSaleType ? { type: filterSaleType as any } : {}
+  return { ...pdvCondition, ...typeCondition }
+}
+
 async function queryRevenueChart(
   tenantId: string, startDate: Date, endDate: Date,
   filterPdv: string, filterSaleType: string,
 ): Promise<Array<{ date: string; revenue: number; orders: number }>> {
-  type Row = { date: unknown; revenue: unknown; orders: unknown }
-
-  let raw: Row[]
-
-  if (filterPdv && filterSaleType) {
-    raw = await prisma.$queryRaw<Row[]>`
-      SELECT DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo')::text AS date,
-             COALESCE(SUM(total), 0)::float                          AS revenue,
-             COUNT(*)::float                                         AS orders
-      FROM "Order"
-      WHERE "tenantId"   = ${tenantId}
-        AND status     NOT IN ('CANCELLED', 'REFUNDED')
-        AND "createdAt" >= ${startDate}
-        AND "createdAt" <= ${endDate}
-        AND "pdvId"      = ${filterPdv}
-        AND type::text  = ${filterSaleType}
-      GROUP BY DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo')
-      ORDER BY date ASC`
-  } else if (filterPdv) {
-    raw = await prisma.$queryRaw<Row[]>`
-      SELECT DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo')::text AS date,
-             COALESCE(SUM(total), 0)::float                          AS revenue,
-             COUNT(*)::float                                         AS orders
-      FROM "Order"
-      WHERE "tenantId"   = ${tenantId}
-        AND status     NOT IN ('CANCELLED', 'REFUNDED')
-        AND "createdAt" >= ${startDate}
-        AND "createdAt" <= ${endDate}
-        AND "pdvId"      = ${filterPdv}
-      GROUP BY DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo')
-      ORDER BY date ASC`
-  } else if (filterSaleType) {
-    raw = await prisma.$queryRaw<Row[]>`
-      SELECT DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo')::text AS date,
-             COALESCE(SUM(total), 0)::float                          AS revenue,
-             COUNT(*)::float                                         AS orders
-      FROM "Order"
-      WHERE "tenantId"   = ${tenantId}
-        AND status     NOT IN ('CANCELLED', 'REFUNDED')
-        AND "createdAt" >= ${startDate}
-        AND "createdAt" <= ${endDate}
-        AND type::text  = ${filterSaleType}
-      GROUP BY DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo')
-      ORDER BY date ASC`
-  } else {
-    raw = await prisma.$queryRaw<Row[]>`
-      SELECT DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo')::text AS date,
-             COALESCE(SUM(total), 0)::float                          AS revenue,
-             COUNT(*)::float                                         AS orders
-      FROM "Order"
-      WHERE "tenantId"   = ${tenantId}
-        AND status     NOT IN ('CANCELLED', 'REFUNDED')
-        AND "createdAt" >= ${startDate}
-        AND "createdAt" <= ${endDate}
-      GROUP BY DATE("createdAt" AT TIME ZONE 'America/Sao_Paulo')
-      ORDER BY date ASC`
+  const orders = await prisma.order.findMany({
+    where: {
+      tenantId,
+      status: { notIn: ['CANCELLED', 'REFUNDED'] },
+      createdAt: { gte: startDate, lte: endDate },
+      ...buildPdvWhere(filterPdv, filterSaleType),
+    },
+    select: { total: true, createdAt: true },
+  })
+  const byDay = new Map<string, { revenue: number; orders: number }>()
+  for (const o of orders) {
+    const day = new Date(o.createdAt).toLocaleDateString('pt-BR', {
+      timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).split('/').reverse().join('-')
+    const cur = byDay.get(day) ?? { revenue: 0, orders: 0 }
+    cur.revenue += Number(o.total); cur.orders++
+    byDay.set(day, cur)
   }
-
-  return raw.map((r) => ({ date: String(r.date), revenue: Number(r.revenue), orders: Number(r.orders) }))
+  return Array.from(byDay.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, d]) => ({ date, revenue: d.revenue, orders: d.orders }))
 }
 
 async function queryHourChart(
   tenantId: string, startDate: Date, endDate: Date,
   filterPdv: string, filterSaleType: string,
 ): Promise<Array<{ hour: number; orders: number }>> {
-  type Row = { hour: unknown; orders: unknown }
-
-  let raw: Row[]
-
-  if (filterPdv && filterSaleType) {
-    raw = await prisma.$queryRaw<Row[]>`
-      SELECT EXTRACT(HOUR FROM "createdAt" AT TIME ZONE 'America/Sao_Paulo')::int AS hour,
-             COUNT(*)::float                                                      AS orders
-      FROM "Order"
-      WHERE "tenantId"   = ${tenantId}
-        AND status     NOT IN ('CANCELLED', 'REFUNDED')
-        AND "createdAt" >= ${startDate}
-        AND "createdAt" <= ${endDate}
-        AND "pdvId"      = ${filterPdv}
-        AND type::text  = ${filterSaleType}
-      GROUP BY EXTRACT(HOUR FROM "createdAt" AT TIME ZONE 'America/Sao_Paulo')
-      ORDER BY hour`
-  } else if (filterPdv) {
-    raw = await prisma.$queryRaw<Row[]>`
-      SELECT EXTRACT(HOUR FROM "createdAt" AT TIME ZONE 'America/Sao_Paulo')::int AS hour,
-             COUNT(*)::float                                                      AS orders
-      FROM "Order"
-      WHERE "tenantId"   = ${tenantId}
-        AND status     NOT IN ('CANCELLED', 'REFUNDED')
-        AND "createdAt" >= ${startDate}
-        AND "createdAt" <= ${endDate}
-        AND "pdvId"      = ${filterPdv}
-      GROUP BY EXTRACT(HOUR FROM "createdAt" AT TIME ZONE 'America/Sao_Paulo')
-      ORDER BY hour`
-  } else if (filterSaleType) {
-    raw = await prisma.$queryRaw<Row[]>`
-      SELECT EXTRACT(HOUR FROM "createdAt" AT TIME ZONE 'America/Sao_Paulo')::int AS hour,
-             COUNT(*)::float                                                      AS orders
-      FROM "Order"
-      WHERE "tenantId"   = ${tenantId}
-        AND status     NOT IN ('CANCELLED', 'REFUNDED')
-        AND "createdAt" >= ${startDate}
-        AND "createdAt" <= ${endDate}
-        AND type::text  = ${filterSaleType}
-      GROUP BY EXTRACT(HOUR FROM "createdAt" AT TIME ZONE 'America/Sao_Paulo')
-      ORDER BY hour`
-  } else {
-    raw = await prisma.$queryRaw<Row[]>`
-      SELECT EXTRACT(HOUR FROM "createdAt" AT TIME ZONE 'America/Sao_Paulo')::int AS hour,
-             COUNT(*)::float                                                      AS orders
-      FROM "Order"
-      WHERE "tenantId"   = ${tenantId}
-        AND status     NOT IN ('CANCELLED', 'REFUNDED')
-        AND "createdAt" >= ${startDate}
-        AND "createdAt" <= ${endDate}
-      GROUP BY EXTRACT(HOUR FROM "createdAt" AT TIME ZONE 'America/Sao_Paulo')
-      ORDER BY hour`
+  const orders = await prisma.order.findMany({
+    where: {
+      tenantId,
+      status: { notIn: ['CANCELLED', 'REFUNDED'] },
+      createdAt: { gte: startDate, lte: endDate },
+      ...buildPdvWhere(filterPdv, filterSaleType),
+    },
+    select: { createdAt: true },
+  })
+  const byHour = new Map<number, number>()
+  for (const o of orders) {
+    const h = Number(new Intl.DateTimeFormat('pt-BR', {
+      hour: 'numeric', hour12: false, timeZone: 'America/Sao_Paulo',
+    }).format(new Date(o.createdAt)))
+    byHour.set(h, (byHour.get(h) ?? 0) + 1)
   }
-
-  return raw.map((r) => ({ hour: Number(r.hour), orders: Number(r.orders) }))
+  return Array.from(byHour.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([hour, orders]) => ({ hour, orders }))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -177,7 +114,11 @@ export default async function ReportsPage({ searchParams }: PageProps) {
     status: PAID_STATUS_FILTER,
     createdAt: { gte: startDate, lte: endDate },
   }
-  if (filterPdv)      baseWhere.pdvId    = filterPdv
+  if (filterPdv === 'null') {
+    baseWhere.pdvId = null          // pedidos online sem PDV
+  } else if (filterPdv) {
+    baseWhere.pdvId = filterPdv
+  }
   if (filterSaleType) baseWhere.type     = filterSaleType as OrderType
   if (filterUser) {
     // Filtra pedidos onde esse usuário confirmou pagamento

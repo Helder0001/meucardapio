@@ -23,6 +23,7 @@ interface Order {
   table: { number: number } | null
   waiter: { name: string } | null
   pdv: { name: string } | null
+  payments?: Array<{ method: string }>
   _count: { items: number }
 }
 
@@ -185,7 +186,8 @@ export function OrdersTable({ orders, total, page, pageSize, currentFilters }: O
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Cliente</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Tipo</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Pagamento</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Pgto.</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Forma</th>
                 <th className="text-right px-4 py-3 font-medium text-muted-foreground">Total</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Data</th>
               </tr>
@@ -237,6 +239,16 @@ export function OrdersTable({ orders, total, page, pageSize, currentFilters }: O
                       )}>
                         {PAYMENT_LABEL[order.paymentStatus] ?? order.paymentStatus}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 hidden md:table-cell">
+                      {order.payments && order.payments.length > 0 ? (
+                        <span className="text-xs text-muted-foreground">
+                          {[...new Set(order.payments.map((p: any) => {
+                            const m: Record<string, string> = { PIX: '⚡ PIX', CREDIT_CARD: '💳 Créd', DEBIT_CARD: '💳 Déb', CASH: '💵 Din' }
+                            return m[p.method] ?? p.method
+                          }))].join(' + ')}
+                        </span>
+                      ) : <span className="text-xs text-muted-foreground">—</span>}
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-foreground">
                       {formatCurrency(order.total)}

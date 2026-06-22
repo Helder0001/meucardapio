@@ -257,8 +257,8 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
                 {advanceLabel}
               </button>
             )}
-            {/* Cancelar — Atendente não pode cancelar */}
-            {!isAttendant && (
+            {/* Cancelar — Atendente e Entregador não podem cancelar */}
+            {!isAttendant && !isDeliveryPerson && (
               <button
                 onClick={cancelOrder}
                 disabled={isPending}
@@ -439,18 +439,18 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
               <div className="mt-2 pt-2 border-t border-border">
                 <p className="font-semibold text-foreground mb-1">🛵 Endereço de entrega</p>
                 {order.deliveryAddress && (() => {
-                  const addr = typeof order.deliveryAddress === 'object' ? order.deliveryAddress as any : {}
-                  return (
-                    <div className="space-y-0.5">
-                      {addr.street && <p>{addr.street}{addr.number ? `, ${addr.number}` : ''}{addr.complement ? ` — ${addr.complement}` : ''}</p>}
-                      {(addr.neighborhood || order.deliveryBairro) && <p>Bairro: {addr.neighborhood ?? order.deliveryBairro}</p>}
-                      {addr.city && <p>{addr.city}{addr.state ? ` — ${addr.state}` : ''}</p>}
-                      {addr.reference && <p className="italic">Ref: {addr.reference}</p>}
-                    </div>
-                  )
+                  const raw = order.deliveryAddress
+                  // Pode ser { address: "rua xxx" } ou objeto estruturado
+                  const addrStr = typeof raw === 'object' && raw !== null
+                    ? (raw as any).address ?? JSON.stringify(raw)
+                    : String(raw)
+                  return <p>{addrStr}</p>
                 })()}
-                {!order.deliveryAddress && order.deliveryBairro && (
-                  <p>Bairro: {order.deliveryBairro}</p>
+                {order.deliveryBairro && (
+                  <p className="mt-0.5">Bairro: {order.deliveryBairro}</p>
+                )}
+                {!order.deliveryAddress && !order.deliveryBairro && (
+                  <p className="italic text-muted-foreground">Endereço não informado</p>
                 )}
               </div>
             )}

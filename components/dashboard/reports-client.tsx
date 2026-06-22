@@ -304,6 +304,7 @@ export function ReportsClient({
                 onChange={setPdv}
                 options={[
                   { value: '', label: 'Todos os PDVs' },
+                  { value: 'null', label: '🌐 Online (sem PDV)' },
                   ...pdvList.map((p) => ({ value: p.id, label: p.name })),
                 ]}
               />

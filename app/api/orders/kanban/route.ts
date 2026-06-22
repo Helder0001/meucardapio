@@ -35,16 +35,30 @@ export async function GET(request: Request) {
   const role     = session.user.role
 
   // Multi-PDV isolation: se o usuário está vinculado a PDV(s) específicos,
-  // só vê pedidos desses PDVs (ou sem PDV, se for balcão online).
+  // só vê pedidos desses PDVs.
+  // Exceção: PDV do tipo DELIVERY também exibe pedidos online sem pdvId.
   // Admin e Gerente veem tudo.
-  let pdvFilter: { pdvId: string | null } | { pdvId: { in: string[] } } | undefined
+  let pdvFilter: object | undefined
   if (!['TENANT_ADMIN', 'MASTER_ADMIN', 'MANAGER'].includes(role)) {
     const pdvAccess = await prisma.pDVUser.findMany({
       where: { userId },
-      select: { pdvId: true },
+      select: { pdvId: true, pdv: { select: { type: true } } },
     })
     if (pdvAccess.length > 0) {
-      pdvFilter = { pdvId: { in: pdvAccess.map((p) => p.pdvId) } }
+      const pdvIds = pdvAccess.map((p) => p.pdvId)
+      const hasDeliveryPdv = pdvAccess.some((p) => p.pdv.type === 'DELIVERY')
+
+      if (hasDeliveryPdv) {
+        // PDVs de entrega: vê pedidos dos seus PDVs OU pedidos delivery sem PDV (online)
+        pdvFilter = {
+          OR: [
+            { pdvId: { in: pdvIds } },
+            { pdvId: null, type: 'DELIVERY' },
+          ],
+        }
+      } else {
+        pdvFilter = { pdvId: { in: pdvIds } }
+      }
     }
   }
 
