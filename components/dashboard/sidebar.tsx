@@ -7,7 +7,7 @@ import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Users, Table2,
-  Truck, BarChart3, Settings, Tag, Star, MessageSquare, Printer,
+  Truck, BarChart3, Settings, Tag, Star, MessageSquare, MessageCircle, Printer,
   Store, QrCode, ShieldCheck, X, Menu,
   Bell, ClipboardList,
 } from 'lucide-react'
@@ -41,6 +41,7 @@ const navItems: NavItem[] = [
   { label: 'Cupons',       href: '/dashboard/coupons',            icon: Tag,               minPlan: 'PRO', allowedRoles: MANAGER_UP },
   { label: 'Fidelidade',   href: '/dashboard/loyalty',            icon: Star,              minPlan: 'PRO', allowedRoles: MANAGER_UP },
   { label: 'WhatsApp',     href: '/dashboard/settings/whatsapp',  icon: MessageSquare,     minPlan: 'PRO', allowedRoles: MANAGER_UP },
+  { label: 'WA Chat',      href: '/dashboard/whatsapp-chat',       icon: MessageCircle,     minPlan: 'PRO', allowedRoles: MANAGER_UP },
   { label: 'Multi-PDV',    href: '/dashboard/pdv',                icon: Store,             minPlan: 'PRO', allowedRoles: MANAGER_UP },
   { label: 'Avaliações',   href: '/dashboard/reviews',            icon: Star,              allowedRoles: MANAGER_UP },
   { label: 'Relatórios',   href: '/dashboard/reports',            icon: BarChart3,         allowedRoles: MANAGER_UP },

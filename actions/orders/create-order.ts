@@ -171,21 +171,21 @@ export async function createOrderAction(
     return { error: calculation.errors[0] }
   }
 
-  // Validar que os valores dos pagamentos somam o total (tolerância de R$ 0,05)
-  if (data.payments) {
-    const sumPaid = data.payments.reduce((s, p) => s + p.amount, 0)
-    if (Math.abs(sumPaid - calculation.total) > 0.05) {
-      return { error: `Total dos pagamentos (${sumPaid.toFixed(2)}) não confere com o valor do pedido (${calculation.total.toFixed(2)})` }
+  // Validar e preencher amounts — só quando há pagamentos (cobrar agora)
+  if (paymentsList.length > 0) {
+    if (data.payments) {
+      const sumPaid = data.payments.reduce((s, p) => s + p.amount, 0)
+      if (Math.abs(sumPaid - calculation.total) > 0.05) {
+        return { error: `Total dos pagamentos (${sumPaid.toFixed(2)}) não confere com o valor do pedido (${calculation.total.toFixed(2)})` }
+      }
+      paymentsList.forEach((p) => {
+        if (p.amount === 0) p.amount = calculation.total
+      })
+    } else {
+      paymentsList[0].amount = calculation.total
     }
-
-    // Preencher amount nos pagamentos legados
-    paymentsList.forEach((p) => {
-      if (p.amount === 0) p.amount = calculation.total
-    })
-  } else {
-    // Legado: pagamento único com o total completo
-    paymentsList[0].amount = calculation.total
   }
+  // paymentsList vazio = "cobrar no final" para pedidos PDV
 
   // 5. Criar pedido em transação
   const orderNumber = await getNextOrderNumber(data.tenantId)

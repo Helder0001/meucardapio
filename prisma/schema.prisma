@@ -145,6 +145,7 @@ model Tenant {
   loyaltyConfig      LoyaltyConfig?
   cashbackConfig     CashbackConfig?
   whatsappConfig     WhatsappConfig?
+  whatsappChats      WhatsappChat[]
   notifications      Notification[]
   auditLogs          AuditLog[]
   payments           Payment[]
@@ -211,6 +212,7 @@ model User {
   ordersCreated     Order[]   @relation("CreatedBy")
   ordersAsWaiter    Order[]   @relation("AssignedWaiter")
   statusHistoryEntries OrderStatusHistory[] @relation("StatusHistoryUser")
+  sentMessages         WhatsappMessage[]    @relation("SentMessages")
   tableSessions     TableSession[]
   auditLogs         AuditLog[]
 
@@ -616,9 +618,46 @@ model OrderStatusHistory {
   @@index([userId])
 }
 
-// ══════════════════════════════════════════════════════════
-// PAGAMENTOS
-// ══════════════════════════════════════════════════════════
+// ── WhatsApp Chat ──────────────────────────────────────────────────────────────
+model WhatsappChat {
+  id          String   @id @default(cuid())
+  tenantId    String
+  phone       String
+  contactName String?
+  lastMessage String?
+  lastMessageAt DateTime?
+  unreadCount Int      @default(0)
+  isOpen      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant    Tenant             @relation(fields: [tenantId], references: [id])
+  messages  WhatsappMessage[]
+
+  @@unique([tenantId, phone])
+  @@index([tenantId])
+  @@index([lastMessageAt])
+}
+
+model WhatsappMessage {
+  id        String   @id @default(cuid())
+  chatId    String
+  tenantId  String
+  body      String
+  fromMe    Boolean  @default(false)
+  status    String   @default("received") // received, sent, read, failed
+  msgId     String?  // ID da mensagem no WhatsApp
+  sentById  String?  // usuário que enviou (quando fromMe=true)
+  createdAt DateTime @default(now())
+
+  chat   WhatsappChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sentBy User?        @relation("SentMessages", fields: [sentById], references: [id])
+
+  @@index([chatId])
+  @@index([tenantId])
+}
+
+
 
 model Payment {
   id                String        @id @default(cuid())

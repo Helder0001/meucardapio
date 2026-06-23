@@ -71,18 +71,54 @@ export async function POST(request: Request) {
       case 'messages.upsert': {
         const messages = Array.isArray(data?.messages) ? data.messages : [data]
         for (const msg of messages) {
-          if (!msg || msg.key?.fromMe) continue // ignorar mensagens enviadas por nós
+          if (!msg || msg.key?.fromMe) continue
 
           const fromPhone = msg.key?.remoteJid?.replace('@s.whatsapp.net', '')
-          const text      = msg.message?.conversation?.toLowerCase().trim() ||
-                            msg.message?.extendedTextMessage?.text?.toLowerCase().trim()
+          const text      = msg.message?.conversation?.trim() ||
+                            msg.message?.extendedTextMessage?.text?.trim() ||
+                            msg.message?.imageMessage?.caption?.trim() ||
+                            '[mídia]'
+          const msgId     = msg.key?.id
 
-          if (!fromPhone || !text) continue
+          if (!fromPhone) continue
 
-          // Processar opt-out: cliente digita SAIR, PARAR, STOP
-          if (['sair', 'parar', 'stop', 'cancelar', 'descadastrar'].includes(text)) {
-            await handleOptOut(config.tenantId, `55${fromPhone}`)
+          const phone = fromPhone.startsWith('55') ? fromPhone : `55${fromPhone}`
+
+          // Opt-out
+          if (['sair', 'parar', 'stop', 'cancelar', 'descadastrar'].includes(text.toLowerCase())) {
+            await handleOptOut(config.tenantId, phone)
           }
+
+          // Salvar/atualizar chat e mensagem
+          const chat = await prisma.whatsappChat.upsert({
+            where: { tenantId_phone: { tenantId: config.tenantId, phone } },
+            create: {
+              tenantId: config.tenantId,
+              phone,
+              contactName: msg.pushName ?? null,
+              lastMessage: text,
+              lastMessageAt: new Date(),
+              unreadCount: 1,
+            },
+            update: {
+              contactName: msg.pushName ?? undefined,
+              lastMessage: text,
+              lastMessageAt: new Date(),
+              unreadCount: { increment: 1 },
+              isOpen: true,
+            },
+          })
+
+          await prisma.whatsappMessage.create({
+            data: {
+              chatId:  chat.id,
+              tenantId: config.tenantId,
+              body:    text,
+              fromMe:  false,
+              msgId,
+              status: 'received',
+            },
+          })
         }
         break
       }
