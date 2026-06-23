@@ -50,8 +50,8 @@ const createOrderSchema = z.object({
   })).min(1, 'Carrinho vazio'),
   type: z.enum(['TABLE', 'DELIVERY', 'PICKUP', 'PDV']),
   tableId: z.string().cuid().optional(),
-  pdvId: z.string().cuid().optional(),            // PDV que criou o pedido
-  createdByUserId: z.string().cuid().optional(),   // usuário que criou
+  pdvId: z.string().optional(),            // PDV que criou o pedido
+  createdByUserId: z.string().optional(),   // usuário que criou
   couponCode: z.string().max(50).optional(),
   deliveryBairro: z.string().max(100).optional(),
   customerPhone: z.string().min(10).max(20).optional(),
