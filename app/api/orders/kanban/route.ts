@@ -131,13 +131,17 @@ export async function GET(request: Request) {
       }, 30_000)
 
       // Criar cliente Redis dedicado para subscribe
-      // (não podemos usar o cliente principal enquanto está subscrito)
-      const subscriber = redis
-
+      // (o cliente principal não pode ser usado enquanto está no modo subscribe)
+      let subscriber: any = null
       try {
+        // Importar Redis e criar instância separada
+        const { Redis } = await import('@upstash/redis')
+        subscriber = new Redis({
+          url:   process.env.UPSTASH_REDIS_REST_URL!,
+          token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+        })
+
         // Inscrever no canal do tenant
-        // Quando createOrderAction ou updateOrderStatus publicar evento,
-        // este callback é chamado e envia o SSE para o cliente
         await (subscriber as any).subscribe(
           CacheKeys.orderChannel(tenantId),
           (message: string) => {
@@ -151,13 +155,14 @@ export async function GET(request: Request) {
         )
       } catch {
         // Redis Pub/Sub não disponível — modo degradado (apenas estado inicial)
+        subscriber = null
       }
 
       // Limpar quando o cliente desconectar
       request.signal.addEventListener('abort', () => {
         clearInterval(heartbeat)
         try {
-          ;(subscriber as any).unsubscribe?.()
+          if (subscriber) subscriber.unsubscribe?.()
         } catch {}
         try {
           controller.close()

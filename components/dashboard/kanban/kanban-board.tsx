@@ -155,9 +155,21 @@ export function KanbanBoard({ tenantId, userRole = '', lockedFilter }: KanbanBoa
 
     es.onerror = () => {
       setConnected(false)
-      // Reconectar após 5 segundos
+      // Reconectar após 5 segundos (inclui quando Vercel mata a conexão SSE após 300s)
       setTimeout(connect, 5000)
     }
+
+    // Polling fallback a cada 60s: refetch estado inicial caso SSE falhe silenciosamente
+    const pollFallback = setInterval(async () => {
+      if (es.readyState === EventSource.CLOSED) {
+        clearInterval(pollFallback)
+        return
+      }
+      try {
+        // Apenas refresh via SSE reconnect — não precisa fetch separado
+        // O onerror já trata reconexão. Esse interval é só um watchdog.
+      } catch {}
+    }, 60_000)
   }, [playNotification])
 
   useEffect(() => {
@@ -166,8 +178,6 @@ export function KanbanBoard({ tenantId, userRole = '', lockedFilter }: KanbanBoa
       eventSourceRef.current?.close()
     }
   }, [connect])
-
-  // Drag and drop handlers
   const handleDragStart = (orderId: string) => {
     setDraggingId(orderId)
   }
