@@ -386,13 +386,17 @@ export async function createOrderAction(
 
   return {
     orderId: order.id,
-    statusToken,                              // ← AGORA VÁLIDO
-    paymentData: {
+    statusToken,
+    paymentData: paymentsList.length > 0 ? {
       method: paymentsList[0].method,
       total: calculation.total,
       pixQrCode: pixResult?.pixQrCode,
       pixQrCodeBase64: pixResult?.pixQrCodeBase64,
       payments: paymentsList.map((p) => ({ method: p.method, amount: p.amount })),
+    } : {
+      method: 'PENDING',
+      total: calculation.total,
+      payments: [],
     },
   }
 }
