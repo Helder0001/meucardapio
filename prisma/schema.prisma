@@ -145,6 +145,7 @@ model Tenant {
   loyaltyConfig      LoyaltyConfig?
   cashbackConfig     CashbackConfig?
   whatsappConfig     WhatsappConfig?
+  mercadoPagoConnection MercadoPagoConnection?
   whatsappChats      WhatsappChat[]
   notifications      Notification[]
   auditLogs          AuditLog[]
@@ -616,6 +617,42 @@ model OrderStatusHistory {
 
   @@index([orderId])
   @@index([userId])
+}
+
+// ══════════════════════════════════════════════════════════
+// CONEXÃO OAUTH COM MERCADO PAGO (Mercado Pago Connect)
+// Substitui o modelo de colar access_token manualmente.
+// ══════════════════════════════════════════════════════════
+
+model MercadoPagoConnection {
+  id                String    @id @default(cuid())
+  tenantId          String    @unique
+
+  mpUserId          String
+  publicKey         String
+
+  // Sensível — criptografado em repouso (AES-256-GCM)
+  accessTokenEnc    String
+  refreshTokenEnc   String
+
+  tokenType         String    @default("bearer")
+  scope             String?
+  expiresAt         DateTime
+
+  liveMode          Boolean   @default(true)
+
+  connectedAt       DateTime  @default(now())
+  connectedByUserId String?
+  lastRefreshedAt   DateTime?
+  revokedAt         DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenant            Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([mpUserId])
 }
 
 // ── WhatsApp Chat ──────────────────────────────────────────────────────────────

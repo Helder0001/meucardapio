@@ -133,7 +133,11 @@ export async function queuePrintJob(orderId: string, sector = 'KITCHEN') {
       tenantId: order.tenantId,
       sector,
       isActive: true,
-      ...(order.pdvId ? { pdvId: order.pdvId } : {}),
+      // Impressora do PDV específico OU impressoras sem PDV (cozinha central)
+      OR: [
+        { pdvId: order.pdvId ?? null },
+        { pdvId: null },
+      ],
     },
   })
 

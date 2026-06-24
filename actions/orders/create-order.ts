@@ -25,6 +25,7 @@ import { getNextOrderNumber } from '@/lib/db/tenant'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { notifyOrderReceived } from '@/lib/messaging/evolution'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
+import { queuePrintJob } from '@/lib/utils/print'
 
 // VULN-NEW-03: gera um token HMAC de curta duração para autorizar
 // o polling público de status do pedido sem exigir login do cliente.
@@ -380,6 +381,14 @@ export async function createOrderAction(
   notifyOrderReceived(order.id).catch((err) =>
     console.error('[createOrder] WhatsApp notification failed:', err)
   )
+
+  // 10. Enfileirar impressão em todas as impressoras ativas do tenant/PDV
+  queuePrintJob(order.id, 'KITCHEN').catch((err) =>
+    console.error('[createOrder] Print job failed:', err)
+  )
+  queuePrintJob(order.id, 'COUNTER').catch(() => {
+    // Setor COUNTER é opcional — não loga erro se não houver impressoras
+  })
 
   // VULN-NEW-03 CORRIGIDO: gerar token de status para o cliente do storefront
   const statusToken = generateOrderStatusToken(order.id)
