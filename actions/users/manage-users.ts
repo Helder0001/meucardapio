@@ -57,7 +57,7 @@ export async function createUserAction(
       tenantId,
       name:         parsed.data.name,
       email:        parsed.data.email,
-      role:         parsed.data.role,
+      role:         parsed.data.role as any,
       passwordHash,
       isActive:     true,
     },
