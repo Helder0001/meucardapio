@@ -34,10 +34,9 @@ export async function POST(
   }
 
   // Save sent message
-  const message = await prisma.whatsappMessage.create({
+  const message = await (prisma as any).whatsappMessage.create({
     data: {
       chatId: chat.id,
-      tenantId: session.user.tenantId,
       body: body.trim(),
       fromMe: true,
       sentById: session.user.id,
