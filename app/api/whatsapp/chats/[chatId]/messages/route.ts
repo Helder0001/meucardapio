@@ -13,18 +13,18 @@ export async function GET(
   const { chatId } = await params
 
   try {
-    const chat = await prisma.whatsappChat.findFirst({
+    const chat = await (prisma as any).whatsappChat.findFirst({
       where: { id: chatId, tenantId: session.user.tenantId },
       select: { id: true, phone: true, contactName: true, unreadCount: true },
     })
     if (!chat) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    await prisma.whatsappChat.update({
+    await (prisma as any).whatsappChat.update({
       where: { id: chatId },
       data: { unreadCount: 0 },
     })
 
-    const messages = await prisma.whatsappMessage.findMany({
+    const messages = await (prisma as any).whatsappMessage.findMany({
       where: { chatId },
       orderBy: { createdAt: 'asc' },
       take: 100,

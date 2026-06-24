@@ -8,7 +8,7 @@ export async function GET() {
   if (!session?.user?.tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const chats = await prisma.whatsappChat.findMany({
+    const chats = await (prisma as any).whatsappChat.findMany({
       where: { tenantId: session.user.tenantId },
       orderBy: { lastMessageAt: 'desc' },
       take: 100,
