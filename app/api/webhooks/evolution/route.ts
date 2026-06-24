@@ -111,11 +111,9 @@ export async function POST(request: Request) {
 
           await (prisma as any).whatsappMessage.create({
             data: {
-              chatId:  chat.id,
-              tenantId: config.tenantId,
-              body:    text,
-              fromMe:  false,
-              msgId,
+              chatId: chat.id,
+              body:   text,
+              fromMe: false,
               status: 'received',
             },
           })
