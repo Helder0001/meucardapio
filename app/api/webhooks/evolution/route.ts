@@ -71,7 +71,7 @@ export async function POST(request: Request) {
       case 'messages.upsert': {
         const messages = Array.isArray(data?.messages) ? data.messages : [data]
         for (const msg of messages) {
-          if (!msg || msg.key?.fromMe) continue
+          if (!msg) continue
 
           const fromPhone = msg.key?.remoteJid?.replace('@s.whatsapp.net', '')
           const text      = msg.message?.conversation?.trim() ||
