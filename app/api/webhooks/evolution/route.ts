@@ -89,8 +89,8 @@ export async function POST(request: Request) {
             await handleOptOut(config.tenantId, phone)
           }
 
-          // Salvar/atualizar chat e mensagem
-          const chat = await prisma.whatsappChat.upsert({
+          // Salvar/atualizar chat e mensagem (tabela pode não existir ainda)
+          const chat = await (prisma as any).whatsappChat.upsert({
             where: { tenantId_phone: { tenantId: config.tenantId, phone } },
             create: {
               tenantId: config.tenantId,
@@ -109,7 +109,7 @@ export async function POST(request: Request) {
             },
           })
 
-          await prisma.whatsappMessage.create({
+          await (prisma as any).whatsappMessage.create({
             data: {
               chatId:  chat.id,
               tenantId: config.tenantId,
