@@ -12,28 +12,34 @@ export async function GET(
 
   const { chatId } = await params
 
-  // Verify chat belongs to this tenant
-  const chat = await prisma.whatsappChat.findFirst({
-    where: { id: chatId, tenantId: session.user.tenantId },
-    select: { id: true, phone: true, contactName: true, unreadCount: true },
-  })
-  if (!chat) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  try {
+    const chat = await prisma.whatsappChat.findFirst({
+      where: { id: chatId, tenantId: session.user.tenantId },
+      select: { id: true, phone: true, contactName: true, unreadCount: true },
+    })
+    if (!chat) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // Mark as read
-  await prisma.whatsappChat.update({
-    where: { id: chatId },
-    data: { unreadCount: 0 },
-  })
+    await prisma.whatsappChat.update({
+      where: { id: chatId },
+      data: { unreadCount: 0 },
+    })
 
-  const messages = await prisma.whatsappMessage.findMany({
-    where: { chatId },
-    orderBy: { createdAt: 'asc' },
-    take: 100,
-    select: {
-      id: true, body: true, fromMe: true, status: true, createdAt: true,
-      sentBy: { select: { name: true } },
-    },
-  })
+    const messages = await prisma.whatsappMessage.findMany({
+      where: { chatId },
+      orderBy: { createdAt: 'asc' },
+      take: 100,
+      select: {
+        id: true, body: true, fromMe: true, status: true, createdAt: true,
+        sentBy: { select: { name: true } },
+      },
+    })
 
-  return NextResponse.json({ chat, messages })
+    return NextResponse.json({ chat, messages })
+  } catch (err: any) {
+    if (err?.message?.includes('does not exist')) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+    console.error('[whatsapp/messages]', err)
+    return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
+  }
 }
