@@ -37,6 +37,8 @@ export async function POST(
   const message = await (prisma as any).whatsappMessage.create({
     data: {
       chatId: chat.id,
+      tenantId: session.user.tenantId,
+      tenantId: session.user.tenantId,
       body: body.trim(),
       fromMe: true,
       sentById: session.user.id,
