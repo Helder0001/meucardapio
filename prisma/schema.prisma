@@ -978,37 +978,3 @@ model AuditLog {
   @@index([resource, resourceId])
   @@index([createdAt])
 }
-
-model WhatsappChat {
-  id            String    @id @default(cuid())
-  tenantId      String
-  phone         String
-  contactName   String?
-  lastMessage   String?
-  lastMessageAt DateTime?
-  unreadCount   Int       @default(0)
-  isOpen        Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  tenant   Tenant            @relation(fields: [tenantId], references: [id])
-  messages WhatsappMessage[]
-
-  @@unique([tenantId, phone])
-  @@index([tenantId])
-}
-
-model WhatsappMessage {
-  id        String   @id @default(cuid())
-  chatId    String
-  body      String
-  fromMe    Boolean  @default(false)
-  status    String?
-  sentById  String?
-  createdAt DateTime @default(now())
-
-  chat   WhatsappChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  sentBy User?        @relation("SentMessages", fields: [sentById], references: [id])
-
-  @@index([chatId])
-}
