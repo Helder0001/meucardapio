@@ -97,7 +97,7 @@ export async function registerAction(
           name,
           email,
           passwordHash,
-          role: 'TENANT_ADMIN',
+          role: 'TENANT_ADMIN' as any,
           isActive: true,
         },
       })
