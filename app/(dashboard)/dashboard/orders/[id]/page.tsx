@@ -41,7 +41,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         orderBy: { createdAt: 'asc' },
         select: {
           status: true, createdAt: true, notes: true,
-          user: { select: { name: true, role: true } },
+          user: { select: { name: true, role: true } } as any,
         },
       },
     },
