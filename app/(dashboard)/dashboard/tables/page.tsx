@@ -18,8 +18,15 @@ export default async function TablesPage() {
     prisma.table.findMany({
       where: { tenantId },
       orderBy: [{ sector: 'asc' }, { number: 'asc' }],
-      include: {
-        pdv: { select: { name: true } },
+      select: {
+        id: true,
+        number: true,
+        sector: true,
+        capacity: true,
+        status: true,
+        isActive: true,
+        qrCode: true,
+        pdv: { select: { id: true, name: true } },
         _count: { select: { orders: { where: { status: { notIn: ['DELIVERED', 'CANCELLED'] } } } } },
       },
     }),

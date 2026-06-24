@@ -58,7 +58,7 @@ export async function POST(
         transaction_amount: Number(order.total),
         payment_method_id:  'pix',
         payer: {
-          email: 'cliente@foodsaas.com',
+          email: 'cliente@meucardapio.com',
           identification: { type: 'CPF', number: '00000000000' },
         },
         description: `Pedido #${id.slice(-8).toUpperCase()}`,

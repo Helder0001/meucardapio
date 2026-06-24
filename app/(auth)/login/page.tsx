@@ -4,6 +4,7 @@ import type { Metadata } from 'next'
 import { LoginForm } from './login-form'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+import { AuthLogo } from '@/components/shared/auth-logo'
 
 export const metadata: Metadata = {
   title: 'Entrar',
@@ -21,12 +22,8 @@ export default async function LoginPage({
     <div className="min-h-screen flex">
       {/* Lado esquerdo: visual */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-orange-500 to-orange-700 flex-col justify-between p-12">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-            <span className="text-orange-600 font-bold text-sm">F</span>
-          </div>
-          <span className="text-white font-semibold text-lg">FoodSaaS</span>
-        </div>
+        {/* CORREÇÃO: marca "Meu Cardápio" + logo enviada pelo cliente */}
+        <AuthLogo variant="light" />
 
         <div>
           <blockquote className="text-white">
@@ -58,13 +55,8 @@ export default async function LoginPage({
             Voltar ao site
           </Link>
 
-          {/* Logo mobile */}
-          <div className="flex items-center gap-2 mb-8 lg:hidden">
-            <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">F</span>
-            </div>
-            <span className="font-semibold text-lg">FoodSaaS</span>
-          </div>
+          {/* Logo mobile — CORREÇÃO: marca "Meu Cardápio" + logo */}
+          <AuthLogo className="mb-8 lg:hidden" />
 
           <h1 className="text-2xl font-bold text-foreground mb-1">
             Bem-vindo de volta

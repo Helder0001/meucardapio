@@ -1,6 +1,6 @@
 {
-  "name": "FoodSaaS — Cardápio Digital",
-  "short_name": "FoodSaaS",
+  "name": "Meu Cardápio — Cardápio Digital",
+  "short_name": "Meu Cardápio",
   "description": "Faça seu pedido pelo cardápio digital",
   "start_url": "/",
   "display": "standalone",

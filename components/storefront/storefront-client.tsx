@@ -1,7 +1,8 @@
 'use client'
 // components/storefront/storefront-client.tsx — com todas as correções
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { useTheme } from 'next-themes'
 import { useCartStore } from '@/lib/store/cart'
 import { ProductCard } from './product-card'
 import { CartDrawer } from './cart-drawer'
@@ -12,7 +13,7 @@ import {
   Search, X, ShoppingBag, MapPin, Clock, Star,
   ChevronDown, MessageCircle, Flame, Sparkles,
   Info, Instagram, Home as HomeIcon, Clock3, CreditCard,
-  ChevronRight, ArrowLeft, User, LogOut, Settings,
+  ChevronRight, ArrowLeft, User, LogOut, Settings, Moon, Sun,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils/format'
 import Image from 'next/image'
@@ -340,6 +341,138 @@ function CustomerAuthModal({
   )
 }
 
+// ─── Aba Meus Pedidos ─────────────────────────────────────────────────────────
+const ORDER_STATUS_LABEL: Record<string, string> = {
+  PENDING: 'Pendente', CONFIRMED: 'Confirmado', PREPARING: 'Preparando',
+  READY: 'Pronto', OUT_FOR_DELIVERY: 'Saiu para entrega', DELIVERED: 'Entregue',
+  CANCELLED: 'Cancelado',
+}
+const ORDER_STATUS_COLOR: Record<string, string> = {
+  PENDING: 'bg-amber-100 text-amber-700', CONFIRMED: 'bg-blue-100 text-blue-700',
+  PREPARING: 'bg-purple-100 text-purple-700', READY: 'bg-emerald-100 text-emerald-700',
+  OUT_FOR_DELIVERY: 'bg-cyan-100 text-cyan-700', DELIVERED: 'bg-green-100 text-green-700',
+  CANCELLED: 'bg-red-100 text-red-600',
+}
+
+function CustomerOrdersSection({
+  customerPhone, customerName, tenantId, tenantSlug, color, onLogin,
+}: {
+  customerPhone: string; customerName: string; tenantId: string; tenantSlug: string
+  color: string; onLogin: () => void
+}) {
+  const [data, setData]       = React.useState<any>(null)
+  const [loading, setLoading] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!customerPhone) return
+    setLoading(true)
+    fetch(`/api/storefront/customer?phone=${encodeURIComponent(customerPhone)}&tenantId=${tenantId}`)
+      .then((r) => r.json())
+      .then((d) => setData(d))
+      .finally(() => setLoading(false))
+  }, [customerPhone, tenantId])
+
+  if (!customerPhone) {
+    return (
+      <section className="text-center py-12">
+        <div className="w-16 h-16 rounded-3xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4 text-2xl">👤</div>
+        <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Entre para ver seus pedidos</p>
+        <p className="text-sm text-gray-400 mb-5">Use seu WhatsApp para acompanhar pedidos e pontos de fidelidade</p>
+        <button onClick={onLogin} className="px-6 py-3 rounded-2xl text-white font-bold text-sm"
+          style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}>
+          Entrar / Cadastrar
+        </button>
+      </section>
+    )
+  }
+
+  const customer = data?.customer
+
+  return (
+    <section className="space-y-4">
+      {/* Card do cliente */}
+      <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-black text-base"
+              style={{ background: color }}>
+              {(customerName || '?')[0]?.toUpperCase()}
+            </div>
+            <div>
+              <p className="font-black text-sm text-gray-900 dark:text-white">{customerName || 'Cliente'}</p>
+              <p className="text-xs text-gray-400">{customerPhone}</p>
+            </div>
+          </div>
+          <button onClick={() => useCartStore.getState().setCustomer('', '')}
+            className="text-xs text-red-400 hover:text-red-500 font-semibold flex items-center gap-1">
+            <LogOut className="w-3.5 h-3.5" /> Sair
+          </button>
+        </div>
+
+        {/* Pontos de fidelidade + cashback — sempre mostra após carregar */}
+        {customer && (
+          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 grid grid-cols-2 gap-2">
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-center">
+              <p className="text-lg font-black text-amber-600">⭐ {customer.loyaltyPoints}</p>
+              <p className="text-xs text-amber-600/80 font-medium">pontos</p>
+            </div>
+            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-center">
+              <p className="text-lg font-black text-emerald-600">
+                💰 R$ {customer.cashbackBalance.toFixed(2).replace('.', ',')}
+              </p>
+              <p className="text-xs text-emerald-600/80 font-medium">cashback</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Lista de pedidos */}
+      <h2 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
+        <span className="w-6 h-6 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-sm">📋</span>
+        Meus pedidos
+      </h2>
+
+      {loading && (
+        <div className="flex justify-center py-8">
+          <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
+        </div>
+      )}
+
+      {!loading && customer && customer.orders.length === 0 && (
+        <div className="text-center py-8 text-gray-400 text-sm">Nenhum pedido ainda.</div>
+      )}
+
+      {!loading && customer?.orders.map((order: any) => (
+        <a key={order.id} href={`/menu/${tenantSlug}/pedido/${order.id}`}
+          className="block bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 active:scale-[0.98] transition-transform">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-black text-sm text-gray-900 dark:text-white">#{order.orderNumber}</span>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ORDER_STATUS_COLOR[order.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                  {ORDER_STATUS_LABEL[order.status] ?? order.status}
+                </span>
+              </div>
+              <p className="text-xs text-gray-400 truncate">
+                {order.items.map((i: any) => `${i.quantity}x ${i.productName}`).join(' · ')}
+                {order.items.length === 3 ? ' ...' : ''}
+              </p>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <p className="font-black text-sm" style={{ color }}>
+                R$ {order.total.toFixed(2).replace('.', ',')}
+              </p>
+              <p className="text-xs text-gray-400">
+                {new Date(order.createdAt).toLocaleDateString('pt-BR')}
+              </p>
+            </div>
+          </div>
+        </a>
+      ))}
+    </section>
+  )
+}
+
 export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: StorefrontClientProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null)
@@ -359,6 +492,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
   const { setTenant, setTable, totalItems, subtotal, customerPhone, customerName } = useCartStore()
 
   const color = tenant.primaryColor ?? '#f97316'
+  const { theme, setTheme } = useTheme()
   const settings = tenant.settings as any ?? {}
   const coverImage: string | null = settings?.coverImage ?? null
   const bannerText: string | null = settings?.tagline ?? null
@@ -465,7 +599,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
             : '-translate-y-full opacity-0 pointer-events-none'
         }`}
       >
-        <div className="glass-card border-b border-gray-200/60 dark:border-gray-800">
+        <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-b border-gray-200 dark:border-gray-800 shadow-sm">
           <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               {tenant.logo ? (
@@ -508,111 +642,111 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
         </div>
       </div>
 
-      {/* ─── HERO COVER ─── */}
-      <div ref={heroRef} className="relative w-full overflow-hidden" style={{ height: 'clamp(280px, 45vw, 440px)' }}>
-        {/* Foto de capa */}
-        {coverImage ? (
-          <Image src={coverImage} alt={`${tenant.name} capa`} fill className="object-cover" priority />
-        ) : (
-          <div className="absolute inset-0" style={{
-            background: `linear-gradient(135deg, ${color}33 0%, ${color}88 50%, ${color}dd 100%)`,
-          }}>
-            <div className="absolute inset-0 opacity-10"
-              style={{ backgroundImage: `radial-gradient(circle at 2px 2px, ${color} 1px, transparent 0)`, backgroundSize: '24px 24px' }} />
-          </div>
-        )}
+      {/* ─── HERO — estilo DR Doces ─── */}
+      <div ref={heroRef} className="bg-white dark:bg-gray-900">
 
-        {/* Overlay gradiente */}
-        <div className="absolute inset-0 sf-cover-overlay" />
+        {/* Banner — largura total, altura fixa responsiva, sem corte */}
+        <div className="w-full overflow-hidden" style={{ height: 'clamp(120px, 33vw, 220px)' }}>
+          {coverImage ? (
+            <img src={coverImage} alt={`${tenant.name} banner`} className="w-full h-full object-cover object-center" />
+          ) : (
+            <div className="w-full h-full" style={{ background: `linear-gradient(135deg, ${color}55, ${color}cc)` }} />
+          )}
+        </div>
 
-        {/* Conteúdo sobre o cover */}
-        <div className="absolute inset-0 flex flex-col justify-end p-5 sm:p-8">
-          <div className="max-w-3xl mx-auto w-full">
-            <div className="flex items-end gap-4">
-              {/* Logo */}
-              {tenant.logo ? (
-                <img src={tenant.logo} alt={tenant.name}
-                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-white/30 shadow-xl flex-shrink-0" />
-              ) : (
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center text-white font-black text-2xl border-2 border-white/30 shadow-xl flex-shrink-0"
-                  style={{ background: `linear-gradient(135deg, ${color}, ${color}99)` }}>
-                  {tenant.name[0]}
-                </div>
-              )}
-
-              {/* Info */}
-              <div className="flex-1 min-w-0 pb-1">
-                <h1 className="text-xl sm:text-3xl font-black text-white leading-tight drop-shadow-sm mb-1">
-                  {tenant.name}
-                </h1>
-                {bannerText && (
-                  <p className="text-white/80 text-xs sm:text-sm mb-2 line-clamp-1">{bannerText}</p>
-                )}
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${
-                    isOpen ? 'bg-emerald-500/90 text-white' : 'bg-red-500/90 text-white'
-                  }`}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                    {isOpen ? 'Aberto' : 'Fechado'}
-                  </span>
-                  {minDeliveryTime && (
-                    <span className="inline-flex items-center gap-1 text-xs text-white/80">
-                      <Clock className="w-3 h-3" /> {minDeliveryTime}–{minDeliveryTime + 15} min
-                    </span>
-                  )}
-                  {minDeliveryFee !== null && (
-                    <span className="inline-flex items-center gap-1 text-xs text-white/80">
-                      🛵 a partir de {minDeliveryFee === 0 ? 'grátis' : formatCurrency(minDeliveryFee)}
-                    </span>
-                  )}
-                  {tableInfo && (
-                    <span className="inline-flex items-center gap-1 text-xs bg-white/20 text-white px-2 py-0.5 rounded-full">
-                      <MapPin className="w-3 h-3" /> Mesa {tableInfo.number}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Botões ação — desktop */}
-              <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
-                {/* Mais informações */}
-                <button
-                  onClick={() => setInfoModalOpen(true)}
-                  className="flex items-center gap-2 bg-white/15 hover:bg-white/25 backdrop-blur-sm border border-white/20 text-white px-3 py-2 rounded-xl text-xs font-semibold transition-all"
-                >
-                  <Info className="w-4 h-4" />
-                  Mais informações
-                </button>
-                {/* WhatsApp — visível desktop */}
-                {tenant.phone && (
-                  <a
-                    href={`https://wa.me/${tenant.phone.replace(/\D/g, '')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 bg-white/15 hover:bg-white/25 backdrop-blur-sm border border-white/20 text-white px-3 py-2 rounded-xl text-xs font-semibold transition-all"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    WhatsApp
-                  </a>
-                )}
-                {cartCount > 0 && (
-                  <button
-                    onClick={() => setCartOpen(true)}
-                    className="flex items-center gap-2 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
-                    style={{ background: `linear-gradient(135deg, ${color}, ${color}bb)` }}
-                  >
-                    <ShoppingBag className="w-4 h-4" />
-                    {cartCount} · {formatCurrency(cartTotal)}
-                  </button>
-                )}
-              </div>
+        {/* Logo centralizado — sobreposto na borda inferior do banner */}
+        <div className="flex justify-center -mt-10 relative z-10">
+          {tenant.logo ? (
+            <img src={tenant.logo} alt={tenant.name}
+              className="w-20 h-20 rounded-full object-cover border-4 border-white dark:border-gray-900 shadow-lg" />
+          ) : (
+            <div className="w-20 h-20 rounded-full flex items-center justify-center text-white font-black text-2xl border-4 border-white dark:border-gray-900 shadow-lg"
+              style={{ background: `linear-gradient(135deg, ${color}, ${color}99)` }}>
+              {tenant.name[0]}
             </div>
+          )}
+        </div>
+
+        {/* Info centralizada */}
+        <div className="text-center px-4 pt-2 pb-4">
+          <h1 className="text-xl font-black text-gray-900 dark:text-white">{tenant.name}</h1>
+          {bannerText && <p className="text-gray-500 text-sm mt-0.5">{bannerText}</p>}
+
+          <div className="flex items-center justify-center gap-2 mt-1.5 flex-wrap text-sm text-gray-500">
+            {settings?.address && (
+              <span className="flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5" /> {settings.address}
+              </span>
+            )}
+            {settings?.address && <span>•</span>}
+            <button onClick={() => setInfoModalOpen(true)} className="font-semibold text-gray-700 dark:text-gray-300 hover:underline">
+              Mais informações
+            </button>
+          </div>
+
+          <div className="mt-1.5 text-sm text-gray-600 dark:text-gray-400">
+            {isOpen ? (
+              <span className="font-semibold" style={{ color }}>
+                Aberto{minDeliveryTime ? ` · ${minDeliveryTime}–${minDeliveryTime + 15} min` : ''}
+                {minDeliveryFee !== null ? ` · a partir de ${minDeliveryFee === 0 ? 'grátis' : formatCurrency(minDeliveryFee)}` : ''}
+              </span>
+            ) : (
+              <span className="font-semibold text-red-500">Fechado no momento</span>
+            )}
+            {tableInfo && (
+              <span className="flex items-center justify-center gap-1 mt-1">
+                <MapPin className="w-3.5 h-3.5" /> Mesa {tableInfo.number}
+              </span>
+            )}
+          </div>
+
+          {/* Botões — apenas desktop (mobile já tem nav embaixo) */}
+          <div className="hidden sm:flex items-center justify-center gap-2 mt-3 flex-wrap">
+            <button onClick={handleNavHome}
+              className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-all">
+              <HomeIcon className="w-3.5 h-3.5" /> Início
+            </button>
+            <button onClick={handleNavOffers}
+              className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-all">
+              <Flame className="w-3.5 h-3.5" /> Ofertas
+            </button>
+            <button onClick={handleNavOrders}
+              className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-all">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              Pedidos
+            </button>
+            {tenant.phone && (
+              <a href={`https://wa.me/${tenant.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-all">
+                <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+              </a>
+            )}
+            {/* Toggle tema — desktop */}
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+              title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+            >
+              {theme === 'dark'
+                ? <Sun className="w-3.5 h-3.5" />
+                : <Moon className="w-3.5 h-3.5" />
+              }
+              {theme === 'dark' ? 'Claro' : 'Escuro'}
+            </button>
+            <button onClick={() => setCartOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90"
+              style={{ background: `linear-gradient(135deg, ${color}, ${color}bb)` }}>
+              <ShoppingBag className="w-3.5 h-3.5" />
+              {cartCount > 0 ? `Carrinho · ${formatCurrency(cartTotal)}` : 'Carrinho'}
+            </button>
           </div>
         </div>
       </div>
 
       {/* ─── BARRA DE BUSCA + NAV ─── */}
-      <div className="sticky top-0 z-40 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 shadow-sm shadow-gray-900/5">
+      <div className={`sticky top-0 z-30 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800 shadow-sm shadow-gray-900/5 ${activeNav !== 'home' ? 'hidden' : ''}`}>
         <div className="max-w-3xl mx-auto">
           {/* Busca */}
           <div className="px-4 pt-3 pb-2">
@@ -684,49 +818,14 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
 
         {/* ── TELA DE PEDIDOS ── */}
         {activeNav === 'orders' && (
-          <section>
-            <h2 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2 mb-4">
-              <span className="w-6 h-6 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-sm">📋</span>
-              Meus pedidos
-            </h2>
-            {customerPhone ? (
-              <div className="space-y-3">
-                <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-black" style={{ background: color }}>
-                        {(customerName ?? '?')[0]?.toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-black text-sm text-gray-900 dark:text-white">{customerName || 'Cliente'}</p>
-                        <p className="text-xs text-gray-400">{customerPhone}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => { useCartStore.getState().setCustomer('', ''); }}
-                      className="text-xs text-red-400 hover:text-red-500 font-semibold flex items-center gap-1"
-                    >
-                      <LogOut className="w-3.5 h-3.5" /> Sair
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-400 text-center py-4">Histórico de pedidos disponível em breve.</p>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 rounded-3xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4 text-2xl">👤</div>
-                <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Entre para ver seus pedidos</p>
-                <p className="text-sm text-gray-400 mb-5">Use seu WhatsApp para acompanhar pedidos e acumular pontos de fidelidade</p>
-                <button
-                  onClick={() => setAuthModalOpen(true)}
-                  className="px-6 py-3 rounded-2xl text-white font-bold text-sm"
-                  style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}
-                >
-                  Entrar / Cadastrar
-                </button>
-              </div>
-            )}
-          </section>
+          <CustomerOrdersSection
+            customerPhone={customerPhone ?? ''}
+            customerName={customerName ?? ''}
+            tenantId={tenant.id}
+            tenantSlug={tenant.slug}
+            color={color}
+            onLogin={() => setAuthModalOpen(true)}
+          />
         )}
 
         {/* ── CONTEÚDO HOME ── */}
@@ -831,13 +930,13 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
 
       {/* ─── BOTTOM NAV MOBILE ─── */}
       <div className="fixed bottom-0 left-0 right-0 z-40 sm:hidden">
-        <div className="glass-card border-t border-gray-200/60 dark:border-gray-800">
+        <div className="bg-white/95 dark:bg-gray-950/95 backdrop-blur-md border-t border-gray-200 dark:border-gray-800 shadow-[0_-2px_12px_rgba(0,0,0,0.08)]">
           <div className="flex items-center justify-around px-2 py-2"
             style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}>
             {/* Home */}
             <button
               onClick={handleNavHome}
-              className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-2xl transition-colors ${activeNav === 'home' ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}
+              className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-2xl transition-colors ${activeNav === 'home' ? 'font-bold' : 'text-gray-500 dark:text-gray-400'}`}
               style={activeNav === 'home' ? { color } : undefined}
             >
               <HomeIcon className="w-5 h-5" />
@@ -847,7 +946,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
             {/* Ofertas */}
             <button
               onClick={handleNavOffers}
-              className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-2xl transition-colors ${activeNav === 'offers' ? '' : 'text-gray-400'}`}
+              className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-2xl transition-colors ${activeNav === 'offers' ? 'font-bold' : 'text-gray-500 dark:text-gray-400'}`}
               style={activeNav === 'offers' ? { color } : undefined}
             >
               <Flame className="w-5 h-5" />
@@ -869,13 +968,13 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
                   </span>
                 )}
               </div>
-              <span className="text-[10px] font-semibold text-gray-500 mt-1">Carrinho</span>
+              <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mt-1">Carrinho</span>
             </button>
 
             {/* Pedidos */}
             <button
               onClick={handleNavOrders}
-              className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-2xl transition-colors ${activeNav === 'orders' ? '' : 'text-gray-400'}`}
+              className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-2xl transition-colors ${activeNav === 'orders' ? 'font-bold' : 'text-gray-500 dark:text-gray-400'}`}
               style={activeNav === 'orders' ? { color } : undefined}
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -896,6 +995,18 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
                 <span className="text-[10px] font-semibold">WhatsApp</span>
               </a>
             )}
+
+            {/* Toggle tema — mobile */}
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-2xl transition-colors text-gray-500 dark:text-gray-400 hover:text-gray-700"
+            >
+              {theme === 'dark'
+                ? <Sun className="w-5 h-5" />
+                : <Moon className="w-5 h-5" />
+              }
+              <span className="text-[10px] font-semibold">Tema</span>
+            </button>
           </div>
         </div>
       </div>

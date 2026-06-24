@@ -3,6 +3,7 @@
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/db/client'
 import { OrderTracking } from '@/components/storefront/order-tracking'
+import { generateStatusToken } from '@/app/api/orders/[id]/status/route'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Acompanhar pedido' }
@@ -65,6 +66,9 @@ export default async function OrderPage({ params }: PageProps) {
     notFound()
   }
 
+  // ✅ Gerar token HMAC no servidor para autorizar o polling de status
+  const statusToken = generateStatusToken(id)
+
   const serialized = {
     ...order,
     total:          Number(order.total),
@@ -87,5 +91,5 @@ export default async function OrderPage({ params }: PageProps) {
     })),
   }
 
-  return <OrderTracking order={serialized} />
+  return <OrderTracking order={serialized} statusToken={statusToken} />
 }

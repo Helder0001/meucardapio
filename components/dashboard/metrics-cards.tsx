@@ -15,52 +15,63 @@ interface MetricsCardsProps {
   }
 }
 
+const cards = (metrics: MetricsCardsProps['metrics']) => [
+  {
+    label: 'Faturamento hoje',
+    value: formatCurrency(metrics.todayRevenue),
+    sub: `${metrics.todayOrdersCount} pedidos hoje`,
+    icon: DollarSign,
+    iconBg: 'bg-emerald-50',
+    iconColor: 'text-emerald-600',
+    accent: 'border-l-emerald-500',
+  },
+  {
+    label: 'Faturamento da semana',
+    value: formatCurrency(metrics.weekRevenue),
+    sub: 'Últimos 7 dias',
+    icon: TrendingUp,
+    iconBg: 'bg-blue-50',
+    iconColor: 'text-blue-600',
+    accent: 'border-l-blue-500',
+  },
+  {
+    label: 'Faturamento do mês',
+    value: formatCurrency(metrics.monthRevenue),
+    sub: `${metrics.monthOrdersCount} pedidos`,
+    icon: ShoppingBag,
+    iconBg: 'bg-violet-50',
+    iconColor: 'text-violet-600',
+    accent: 'border-l-violet-500',
+  },
+  {
+    label: 'Ticket médio',
+    value: formatCurrency(metrics.avgTicket),
+    sub: 'Este mês',
+    icon: Clock,
+    iconBg: 'bg-orange-50',
+    iconColor: 'text-orange-600',
+    accent: 'border-l-orange-500',
+  },
+]
+
 export function MetricsCards({ metrics }: MetricsCardsProps) {
-  const cards = [
-    {
-      label: 'Faturamento hoje',
-      value: formatCurrency(metrics.todayRevenue),
-      sub: `${metrics.todayOrdersCount} pedidos`,
-      icon: DollarSign,
-      color: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30',
-    },
-    {
-      label: 'Faturamento da semana',
-      value: formatCurrency(metrics.weekRevenue),
-      sub: 'Últimos 7 dias',
-      icon: TrendingUp,
-      color: 'text-blue-600 bg-blue-100 dark:bg-blue-900/30',
-    },
-    {
-      label: 'Faturamento do mês',
-      value: formatCurrency(metrics.monthRevenue),
-      sub: `${metrics.monthOrdersCount} pedidos`,
-      icon: ShoppingBag,
-      color: 'text-purple-600 bg-purple-100 dark:bg-purple-900/30',
-    },
-    {
-      label: 'Ticket médio',
-      value: formatCurrency(metrics.avgTicket),
-      sub: 'Este mês',
-      icon: TrendingUp,
-      color: 'text-orange-600 bg-orange-100 dark:bg-orange-900/30',
-    },
-  ]
+  const items = cards(metrics)
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      {cards.map((card) => (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+      {items.map((card) => (
         <div
           key={card.label}
-          className="bg-card border border-border rounded-xl p-5"
+          className={`bg-card border border-border border-l-4 ${card.accent} rounded-xl p-3.5 md:p-5 transition-shadow hover:shadow-md`}
+          style={{ boxShadow: 'var(--shadow-card)' }}
         >
-          <div className="flex items-start justify-between mb-3">
-            <p className="text-sm text-muted-foreground">{card.label}</p>
-            <div className={`p-2 rounded-lg ${card.color}`}>
-              <card.icon className="h-4 w-4" />
+          <div className="flex items-start justify-between mb-2 md:mb-4">
+            <p className="text-xs md:text-sm font-medium text-muted-foreground leading-snug">{card.label}</p>
+            <div className={`w-7 h-7 md:w-9 md:h-9 rounded-lg ${card.iconBg} flex items-center justify-center flex-shrink-0 ml-1`}>
+              <card.icon className={`h-3.5 w-3.5 md:h-4 md:w-4 ${card.iconColor}`} />
             </div>
           </div>
-          <p className="text-2xl font-bold text-foreground">{card.value}</p>
+          <p className="text-base md:text-2xl font-bold text-foreground tracking-tight">{card.value}</p>
           <p className="text-xs text-muted-foreground mt-1">{card.sub}</p>
         </div>
       ))}

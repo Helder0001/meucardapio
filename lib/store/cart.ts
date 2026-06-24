@@ -109,7 +109,7 @@ export const useCartStore = create<CartState>()(
       subtotal:   () => get().items.reduce((s, i) => s + i.totalPrice, 0),
     }),
     {
-      name: 'foodsaas-cart',
+      name: 'meucardapio-cart', // CORREÇÃO: renomeado de 'foodsaas-cart' (rebranding)
 
       // VULN-05 CORRIGIDO: partialize exclui dados sensíveis do localStorage
       // Apenas itens do carrinho, tipo de entrega e cupom são persistidos

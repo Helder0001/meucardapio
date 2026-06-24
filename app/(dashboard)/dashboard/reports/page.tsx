@@ -4,14 +4,106 @@ import { auth } from '@/lib/auth/session'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db/client'
 import { ReportsClient } from '@/components/dashboard/reports-client'
-import { startOfMonth, subDays, startOfDay, endOfDay } from 'date-fns'
+import { startOfMonth, startOfDay, endOfDay } from 'date-fns'
 import type { Metadata } from 'next'
+import type { OrderStatus, OrderType } from '@prisma/client'
 
-export const metadata: Metadata = { title: 'Relatórios' }
+export const metadata: Metadata = { title: 'Relatórios — Meu Cardápio' }
 export const dynamic = 'force-dynamic'
 
 interface PageProps {
-  searchParams: Promise<{ start?: string; end?: string }>
+  searchParams: Promise<{
+    start?: string; end?: string
+    pdv?: string; payment?: string; product?: string; saleType?: string; user?: string
+  }>
+}
+
+const PAID_STATUS_FILTER = { notIn: ['CANCELLED', 'REFUNDED'] as OrderStatus[] }
+
+function buildPdvWhere(filterPdv: string, filterSaleType: string) {
+  const pdvCondition = filterPdv === 'null'
+    ? { pdvId: null }
+    : filterPdv
+      ? { pdvId: filterPdv }
+      : {}
+  const typeCondition = filterSaleType ? { type: filterSaleType as any } : {}
+  return { ...pdvCondition, ...typeCondition }
+}
+
+async function queryRevenueChart(
+  tenantId: string, startDate: Date, endDate: Date,
+  filterPdv: string, filterSaleType: string,
+): Promise<Array<{ date: string; revenue: number; orders: number }>> {
+  const orders = await prisma.order.findMany({
+    where: {
+      tenantId,
+      status: { notIn: ['CANCELLED', 'REFUNDED'] },
+      createdAt: { gte: startDate, lte: endDate },
+      ...buildPdvWhere(filterPdv, filterSaleType),
+    },
+    select: { total: true, createdAt: true },
+  })
+  const byDay = new Map<string, { revenue: number; orders: number }>()
+  for (const o of orders) {
+    const day = new Date(o.createdAt).toLocaleDateString('pt-BR', {
+      timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).split('/').reverse().join('-')
+    const cur = byDay.get(day) ?? { revenue: 0, orders: 0 }
+    cur.revenue += Number(o.total); cur.orders++
+    byDay.set(day, cur)
+  }
+  return Array.from(byDay.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, d]) => ({ date, revenue: d.revenue, orders: d.orders }))
+}
+
+// Versão simplificada para o período anterior (apenas revenue por dia)
+async function queryRevenueChartSimple(
+  tenantId: string, startDate: Date, endDate: Date,
+): Promise<Array<{ date: string; revenue: number }>> {
+  const orders = await prisma.order.findMany({
+    where: {
+      tenantId,
+      status: { notIn: ['CANCELLED', 'REFUNDED'] },
+      createdAt: { gte: startDate, lte: endDate },
+    },
+    select: { total: true, createdAt: true },
+  })
+  const byDay = new Map<string, number>()
+  for (const o of orders) {
+    const day = new Date(o.createdAt).toLocaleDateString('pt-BR', {
+      timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).split('/').reverse().join('-')
+    byDay.set(day, (byDay.get(day) ?? 0) + Number(o.total))
+  }
+  return Array.from(byDay.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, revenue]) => ({ date, revenue }))
+}
+
+async function queryHourChart(
+  tenantId: string, startDate: Date, endDate: Date,
+  filterPdv: string, filterSaleType: string,
+): Promise<Array<{ hour: number; orders: number }>> {
+  const orders = await prisma.order.findMany({
+    where: {
+      tenantId,
+      status: { notIn: ['CANCELLED', 'REFUNDED'] },
+      createdAt: { gte: startDate, lte: endDate },
+      ...buildPdvWhere(filterPdv, filterSaleType),
+    },
+    select: { createdAt: true },
+  })
+  const byHour = new Map<number, number>()
+  for (const o of orders) {
+    const h = Number(new Intl.DateTimeFormat('pt-BR', {
+      hour: 'numeric', hour12: false, timeZone: 'America/Sao_Paulo',
+    }).format(new Date(o.createdAt)))
+    byHour.set(h, (byHour.get(h) ?? 0) + 1)
+  }
+  return Array.from(byHour.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([hour, orders]) => ({ hour, orders }))
 }
 
 export default async function ReportsPage({ searchParams }: PageProps) {
@@ -19,134 +111,228 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   if (!session?.user?.tenantId) redirect('/login')
 
   const tenantId = session.user.tenantId
-  const now = new Date()
-  const params = await searchParams
+  const now      = new Date()
+  const params   = await searchParams
 
-  // Período padrão: mês atual
   const defaultStart = startOfMonth(now)
   const startDate = params.start ? startOfDay(new Date(params.start)) : defaultStart
   const endDate   = params.end   ? endOfDay(new Date(params.end))     : endOfDay(now)
 
-  // ── Faturamento diário no período ──────────────────────────────────────
+  const filterPdv      = params.pdv      || ''
+  const filterPayment  = params.payment  || ''
+  const filterProduct  = params.product  || ''
+  const filterSaleType = params.saleType || ''
+  const filterUser     = params.user     || ''
+
+  const baseWhere: any = {
+    tenantId,
+    status: PAID_STATUS_FILTER,
+    createdAt: { gte: startDate, lte: endDate },
+  }
+  if (filterPdv === 'null') {
+    baseWhere.pdvId = null
+  } else if (filterPdv) {
+    baseWhere.pdvId = filterPdv
+  }
+  if (filterSaleType) baseWhere.type = filterSaleType as OrderType
+  if (filterUser) {
+    baseWhere.statusHistory = {
+      some: {
+        userId: filterUser,
+        notes: { contains: 'Pagamento confirmado' },
+      },
+    }
+  }
+
+  // Período anterior
+  const periodLen = endDate.getTime() - startDate.getTime()
+  const prevStart = new Date(startDate.getTime() - periodLen)
+  const prevEnd   = new Date(startDate.getTime() - 1)
+
+  // ── Listas para selects ──────────────────────────────────────────────────
+  const [pdvList, productList, userList] = await Promise.all([
+    prisma.pDV.findMany({
+      where: { tenantId },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.product.findMany({
+      where: { tenantId },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.user.findMany({
+      where: {
+        tenantId,
+        isActive: true,
+        // filtra apenas roles válidas no enum atual — ignora valores legados como 'WAITER'
+        role: {
+          in: [
+            'MASTER_ADMIN', 'TENANT_ADMIN', 'MANAGER',
+            'ATTENDANT', 'STAFF', 'DELIVERY_PERSON',
+          ] as any[],
+        },
+      },
+      select: { id: true, name: true, role: true },
+      orderBy: { name: 'asc' },
+    }),
+  ])
+
+  // ── Gráficos de faturamento (atual + anterior) ───────────────────────────
   let revenueChart: Array<{ date: string; revenue: number; orders: number }> = []
+  let revenueChartPrev: Array<{ date: string; revenue: number }> = []
   try {
-    revenueChart = await prisma.$queryRaw<Array<{ date: string; revenue: number; orders: number }>>`
-      SELECT
-        DATE(created_at AT TIME ZONE 'America/Sao_Paulo') as date,
-        COALESCE(SUM(total), 0)::float as revenue,
-        COUNT(*)::int as orders
-      FROM "Order"
-      WHERE
-        tenant_id = ${tenantId}
-        AND payment_status = 'PAID'
-        AND created_at >= ${startDate}
-        AND created_at <= ${endDate}
-      GROUP BY DATE(created_at AT TIME ZONE 'America/Sao_Paulo')
-      ORDER BY date ASC
-    `
+    ;[revenueChart, revenueChartPrev] = await Promise.all([
+      queryRevenueChart(tenantId, startDate, endDate, filterPdv, filterSaleType),
+      queryRevenueChartSimple(tenantId, prevStart, prevEnd),
+    ])
   } catch (e) { console.error('[reports] revenueChart error:', e) }
 
-  // ── Produtos mais vendidos no período ──────────────────────────────────
+  // ── Pico por horário ─────────────────────────────────────────────────────
+  let salesByHour: Array<{ hour: number; orders: number }> = []
+  try {
+    salesByHour = await queryHourChart(tenantId, startDate, endDate, filterPdv, filterSaleType)
+  } catch (e) { console.error('[reports] salesByHour error:', e) }
+
+  // ── Produtos mais vendidos ───────────────────────────────────────────────
+  const productWhere: any = {
+    order: {
+      ...baseWhere,
+      ...(filterPayment ? { payments: { some: { method: filterPayment, status: 'PAID' } } } : {}),
+    },
+  }
+  if (filterProduct) productWhere.productId = filterProduct
+
   const topProducts = await prisma.orderItem.groupBy({
     by: ['productId', 'productName'],
-    where: {
-      order: { tenantId, paymentStatus: 'PAID', createdAt: { gte: startDate, lte: endDate } },
-    },
+    where: productWhere,
     _sum: { quantity: true, totalPrice: true },
     orderBy: { _sum: { quantity: 'desc' } },
     take: 10,
   })
 
-  // ── Vendas por tipo no período ─────────────────────────────────────────
+  // ── Vendas por tipo ──────────────────────────────────────────────────────
   const salesByType = await prisma.order.groupBy({
     by: ['type'],
-    where: { tenantId, paymentStatus: 'PAID', createdAt: { gte: startDate, lte: endDate } },
+    where: {
+      ...baseWhere,
+      ...(filterPayment ? { payments: { some: { method: filterPayment, status: 'PAID' } } } : {}),
+      ...(filterProduct ? { items: { some: { productId: filterProduct } } } : {}),
+    },
     _sum: { total: true },
     _count: { id: true },
   })
 
-  // ── Vendas por forma de pagamento no período ───────────────────────────
+  // ── Formas de pagamento ──────────────────────────────────────────────────
+  const paymentWhere: any = {
+    order: {
+      ...baseWhere,
+      ...(filterProduct ? { items: { some: { productId: filterProduct } } } : {}),
+    },
+    status: 'PAID',
+  }
+  if (filterPayment) paymentWhere.method = filterPayment
+
   const salesByPayment = await prisma.payment.groupBy({
     by: ['method'],
-    where: {
-      order: { tenantId },
-      status: 'PAID',
-      paidAt: { gte: startDate, lte: endDate },
-    },
+    where: paymentWhere,
     _sum: { amount: true },
     _count: { id: true },
   })
 
-  // ── Pico de pedidos por horário no período ─────────────────────────────
-  let salesByHour: Array<{ hour: number; orders: number }> = []
-  try {
-    salesByHour = await prisma.$queryRaw<Array<{ hour: number; orders: number }>>`
-      SELECT
-        EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo')::int as hour,
-        COUNT(*)::int as orders
-      FROM "Order"
-      WHERE
-        tenant_id = ${tenantId}
-        AND payment_status = 'PAID'
-        AND created_at >= ${startDate}
-        AND created_at <= ${endDate}
-      GROUP BY hour
-      ORDER BY hour
-    `
-  } catch (e) { console.error('[reports] salesByHour error:', e) }
-
-  // ── Métricas do período vs período anterior equivalente ─────────────────
-  const periodLen = endDate.getTime() - startDate.getTime()
-  const prevStart = new Date(startDate.getTime() - periodLen)
-  const prevEnd   = new Date(startDate.getTime() - 1)
-
+  // ── Resumo atual vs anterior ─────────────────────────────────────────────
   const [current, previous] = await Promise.all([
     prisma.order.aggregate({
-      where: { tenantId, paymentStatus: 'PAID', createdAt: { gte: startDate, lte: endDate } },
+      where: baseWhere,
       _sum: { total: true },
       _count: { id: true },
     }),
     prisma.order.aggregate({
-      where: { tenantId, paymentStatus: 'PAID', createdAt: { gte: prevStart, lte: prevEnd } },
+      where: { tenantId, status: PAID_STATUS_FILTER, createdAt: { gte: prevStart, lte: prevEnd } },
       _sum: { total: true },
       _count: { id: true },
     }),
   ])
 
-  const thisRevenue = Number(current._sum.total ?? 0)
-  const prevRevenue = Number(previous._sum.total ?? 0)
-  const revenueGrowth = prevRevenue > 0
-    ? ((thisRevenue - prevRevenue) / prevRevenue) * 100
-    : 0
+  const thisRevenue   = Number(current._sum.total  ?? 0)
+  const prevRevenue   = Number(previous._sum.total ?? 0)
+  const revenueGrowth = prevRevenue > 0 ? ((thisRevenue - prevRevenue) / prevRevenue) * 100 : 0
+  const prevOrders    = previous._count.id
+  const avgTicket     = current._count.id > 0 ? thisRevenue / current._count.id : 0
+  const prevAvgTicket = previous._count.id > 0 ? prevRevenue / previous._count.id : 0
+
+  // ── Clientes ─────────────────────────────────────────────────────────────
+  let totalClients = 0, newClients = 0, returningClients = 0, returnRate = 0
+  try {
+    const [currentCustomers, prevCustomers] = await Promise.all([
+      prisma.order.findMany({
+        where: { ...baseWhere, customerId: { not: null } },
+        select: { customerId: true },
+        distinct: ['customerId'],
+      }),
+      prisma.order.findMany({
+        where: {
+          tenantId,
+          status: PAID_STATUS_FILTER,
+          createdAt: { gte: prevStart, lte: prevEnd },
+          customerId: { not: null },
+        },
+        select: { customerId: true },
+        distinct: ['customerId'],
+      }),
+    ])
+    const prevIds = new Set(prevCustomers.map((o) => o.customerId))
+    const currIds = currentCustomers.map((o) => o.customerId as string)
+    totalClients     = currIds.length
+    returningClients = currIds.filter((id) => prevIds.has(id)).length
+    newClients       = totalClients - returningClients
+    returnRate       = totalClients > 0 ? (returningClients / totalClients) * 100 : 0
+  } catch (e) { console.error('[reports] clients error:', e) }
 
   return (
     <ReportsClient
       revenueChart={revenueChart}
+      revenueChartPrev={revenueChartPrev}
       topProducts={topProducts.map((p) => ({
-        name: p.productName,
-        quantity: p._sum.quantity ?? 0,
-        revenue: Number(p._sum.totalPrice ?? 0),
+        id:       p.productId,
+        name:     p.productName,
+        quantity: p._sum.quantity  ?? 0,
+        revenue:  Number(p._sum.totalPrice ?? 0),
       }))}
       salesByType={salesByType.map((s) => ({
-        type: s.type,
+        type:  s.type,
         total: Number(s._sum.total ?? 0),
         count: s._count.id,
       }))}
       salesByPayment={salesByPayment.map((s) => ({
         method: s.method,
-        total: Number(s._sum.amount ?? 0),
-        count: s._count.id,
+        total:  Number(s._sum.amount ?? 0),
+        count:  s._count.id,
       }))}
       salesByHour={salesByHour}
       summary={{
         thisRevenue,
         prevRevenue,
         revenueGrowth,
-        totalOrders: current._count.id,
-        avgTicket: current._count.id > 0 ? thisRevenue / current._count.id : 0,
+        totalOrders:     current._count.id,
+        prevOrders,
+        avgTicket,
+        prevAvgTicket,
+        totalClients,
+        newClients,
+        returningClients,
+        returnRate,
       }}
       startDate={startDate.toISOString().slice(0, 10)}
       endDate={endDate.toISOString().slice(0, 10)}
+      pdvList={pdvList}
+      productList={productList}
+      userList={userList}
+      filterPdv={filterPdv}
+      filterPayment={filterPayment}
+      filterProduct={filterProduct}
+      filterSaleType={filterSaleType}
+      filterUser={filterUser}
     />
   )
 }

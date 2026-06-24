@@ -83,7 +83,7 @@ Antes de fazer deploy, clique em **Environment Variables** e adicione:
 | `S3_REGION` | `auto` |
 | `S3_ENDPOINT` | `https://SEU_ID.r2.cloudflarestorage.com` |
 | `MERCADOPAGO_ACCESS_TOKEN` | mercadopago.com.br/developers |
-| `NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY` | mercadopago.com.br/developers |
+| `NEXT_PUBLIC_MP_PUBLIC_KEY` | mercadopago.com.br/developers |
 | `MERCADOPAGO_WEBHOOK_SECRET` | mercadopago.com.br/developers → Webhooks |
 | `NEXT_PUBLIC_APP_URL` | `https://foodsaas.vercel.app` (sua URL da Vercel) |
 | `NODE_ENV` | `production` |

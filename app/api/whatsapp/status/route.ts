@@ -1,10 +1,12 @@
 // app/api/whatsapp/status/route.ts
-// VULN-02 CORRIGIDO: decrypt com AES-256-GCM
+// Credenciais da Evolution API ficam em variáveis de ambiente
 
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/client'
-import { decrypt } from '@/lib/security/crypto'
+
+const EVOLUTION_URL = process.env.EVOLUTION_API_URL!
+const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY!
 
 export async function GET() {
   const session = await auth()
@@ -13,24 +15,21 @@ export async function GET() {
   }
 
   const config = await prisma.whatsappConfig.findFirst({
-    where: { tenantId: session.user.tenantId },
-    select: {
-      evolutionUrl:    true,
-      evolutionApiKey: true,
-      instanceName:    true,
-      status:          true,
-    },
+    where:  { tenantId: session.user.tenantId },
+    select: { instanceName: true, status: true },
   })
 
   if (!config) return NextResponse.json({ status: 'DISCONNECTED' })
 
+  if (!EVOLUTION_URL || !EVOLUTION_KEY) {
+    return NextResponse.json({ status: config.status })
+  }
+
   try {
-    // VULN-02 CORRIGIDO: usar decrypt() real
-    const apiKey  = decrypt(config.evolutionApiKey)
-    const res     = await fetch(
-      `${config.evolutionUrl}/instance/connectionState/${config.instanceName}`,
+    const res = await fetch(
+      `${EVOLUTION_URL}/instance/connectionState/${config.instanceName}`,
       {
-        headers: { apikey: apiKey },
+        headers: { apikey: EVOLUTION_KEY },
         signal:  AbortSignal.timeout(8_000),
       }
     )

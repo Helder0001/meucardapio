@@ -254,7 +254,7 @@ if ($configurarAgora -eq 's') {
   $vars["S3_REGION"]            = "auto"
 
   $vars["MERCADOPAGO_ACCESS_TOKEN"]            = Read-Host "  MERCADOPAGO_ACCESS_TOKEN"
-  $vars["NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY"]  = Read-Host "  NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY"
+  $vars["NEXT_PUBLIC_MP_PUBLIC_KEY"]            = Read-Host "  NEXT_PUBLIC_MP_PUBLIC_KEY"
   $vars["MERCADOPAGO_WEBHOOK_SECRET"]          = Read-Host "  MERCADOPAGO_WEBHOOK_SECRET"
 
   $resendKey = Read-Host "  RESEND_API_KEY (opcional — para emails)"

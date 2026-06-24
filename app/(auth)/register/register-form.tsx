@@ -19,17 +19,34 @@ export function RegisterForm() {
   const [cardName, setCardName]     = useState('')
   const [cardExpiry, setCardExpiry] = useState('')  // MM/AA
   const [cardCvv, setCardCvv]       = useState('')
+  const [cardCpf, setCardCpf]       = useState('')
   const [cardToken, setCardToken]   = useState('')
   const [cardError, setCardError]   = useState('')
   const [tokenizing, setTokenizing] = useState(false)
+  const [sdkReady, setSdkReady]     = useState(false)
 
   // Load Mercado Pago SDK
   useEffect(() => {
+    // Se o script já foi injetado (ex: StrictMode monta o efeito 2x em dev),
+    // não duplica e só observa o carregamento existente.
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[src="https://sdk.mercadopago.com/js/v2"]'
+    )
+    if (existing) {
+      if ((window as any).MercadoPago) setSdkReady(true)
+      else existing.addEventListener('load', () => setSdkReady(true))
+      return
+    }
+
     const script = document.createElement('script')
     script.src = 'https://sdk.mercadopago.com/js/v2'
     script.async = true
+    script.onload = () => setSdkReady(true)
+    script.onerror = () => setCardError('Não foi possível carregar o Mercado Pago. Verifique sua conexão e recarregue a página.')
     document.head.appendChild(script)
-    return () => { document.head.removeChild(script) }
+    // Não removemos o script no cleanup: removê-lo e re-adicioná-lo
+    // (ex: em re-renders do StrictMode) pode deixar `window.MercadoPago`
+    // em estado inconsistente e foi a causa raiz do "Card token service not found".
   }, [])
 
   const formatCardNumber = (v: string) =>
@@ -40,29 +57,88 @@ export function RegisterForm() {
     return d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d
   }
 
+  const formatCpf = (v: string) => {
+    const d = v.replace(/\D/g, '').slice(0, 11)
+    return d
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+  }
+
   const tokenizeCard = async (): Promise<string | null> => {
     setCardError('')
+
+    const cpfDigits = cardCpf.replace(/\D/g, '')
+    if (cpfDigits.length !== 11) {
+      setCardError('CPF do titular do cartão é obrigatório.')
+      return null
+    }
+
+    if (!cardNumber.replace(/\s/g, '') || cardNumber.replace(/\s/g, '').length < 13) {
+      setCardError('Número do cartão inválido.')
+      return null
+    }
+
+    if (!cardName.trim()) {
+      setCardError('Nome no cartão é obrigatório.')
+      return null
+    }
+
+    if (!cardExpiry.includes('/') || cardExpiry.length < 5) {
+      setCardError('Data de validade inválida.')
+      return null
+    }
+
+    if (!cardCvv || cardCvv.length < 3) {
+      setCardError('CVV inválido.')
+      return null
+    }
+
     setTokenizing(true)
     try {
-      const mp = (window as any).MercadoPago
-      if (!mp) throw new Error('SDK não carregado')
+      console.log('[register] iniciando tokenização...')
 
-      const mpInstance = new mp(process.env.NEXT_PUBLIC_MP_PUBLIC_KEY)
+      if (!sdkReady) {
+        throw new Error('O Mercado Pago ainda está carregando. Aguarde um instante e tente novamente.')
+      }
+
+      const MercadoPago = (window as any).MercadoPago
+      if (!MercadoPago) throw new Error('SDK do Mercado Pago não carregou. Recarregue a página.')
+
+      const publicKey = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY
+      console.log('[register] MP public key presente:', !!publicKey)
+      if (!publicKey) throw new Error('Chave pública do Mercado Pago não configurada.')
+
+      // mp.createCardToken é o método correto dos Core Methods do SDK v2
+      // (ver docs oficiais: github.com/mercadopago/sdk-js/blob/main/docs/core-methods.md)
+      const mp = new MercadoPago(publicKey, { locale: 'pt-BR' })
+
       const [expMonth, expYear] = cardExpiry.split('/')
 
-      const result = await mpInstance.createCardToken({
+      console.log('[register] chamando createCardToken...')
+      const result = await mp.createCardToken({
         cardNumber: cardNumber.replace(/\s/g, ''),
         cardholderName: cardName.trim(),
         cardExpirationMonth: expMonth,
         cardExpirationYear: `20${expYear}`,
         securityCode: cardCvv,
+        identificationType: 'CPF',
+        identificationNumber: cpfDigits,
       })
 
-      if (result.error) throw new Error(result.error.message ?? 'Cartão inválido')
+      console.log('[register] resultado MP:', JSON.stringify(result))
+
+      // FIX: o SDK v2 retorna erros em result.cause[], não em result.error
+      if (!result?.id) {
+        const cause = result?.cause?.[0]
+        const msg = cause?.description ?? cause?.code ?? 'Cartão inválido. Verifique os dados.'
+        throw new Error(msg)
+      }
 
       setCardToken(result.id)
       return result.id
     } catch (err: any) {
+      console.error('[register] erro tokenização:', err)
       setCardError(err.message ?? 'Cartão inválido. Verifique os dados.')
       return null
     } finally {
@@ -72,13 +148,21 @@ export function RegisterForm() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    console.log('[register] form submetido')
 
-    // Tokenize card before submitting
+    // IMPORTANTE: capturar FormData ANTES do await, pois após o await
+    // o e.currentTarget perde a referência ao HTMLFormElement
+    const fd = new FormData(e.currentTarget)
+
     const token = await tokenizeCard()
+    console.log('[register] token obtido:', !!token)
     if (!token) return
 
-    const fd = new FormData(e.currentTarget)
+    console.log('[register] chamando formAction...')
     fd.set('cardToken', token)
+    // Passar nome e CPF para o server action usar no payload da preapproval
+    fd.set('cardName', cardName.trim())
+    fd.set('cardCpf', cardCpf.replace(/\D/g, ''))
     formAction(fd)
   }
 
@@ -182,6 +266,14 @@ export function RegisterForm() {
             className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">CPF do titular *</label>
+          <input type="text" inputMode="numeric" value={cardCpf}
+            onChange={(e) => setCardCpf(formatCpf(e.target.value))}
+            placeholder="000.000.000-00" maxLength={14}
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-orange-500" />
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Validade *</label>
@@ -208,10 +300,12 @@ export function RegisterForm() {
       {/* Hidden field for card token */}
       <input type="hidden" name="cardToken" value={cardToken} />
 
-      <button type="submit" disabled={isPending || tokenizing}
+      <button type="submit" disabled={isPending || tokenizing || !sdkReady}
         className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2">
         {(isPending || tokenizing) ? (
           <><Loader2 className="h-4 w-4 animate-spin" /> {tokenizing ? 'Validando cartão...' : 'Criando conta...'}</>
+        ) : !sdkReady ? (
+          <><Loader2 className="h-4 w-4 animate-spin" /> Carregando...</>
         ) : (
           'Criar conta — 7 dias grátis'
         )}

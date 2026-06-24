@@ -29,7 +29,8 @@ export interface CalculateOrderInput {
   deliveryBairro?: string
   deliveryType?: 'DELIVERY' | 'PICKUP'
   customerId?: string
-  cashbackToUse?: number  // quanto cashback o cliente quer usar
+  cashbackToUse?: number   // quanto cashback o cliente quer usar
+  pointsToRedeem?: number  // quantos pontos o cliente quer resgatar
 }
 
 export interface CalculatedOrder {
@@ -37,6 +38,8 @@ export interface CalculatedOrder {
   deliveryFee: number
   couponDiscount: number
   cashbackUsed: number
+  pointsDiscount: number   // desconto em R$ convertido dos pontos
+  pointsRedeemed: number   // pontos efetivamente debitados
   total: number
   items: CalculatedItem[]
   coupon: { id: string; code: string; type: string } | null
@@ -167,7 +170,7 @@ export async function calculateOrder(
   }
 
   if (errors.length > 0) {
-    return { subtotal: 0, deliveryFee: 0, couponDiscount: 0, cashbackUsed: 0, total: 0, items: [], coupon: null, errors }
+    return { subtotal: 0, deliveryFee: 0, couponDiscount: 0, cashbackUsed: 0, pointsDiscount: 0, pointsRedeemed: 0, total: 0, items: [], coupon: null, errors }
   }
 
   // ── 4. Taxa de entrega ────────────────────────────────────
@@ -192,7 +195,7 @@ export async function calculateOrder(
   }
 
   if (errors.length > 0) {
-    return { subtotal, deliveryFee: 0, couponDiscount: 0, cashbackUsed: 0, total: subtotal, items: calculatedItems, coupon: null, errors }
+    return { subtotal, deliveryFee: 0, couponDiscount: 0, cashbackUsed: 0, pointsDiscount: 0, pointsRedeemed: 0, total: subtotal, items: calculatedItems, coupon: null, errors }
   }
 
   // ── 5. Cupom de desconto ──────────────────────────────────
@@ -256,13 +259,45 @@ export async function calculateOrder(
 
       // Usar o menor entre: solicitado, disponível, máximo permitido
       cashbackUsed = Math.min(requestedCashback, available, maxUsable)
-      cashbackUsed = Math.max(0, cashbackUsed) // garantir >= 0
+      cashbackUsed = Math.max(0, cashbackUsed)
     }
   }
 
-  // ── 7. Total final ────────────────────────────────────────
+  // ── 7. Resgate de pontos ──────────────────────────────────
+  let pointsDiscount = 0
+  let pointsRedeemed = 0
+  const requestedPoints = input.pointsToRedeem ?? 0
+
+  if (requestedPoints > 0 && customerId) {
+    const [customer, loyaltyConfig] = await Promise.all([
+      prisma.customer.findFirst({ where: { id: customerId, tenantId }, select: { loyaltyPoints: true } }),
+      prisma.loyaltyConfig.findFirst({ where: { tenantId, isActive: true }, select: { redeemEvery: true, redeemValue: true, minPointsRedeem: true } }),
+    ])
+
+    if (customer && loyaltyConfig) {
+      const available   = customer.loyaltyPoints
+      const redeemEvery = loyaltyConfig.redeemEvery      // ex: 100 pontos
+      const redeemValue = Number(loyaltyConfig.redeemValue) // ex: R$ 5,00
+      const minPoints   = loyaltyConfig.minPointsRedeem
+
+      // Só resgata em múltiplos de redeemEvery e com mínimo
+      const validPoints = Math.min(requestedPoints, available)
+      const blocks      = Math.floor(validPoints / redeemEvery)
+
+      if (blocks > 0 && validPoints >= minPoints) {
+        const maxBlocks = Math.floor(
+          (subtotal + deliveryFee - couponDiscount - cashbackUsed) / redeemValue
+        )
+        const usedBlocks  = Math.min(blocks, maxBlocks)
+        pointsDiscount    = usedBlocks * redeemValue
+        pointsRedeemed    = usedBlocks * redeemEvery
+      }
+    }
+  }
+
+  // ── 8. Total final ────────────────────────────────────────
   const total = Math.max(0,
-    subtotal + deliveryFee - couponDiscount - cashbackUsed
+    subtotal + deliveryFee - couponDiscount - cashbackUsed - pointsDiscount
   )
 
   return {
@@ -270,6 +305,8 @@ export async function calculateOrder(
     deliveryFee,
     couponDiscount,
     cashbackUsed,
+    pointsDiscount,
+    pointsRedeemed,
     total,
     items: calculatedItems,
     coupon: appliedCoupon,

@@ -75,8 +75,8 @@ export async function checkProductLimit(tenantId: string, plan: string): Promise
 
 // Verifica limite de usuários pelo plano
 export async function checkUserLimit(tenantId: string, plan: string): Promise<boolean> {
-  const limits = { STARTER: 1, PRO: 5, PREMIUM: Infinity }
-  const limit = limits[plan as keyof typeof limits] ?? 1
+  const limits = { STARTER: 3, PRO: 10, PREMIUM: Infinity }
+  const limit = limits[plan as keyof typeof limits] ?? 3
 
   if (limit === Infinity) return true
 

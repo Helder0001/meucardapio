@@ -61,7 +61,7 @@ postgresql://user:password@ep-xxx.us-east-1.aws.neon.tech/foodsaas?sslmode=requi
 2. Crie uma aplicação
 3. Copie as credenciais de **Produção**:
    - `MERCADOPAGO_ACCESS_TOKEN` (começa com `APP_USR-...`)
-   - `NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY`
+   - `NEXT_PUBLIC_MP_PUBLIC_KEY`
 4. Configure o webhook:
    - URL: `https://seudominio.vercel.app/api/webhooks/mercadopago`
    - Evento: `payment`
@@ -111,7 +111,7 @@ vercel env add S3_BUCKET_NAME production
 vercel env add S3_REGION production
 vercel env add S3_ENDPOINT production
 vercel env add MERCADOPAGO_ACCESS_TOKEN production
-vercel env add NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY production
+vercel env add NEXT_PUBLIC_MP_PUBLIC_KEY production
 vercel env add MERCADOPAGO_WEBHOOK_SECRET production
 vercel env add RESEND_API_KEY production
 vercel env add EMAIL_FROM production

@@ -27,9 +27,8 @@ export default async function WhatsAppPage() {
       <WhatsAppSettings
         tenantId={session.user.tenantId}
         config={config ? {
-          evolutionUrl: config.evolutionUrl,
-          instanceName: config.instanceName,
-          status: config.status,
+          instanceName:    config.instanceName,
+          status:          config.status,
           lastConnectedAt: config.lastConnectedAt?.toISOString() ?? null,
         } : null}
       />

@@ -269,7 +269,7 @@ CRON_SECRET="$cronSecret"
 # ─── PREENCHA ABAIXO PARA FUNCIONALIDADES EXTRAS ───────────────────────────
 # Pagamentos PIX (obtenha em mercadopago.com.br/developers)
 MERCADOPAGO_ACCESS_TOKEN=""
-NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY=""
+NEXT_PUBLIC_MP_PUBLIC_KEY=""
 MERCADOPAGO_WEBHOOK_SECRET=""
 
 # WhatsApp (requer servidor Evolution API)

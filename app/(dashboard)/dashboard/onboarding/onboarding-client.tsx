@@ -1,11 +1,11 @@
-\'use client\'
+'use client'
 
 // components/dashboard/onboarding/onboarding-client.tsx
 // Wizard interativo de 4 passos para configuração inicial do tenant.
 
-import { useState } from \'react\'
-import { useRouter } from \'next/navigation\'
-import { CheckCircle, Circle, ArrowRight, ExternalLink } from \'lucide-react\'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { CheckCircle, Circle, ArrowRight, ExternalLink } from 'lucide-react'
 
 interface Progress {
   hasCategory: boolean
@@ -22,39 +22,39 @@ interface Props {
 
 const STEPS = [
   {
-    key: \'hasCategory\' as keyof Progress,
-    title: \'Crie sua primeira categoria\',
-    description: \'Organize seu cardápio em categorias como "Pizzas", "Bebidas", "Sobremesas"...\',
-    href: \'/dashboard/menu/categories\',
-    emoji: \'📂\',
+    key: 'hasCategory' as keyof Progress,
+    title: 'Crie sua primeira categoria',
+    description: 'Organize seu cardápio em categorias como "Pizzas", "Bebidas", "Sobremesas"...',
+    href: 'dashboard/menu/categories',
+    emoji: '📂',
   },
   {
-    key: \'hasProduct\' as keyof Progress,
-    title: \'Adicione seu primeiro produto\',
-    description: \'Cadastre um produto com nome, preço e foto. Use IA para gerar a descrição!\',
-    href: \'/dashboard/menu/products/new\',
-    emoji: \'🍕\',
+    key: 'hasProduct' as keyof Progress,
+    title: 'Adicione seu primeiro produto',
+    description: 'Cadastre um produto com nome, preço e foto. Use IA para gerar a descrição!',
+    href: 'dashboard/menu/products/new',
+    emoji: '🍕',
   },
   {
-    key: \'hasHours\' as keyof Progress,
-    title: \'Configure seu horário de funcionamento\',
-    description: \'Defina os dias e horários em que seu estabelecimento aceita pedidos.\',
-    href: \'/dashboard/settings\',
-    emoji: \'🕐\',
+    key: 'hasHours' as keyof Progress,
+    title: 'Configure seu horário de funcionamento',
+    description: 'Defina os dias e horários em que seu estabelecimento aceita pedidos.',
+    href: 'dashboard/settings',
+    emoji: '🕐',
   },
   {
-    key: \'hasWhatsapp\' as keyof Progress,
-    title: \'Conecte o WhatsApp (opcional)\',
-    description: \'Receba notificações de novos pedidos e envie atualizações automáticas de status.\',
-    href: \'/dashboard/settings/whatsapp\',
-    emoji: \'💬\',
+    key: 'hasWhatsapp' as keyof Progress,
+    title: 'Conecte o WhatsApp (opcional)',
+    description: 'Receba notificações de novos pedidos e envie atualizações automáticas de status.',
+    href: 'dashboard/settings/whatsapp',
+    emoji: '💬',
   },
 ]
 
 async function completeOnboarding(tenantId: string) {
-  await fetch(\'/api/onboarding/complete\', {
-    method: \'POST\',
-    headers: { \'Content-Type\': \'application/json\'  },
+  await fetch('/api/onboarding/complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ tenantId }),
   })
 }
@@ -69,7 +69,7 @@ export function OnboardingClient({ tenantId, tenantName, progress }: Props) {
   const handleFinish = async () => {
     setCompleting(true)
     await completeOnboarding(tenantId)
-    router.push(\'/dashboard\')
+    router.push('/dashboard')
   }
 
   return (
@@ -109,17 +109,17 @@ export function OnboardingClient({ tenantId, tenantName, progress }: Props) {
                 key={step.key}
                 className={`bg-white rounded-xl border-2 p-5 flex items-center gap-4 transition-all ${
                   done
-                    ? \'border-green-200 bg-green-50\'
-                    : \'border-gray-200 hover:border-orange-300\'
+                    ? 'border-green-200 bg-green-50'
+                    : 'border-gray-200 hover:border-orange-300'
                 }`}
               >
                 <div className="text-3xl">{step.emoji}</div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <h3 className={`font-semibold ${done ? \'text-green-700 line-through\' : \'text-gray-900\'}`}>
+                    <h3 className={`font-semibold ${done ? 'text-green-700 line-through' : 'text-gray-900'}`}>
                       {step.title}
                     </h3>
-                    {step.key === \'hasWhatsapp\' && (
+                    {step.key === 'hasWhatsapp' && (
                       <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">opcional</span>
                     )}
                   </div>
@@ -147,7 +147,7 @@ export function OnboardingClient({ tenantId, tenantName, progress }: Props) {
             disabled={completing || !allEssential}
             className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {completing ? \'Finalizando...\' : \'Ir para o Dashboard\'}
+            {completing ? 'Finalizando...' : 'Ir para o Dashboard'}
             <ArrowRight className="w-4 h-4" />
           </button>
           {!allEssential && (

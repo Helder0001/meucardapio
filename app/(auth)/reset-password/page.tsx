@@ -3,6 +3,7 @@ import { ResetPasswordForm } from './reset-password-form'
 import { prisma } from '@/lib/db/client'
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import { AuthLogo } from '@/components/shared/auth-logo'
 
 export const metadata: Metadata = { title: 'Redefinir senha' }
 
@@ -52,12 +53,8 @@ export default async function ResetPasswordPage({ searchParams }: PageProps) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-4">
       <div className="w-full max-w-sm">
-        <div className="flex items-center gap-2 mb-8">
-          <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-sm">F</span>
-          </div>
-          <span className="font-semibold text-lg text-foreground">FoodSaaS</span>
-        </div>
+        {/* CORREÇÃO: marca "Meu Cardápio" + logo enviada pelo cliente */}
+        <AuthLogo className="mb-8" />
         <h1 className="text-2xl font-bold text-foreground mb-1">Nova senha</h1>
         <p className="text-muted-foreground text-sm mb-8">
           Escolha uma senha forte com pelo menos 8 caracteres.

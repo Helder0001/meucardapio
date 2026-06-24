@@ -13,7 +13,7 @@ import { z } from 'zod'
 const createSchema = z.object({
   name:     z.string().min(2).max(100),
   email:    z.string().email().toLowerCase(),
-  role:     z.enum(['MANAGER', 'ATTENDANT', 'WAITER', 'DELIVERY_PERSON']),
+  role:     z.enum(['MANAGER', 'ATTENDANT', 'STAFF', 'DELIVERY_PERSON']),
   password: z.string().min(8, 'Senha deve ter pelo menos 8 caracteres'),
 })
 

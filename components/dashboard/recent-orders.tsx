@@ -18,14 +18,26 @@ interface RecentOrdersProps {
   }>
 }
 
+const typeLabel: Record<string, string> = {
+  DINE_IN: 'Mesa',
+  TAKEAWAY: 'Retirada',
+  DELIVERY: 'Delivery',
+}
+
 export function RecentOrders({ orders }: RecentOrdersProps) {
   return (
-    <div className="bg-card border border-border rounded-xl">
-      <div className="flex items-center justify-between p-5 border-b border-border">
-        <h2 className="font-semibold text-foreground">Pedidos recentes</h2>
+    <div
+      className="bg-card border border-border rounded-xl overflow-hidden"
+      style={{ boxShadow: 'var(--shadow-card)' }}
+    >
+      <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+        <div>
+          <h2 className="font-semibold text-foreground">Pedidos recentes</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Últimas movimentações</p>
+        </div>
         <Link
           href="/dashboard/orders"
-          className="text-sm text-primary hover:underline flex items-center gap-1"
+          className="flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
         >
           Ver todos
           <ArrowRight className="h-3.5 w-3.5" />
@@ -33,8 +45,11 @@ export function RecentOrders({ orders }: RecentOrdersProps) {
       </div>
 
       {orders.length === 0 ? (
-        <div className="p-8 text-center text-muted-foreground text-sm">
-          Nenhum pedido ainda. Compartilhe seu cardápio para começar!
+        <div className="p-10 text-center">
+          <p className="text-sm font-medium text-foreground">Nenhum pedido ainda</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Compartilhe seu cardápio para começar!
+          </p>
         </div>
       ) : (
         <div className="divide-y divide-border">
@@ -42,29 +57,34 @@ export function RecentOrders({ orders }: RecentOrdersProps) {
             <Link
               key={order.id}
               href={`/dashboard/orders/${order.id}`}
-              className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
+              className="flex items-center gap-4 px-5 py-3.5 hover:bg-muted/40 transition-colors group"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
-                  <span className="text-xs font-bold text-muted-foreground">
-                    #{order.orderNumber}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    {order.customer?.name ?? order.customer?.phone ?? 'Cliente'}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDate(order.createdAt)} • {order.type}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <OrderStatusBadge status={order.status} />
-                <span className="text-sm font-semibold text-foreground">
-                  {formatCurrency(Number(order.total))}
+              {/* Número do pedido */}
+              <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center flex-shrink-0">
+                <span className="text-xs font-bold text-orange-600">
+                  #{order.orderNumber}
                 </span>
               </div>
+
+              {/* Cliente + data */}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">
+                  {order.customer?.name ?? order.customer?.phone ?? 'Cliente'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {formatDate(order.createdAt)} · {typeLabel[order.type] ?? order.type}
+                </p>
+              </div>
+
+              {/* Status */}
+              <div className="flex-shrink-0">
+                <OrderStatusBadge status={order.status} />
+              </div>
+
+              {/* Valor */}
+              <span className="text-sm font-bold text-foreground flex-shrink-0 tabular-nums">
+                {formatCurrency(Number(order.total))}
+              </span>
             </Link>
           ))}
         </div>

@@ -14,6 +14,8 @@ interface Category { id: string; name: string; products: Product[] }
 
 interface Props {
   tenantId: string
+  pdvId?: string
+  createdByUserId?: string
   categories: Category[]
 }
 
@@ -24,14 +26,23 @@ interface OrderItem {
   quantity: number
 }
 
-export function KanbanNewOrderButton({ tenantId, categories }: Props) {
+type PaymentMethodType = 'PIX' | 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD'
+interface PaymentEntry { method: PaymentMethodType; amount: number }
+
+interface PixData { qrCode: string; qrCodeBase64: string }
+
+export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categories }: Props) {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<OrderItem[]>([])
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerName, setCustomerName] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState<'PIX' | 'CASH' | 'CARD'>('PIX')
+  // CORREÇÃO: suporta múltiplas formas de pagamento no mesmo pedido (split)
+  const [payments, setPayments] = useState<PaymentEntry[]>([{ method: 'PIX', amount: 0 }])
   const [notes, setNotes] = useState('')
+  const [payNow, setPayNow] = useState(true)   // pagar agora ou deixar pendente (pagar no final)
   const [isPending, start] = useTransition()
+  const [pixData, setPixData] = useState<PixData | null>(null)
+  const [copied, setCopied] = useState(false)
   const router = useRouter()
 
   const addItem = (product: Product) => {
@@ -53,28 +64,86 @@ export function KanbanNewOrderButton({ tenantId, categories }: Props) {
 
   const total = items.reduce((s, i) => s + i.price * i.quantity, 0)
 
+  // ── Split de pagamento ───────────────────────────────────────────────────
+  const paidSum   = payments.reduce((s, p) => s + (p.amount || 0), 0)
+  const remaining = Math.round((total - paidSum) * 100) / 100
+
+  const addPaymentRow = () => {
+    setPayments((prev) => [...prev, { method: 'CASH', amount: Math.max(remaining, 0) }])
+  }
+  const removePaymentRow = (idx: number) => {
+    setPayments((prev) => prev.filter((_, i) => i !== idx))
+  }
+  const updatePaymentMethod = (idx: number, method: PaymentMethodType) => {
+    setPayments((prev) => prev.map((p, i) => i === idx ? { ...p, method } : p))
+  }
+  const updatePaymentAmount = (idx: number, amount: number) => {
+    setPayments((prev) => prev.map((p, i) => i === idx ? { ...p, amount } : p))
+  }
+
   const handleSubmit = () => {
     if (items.length === 0) { toast.error('Adicione pelo menos um item'); return }
+    // Com 1 só forma de pagamento, o valor é sempre o total do pedido.
+    // Com mais de uma (split), as parcelas precisam somar exatamente o total.
+    const finalPayments: PaymentEntry[] = payments.length === 1
+      ? [{ ...payments[0], amount: total }]
+      : payments
+    if (payments.length > 1 && Math.abs(remaining) > 0.01) {
+      toast.error(remaining > 0
+        ? `Faltam ${formatCurrency(remaining)} para completar o pagamento`
+        : `Os valores excedem o total em ${formatCurrency(-remaining)}`)
+      return
+    }
     start(async () => {
       try {
         const result = await createOrderAction({
           tenantId,
           items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, addonIds: [] })),
           type: 'PDV',
+          pdvId,
+          createdByUserId,
           customerPhone: customerPhone || undefined,
           customerName: customerName || undefined,
-          paymentMethod,
+          payments: payNow ? finalPayments : undefined,
           notes: notes || undefined,
         })
         if (result.error) { toast.error(result.error); return }
+
+        // Se algum dos pagamentos for PIX, mostrar QR code + copia-e-cola
+        // em vez de fechar direto — o caixa precisa exibir isso pro cliente.
+        if (result.paymentData?.pixQrCode && result.paymentData?.pixQrCodeBase64) {
+          setPixData({ qrCode: result.paymentData.pixQrCode, qrCodeBase64: result.paymentData.pixQrCodeBase64 })
+          toast.success('Pedido criado! Aguardando pagamento PIX')
+          router.refresh()
+          return
+        }
+
         toast.success('Pedido criado! 🎉')
-        setOpen(false)
-        setItems([]); setCustomerPhone(''); setCustomerName(''); setNotes('')
+        closeAndReset()
         router.refresh()
       } catch {
         toast.error('Erro ao criar pedido')
       }
     })
+  }
+
+  const closeAndReset = () => {
+    setOpen(false)
+    setItems([]); setCustomerPhone(''); setCustomerName(''); setNotes('')
+    setPayments([{ method: 'PIX', amount: 0 }])
+    setPayNow(true)
+    setPixData(null); setCopied(false)
+  }
+
+  const copyPixCode = async () => {
+    if (!pixData) return
+    try {
+      await navigator.clipboard.writeText(pixData.qrCode)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast.error('Não foi possível copiar')
+    }
   }
 
   return (
@@ -102,6 +171,37 @@ export function KanbanNewOrderButton({ tenantId, categories }: Props) {
               </button>
             </div>
 
+            {pixData ? (
+              <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center text-center gap-4">
+                <div>
+                  <h3 className="font-bold text-foreground">Aguardando pagamento PIX</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Peça pro cliente escanear o QR Code ou usar o código copia e cola. Expira em 5 minutos.
+                  </p>
+                </div>
+                <img
+                  src={`data:image/png;base64,${pixData.qrCodeBase64}`}
+                  alt="QR Code PIX"
+                  className="w-56 h-56 rounded-xl border border-border"
+                />
+                <div className="w-full">
+                  <p className="text-xs font-medium text-foreground mb-1 text-left">Código copia e cola</p>
+                  <div className="flex items-center gap-2">
+                    <input readOnly value={pixData.qrCode}
+                      className="flex-1 px-3 py-2 text-xs border border-input rounded-lg bg-muted truncate" />
+                    <button onClick={copyPixCode}
+                      className="px-3 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex-shrink-0">
+                      {copied ? 'Copiado!' : 'Copiar'}
+                    </button>
+                  </div>
+                </div>
+                <button onClick={closeAndReset}
+                  className="w-full mt-2 px-4 py-3 bg-muted text-foreground font-semibold rounded-lg hover:bg-muted/70 transition-colors">
+                  Concluir
+                </button>
+              </div>
+            ) : (
+              <>
             <div className="flex-1 overflow-y-auto p-5 space-y-5">
               {/* Produtos */}
               <div>
@@ -157,20 +257,83 @@ export function KanbanNewOrderButton({ tenantId, categories }: Props) {
                 </div>
               </div>
 
-              {/* Pagamento */}
-              <div>
-                <label className="block text-xs font-medium text-foreground mb-2">Forma de pagamento</label>
-                <div className="flex gap-2">
-                  {(['PIX', 'CASH', 'CARD'] as const).map((m) => (
-                    <button key={m} onClick={() => setPaymentMethod(m)}
-                      className={`flex-1 py-2 rounded-lg text-xs font-semibold border-2 transition-all ${
-                        paymentMethod === m ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-foreground hover:border-primary/50'
-                      }`}>
-                      {m === 'PIX' ? '⚡ PIX' : m === 'CASH' ? '💵 Dinheiro' : '💳 Cartão'}
-                    </button>
-                  ))}
+              {/* Quando pagar — pagar agora ou deixar para o final */}
+              <div className="flex items-center justify-between rounded-xl border border-border p-3 bg-muted/30">
+                <div>
+                  <p className="text-xs font-semibold text-foreground">Cobrar agora?</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {payNow ? 'Pagamento registrado na criação do pedido' : 'Pedido fica pendente — cobra no final'}
+                  </p>
                 </div>
+                <button
+                  onClick={() => setPayNow((v) => !v)}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${payNow ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'}`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${payNow ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
               </div>
+
+              {/* Forma de pagamento — só aparece se cobrar agora */}
+              {payNow && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-medium text-foreground">Forma de pagamento</label>
+                    {payments.length === 1 && (
+                      <button onClick={addPaymentRow} className="text-xs font-medium text-primary hover:underline">
+                        + Dividir pagamento
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    {payments.map((p, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <select
+                          value={p.method}
+                          onChange={(e) => updatePaymentMethod(idx, e.target.value as PaymentMethodType)}
+                          className="flex-1 px-2.5 py-2 text-xs font-medium border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                        >
+                          <option value="PIX">⚡ PIX</option>
+                          <option value="CASH">💵 Dinheiro</option>
+                          <option value="CREDIT_CARD">💳 Crédito</option>
+                          <option value="DEBIT_CARD">💳 Débito</option>
+                        </select>
+
+                        {payments.length > 1 && (
+                          <input
+                            type="number" min="0" step="0.01"
+                            value={p.amount || ''}
+                            onChange={(e) => updatePaymentAmount(idx, Number(e.target.value))}
+                            placeholder="0,00"
+                            className="w-24 px-2.5 py-2 text-xs border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                          />
+                        )}
+
+                        {payments.length > 1 && (
+                          <button onClick={() => removePaymentRow(idx)} className="w-7 h-7 flex-shrink-0 rounded-md bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {payments.length > 1 && (
+                    <div className="flex justify-between text-xs mt-2">
+                      <button onClick={addPaymentRow} className="font-medium text-primary hover:underline">
+                        + Adicionar outra forma
+                      </button>
+                      <span className={remaining === 0 ? 'text-emerald-600 font-semibold' : 'text-amber-600 font-semibold'}>
+                        {remaining > 0
+                          ? `Faltam ${formatCurrency(remaining)}`
+                          : remaining < 0
+                            ? `Excede em ${formatCurrency(-remaining)}`
+                            : 'Valores OK ✓'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Observações */}
               <div>
@@ -206,6 +369,8 @@ export function KanbanNewOrderButton({ tenantId, categories }: Props) {
                 {isPending ? 'Criando...' : `Criar pedido${total > 0 ? ` · ${formatCurrency(total)}` : ''}`}
               </button>
             </div>
+              </>
+            )}
           </div>
         </div>
       )}

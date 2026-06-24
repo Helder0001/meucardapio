@@ -10,7 +10,7 @@ export async function GET(
   const { token } = await params
 
   const printer = await prisma.printer.findFirst({
-    where: { token, isActive: true },
+    where: { token },
   })
 
   if (!printer) {
@@ -47,7 +47,7 @@ export async function PATCH(
   const { jobId, status = 'PRINTED', error } = body
 
   const printer = await prisma.printer.findFirst({
-    where: { token, isActive: true },
+    where: { token },
   })
 
   if (!printer) {

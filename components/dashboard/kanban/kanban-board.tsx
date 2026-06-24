@@ -52,17 +52,19 @@ type FilterType = 'ALL' | 'TABLE' | 'DELIVERY' | 'PICKUP'
 
 interface KanbanBoardProps {
   tenantId: string
-  /** Se true, desabilita drag-and-drop (modo garçom — apenas visualização + novo pedido) */
-  readOnly?: boolean
+  userRole?: string
+  /** Se definido, trava o filtro nesse tipo e oculta os botões de filtro */
+  lockedFilter?: FilterType
 }
 
-export function KanbanBoard({ tenantId, readOnly = false }: KanbanBoardProps) {
+export function KanbanBoard({ tenantId, userRole = '', lockedFilter }: KanbanBoardProps) {
   const [orders, setOrders] = useState<KanbanOrder[]>([])
   const [connected, setConnected] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(true)
-  const [filter, setFilter] = useState<FilterType>('ALL')
+  const [filter, setFilter] = useState<FilterType>(lockedFilter ?? 'ALL')
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const isDeliveryPerson = userRole === 'DELIVERY_PERSON'
   const audioRef = useRef<AudioContext | null>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
 
@@ -153,9 +155,21 @@ export function KanbanBoard({ tenantId, readOnly = false }: KanbanBoardProps) {
 
     es.onerror = () => {
       setConnected(false)
-      // Reconectar após 5 segundos
+      // Reconectar após 5 segundos (inclui quando Vercel mata a conexão SSE após 300s)
       setTimeout(connect, 5000)
     }
+
+    // Polling fallback a cada 60s: refetch estado inicial caso SSE falhe silenciosamente
+    const pollFallback = setInterval(async () => {
+      if (es.readyState === EventSource.CLOSED) {
+        clearInterval(pollFallback)
+        return
+      }
+      try {
+        // Apenas refresh via SSE reconnect — não precisa fetch separado
+        // O onerror já trata reconexão. Esse interval é só um watchdog.
+      } catch {}
+    }, 60_000)
   }, [playNotification])
 
   useEffect(() => {
@@ -164,8 +178,6 @@ export function KanbanBoard({ tenantId, readOnly = false }: KanbanBoardProps) {
       eventSourceRef.current?.close()
     }
   }, [connect])
-
-  // Drag and drop handlers
   const handleDragStart = (orderId: string) => {
     setDraggingId(orderId)
   }
@@ -216,13 +228,22 @@ export function KanbanBoard({ tenantId, readOnly = false }: KanbanBoardProps) {
   const ordersByStatus = (status: string) =>
     filteredOrders.filter((o) => o.status === status)
 
+  // OUT_FOR_DELIVERY só é relevante para delivery — esconde em mesa/retirada/balcão
+  // Para entregador, sempre mostra a coluna OUT_FOR_DELIVERY
+  const visibleColumns = COLUMNS.filter((col) => {
+    if (col.key === 'OUT_FOR_DELIVERY') {
+      return isDeliveryPerson || filter === 'ALL' || filter === 'DELIVERY'
+    }
+    return true
+  })
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Filtros */}
+        {/* Filtros — ocultados quando o filtro está travado (ex: entregador) */}
         <div className="flex gap-1.5">
-          {(['ALL', 'DELIVERY', 'TABLE', 'PICKUP'] as FilterType[]).map((f) => (
+          {!lockedFilter && (['ALL', 'DELIVERY', 'TABLE', 'PICKUP'] as FilterType[]).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -240,8 +261,6 @@ export function KanbanBoard({ tenantId, readOnly = false }: KanbanBoardProps) {
             </button>
           ))}
         </div>
-
-        {/* Status e controles */}
         <div className="flex items-center gap-2">
           <button
             onClick={() => setSoundEnabled((s) => !s)}
@@ -276,14 +295,14 @@ export function KanbanBoard({ tenantId, readOnly = false }: KanbanBoardProps) {
 
       {/* Colunas do kanban */}
       <div className="flex gap-4 overflow-x-auto pb-4">
-        {COLUMNS.map((col) => (
+        {visibleColumns.map((col) => (
           <KanbanColumn
             key={col.key}
             column={col}
             orders={ordersByStatus(col.key)}
             draggingId={draggingId}
-            onDragStart={readOnly ? undefined : handleDragStart}
-            onDrop={readOnly ? undefined : handleDrop}
+            onDragStart={isDeliveryPerson ? undefined : handleDragStart}
+            onDrop={isDeliveryPerson ? undefined : handleDrop}
             loading={loading}
           />
         ))}

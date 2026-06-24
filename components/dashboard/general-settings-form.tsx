@@ -4,15 +4,16 @@
 
 import { useFormState, useFormStatus } from 'react-dom'
 import { saveGeneralSettings } from '@/actions/settings/save-general'
-import { Loader2, ExternalLink, Clock, Image as ImageIcon, Instagram, MapPin, CreditCard } from 'lucide-react'
+import { Loader2, ExternalLink, Clock, Instagram, MapPin, CreditCard } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
+import { ImageUpload } from '@/components/shared/image-upload'
 
 const DAYS = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado']
 
 const PAYMENT_OPTIONS = [
   'PIX', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito',
-  'Vale Refeição', 'Vale Alimentação', 'Boleto', 'Transferência'
+  'Vale Refeição', 'Vale Alimentação', 'Transferência',
 ]
 
 function SubmitButton() {
@@ -54,9 +55,15 @@ interface SettingsProps {
 export function GeneralSettingsForm({ tenant }: SettingsProps) {
   const [state, formAction] = useFormState(saveGeneralSettings, {})
   const settings = tenant.settings as Record<string, any> ?? {}
+
   const [selectedPayments, setSelectedPayments] = useState<string[]>(
     settings?.acceptedPayments ?? []
   )
+
+  // Upload state — imagens são submetidas como hidden inputs
+  const [logoUrl,      setLogoUrl]      = useState<string>(tenant.logo ?? '')
+  const [coverUrl,     setCoverUrl]     = useState<string>(settings?.coverImage ?? '')
+  const [instagramUrl, setInstagramUrl] = useState<string>(settings?.instagram ?? '')
 
   const hours: BusinessHour[] = DAYS.map((_, dayOfWeek) =>
     tenant.businessHours.find((h) => h.dayOfWeek === dayOfWeek) ?? {
@@ -75,7 +82,9 @@ export function GeneralSettingsForm({ tenant }: SettingsProps) {
 
   return (
     <form action={formAction} className="space-y-6">
-      {/* Hidden: pagamentos selecionados */}
+      {/* Hidden fields para imagens e pagamentos */}
+      <input type="hidden" name="logo"             value={logoUrl} />
+      <input type="hidden" name="coverImage"       value={coverUrl} />
       <input type="hidden" name="acceptedPayments" value={JSON.stringify(selectedPayments)} />
 
       {state.error && (
@@ -177,53 +186,32 @@ export function GeneralSettingsForm({ tenant }: SettingsProps) {
         </div>
       </div>
 
-      {/* ── Imagens da loja ── */}
-      <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-        <div className="flex items-center gap-2">
-          <ImageIcon className="h-4 w-4 text-muted-foreground" />
-          <h2 className="font-semibold text-foreground">Imagens da loja</h2>
-        </div>
+      {/* ── Imagens da loja — upload direto ── */}
+      <div className="bg-card border border-border rounded-xl p-5 space-y-6">
+        <h2 className="font-semibold text-foreground">Imagens da loja</h2>
+        <p className="text-xs text-muted-foreground -mt-4">
+          Faça upload das imagens diretamente — elas serão otimizadas automaticamente.
+        </p>
 
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-1.5">
-            Logo (foto de perfil)
-          </label>
-          <p className="text-xs text-muted-foreground mb-2">
-            URL da imagem do logo. Recomendado: quadrada, 400×400px.
-          </p>
-          <input
-            name="logo"
-            defaultValue={tenant.logo ?? ''}
-            placeholder="https://exemplo.com/logo.png"
-            className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-          {tenant.logo && (
-            <div className="mt-2">
-              <img src={tenant.logo} alt="Logo atual" className="w-16 h-16 rounded-xl object-cover border border-input" />
-            </div>
-          )}
-        </div>
+        {/* Logo */}
+        <ImageUpload
+          label="Logo (foto de perfil)"
+          value={logoUrl || null}
+          onChange={setLogoUrl}
+          onRemove={() => setLogoUrl('')}
+          type="logo"
+        />
 
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-1.5">
-            Foto de capa (banner)
-          </label>
-          <p className="text-xs text-muted-foreground mb-2">
-            URL da imagem de capa do cardápio. Recomendado: 1200×400px.
-          </p>
-          <input
-            name="coverImage"
-            defaultValue={settings?.coverImage ?? ''}
-            placeholder="https://exemplo.com/capa.png"
-            className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-          {settings?.coverImage && (
-            <div className="mt-2">
-              <img src={settings.coverImage} alt="Capa atual" className="w-full h-24 rounded-xl object-cover border border-input" />
-            </div>
-          )}
-        </div>
+        {/* Capa */}
+        <ImageUpload
+          label="Foto de capa (banner do cardápio)"
+          value={coverUrl || null}
+          onChange={setCoverUrl}
+          onRemove={() => setCoverUrl('')}
+          type="product"
+        />
 
+        {/* Tagline */}
         <div>
           <label className="block text-sm font-medium text-foreground mb-1.5">
             Slogan / tagline (aparece na capa)
@@ -237,28 +225,43 @@ export function GeneralSettingsForm({ tenant }: SettingsProps) {
         </div>
       </div>
 
-      {/* ── Informações do cardápio (instagram, endereço) ── */}
+      {/* ── Informações públicas ── */}
       <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-        <h2 className="font-semibold text-foreground">Informações públicas (Mais informações)</h2>
+        <h2 className="font-semibold text-foreground">Informações públicas</h2>
         <p className="text-xs text-muted-foreground">
-          Essas informações aparecem no botão "Mais informações" do cardápio digital.
+          Aparecem no botão "Mais informações" do cardápio digital.
         </p>
 
+        {/* Instagram — usuário digita @handle, clique direciona para perfil */}
         <div>
           <label className="block text-sm font-medium text-foreground mb-1.5 flex items-center gap-1.5">
             <Instagram className="h-4 w-4" /> Instagram
           </label>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">@</span>
+            <span className="text-sm text-muted-foreground px-3 py-2.5 border border-input rounded-l-lg bg-muted">
+              @
+            </span>
             <input
               name="instagram"
-              defaultValue={(settings?.instagram ?? '').replace('@', '')}
+              value={instagramUrl.replace(/^@/, '').replace(/^https?:\/\/(www\.)?instagram\.com\/?/, '')}
+              onChange={(e) => setInstagramUrl(e.target.value.replace(/^@/, ''))}
               placeholder="nomedoperfil"
-              className="flex-1 px-3 py-2.5 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="flex-1 px-3 py-2.5 border border-l-0 border-input rounded-r-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
+          {instagramUrl && (
+            <a
+              href={`https://instagram.com/${instagramUrl.replace(/^@/, '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1.5 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+            >
+              <ExternalLink className="h-3 w-3" />
+              instagram.com/{instagramUrl.replace(/^@/, '')}
+            </a>
+          )}
           <p className="text-xs text-muted-foreground mt-1">
-            Ao clicar, o cliente será redirecionado para o seu perfil no Instagram.
+            O cliente será redirecionado ao seu Instagram ao clicar.
           </p>
         </div>
 

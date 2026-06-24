@@ -6,7 +6,7 @@ import { useState, useTransition } from 'react'
 import { useFormState, useFormStatus } from 'react-dom'
 import { createUserAction, deactivateUserAction } from '@/actions/users/manage-users'
 import { formatDate, formatRelative } from '@/lib/utils/format'
-import { Plus, X, Loader2, UserX, ShieldCheck } from 'lucide-react'
+import { Plus, X, Loader2, UserX, Info } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -21,18 +21,32 @@ interface UserData {
 }
 
 const ROLE_LABELS: Record<string, string> = {
-  TENANT_ADMIN:    '👑 Administrador',
-  MANAGER:         '🎯 Gerente',
-  ATTENDANT:       '💻 Atendente',
-  WAITER:          '🍽️ Garçom',
-  DELIVERY_PERSON: '🛵 Entregador',
+  TENANT_ADMIN:    'Administrador',
+  MANAGER:         'Gerente',
+  ATTENDANT:       'Atendente',
+  STAFF:           'Operador',
+  DELIVERY_PERSON: 'Entregador',
+}
+
+const ROLE_DESC: Record<string, string> = {
+  MANAGER:         'Acesso total: pedidos, kanban, cardápio, relatórios, clientes e configurações (exceto usuários e conta)',
+  ATTENDANT:       'Gerencia pedidos e kanban. Não pode cancelar pedidos nem confirmar ou entregar pedidos delivery',
+  STAFF:           'Confirma pedidos e avança até Pronto. Não pode cancelar nem marcar como entregue',
+  DELIVERY_PERSON: 'Somente pedidos Delivery: muda para Saiu/Entregue e confirma pagamento após entrega',
+}
+
+const ROLE_PERMISSIONS: Record<string, string[]> = {
+  MANAGER:         ['Gerenciar pedidos', 'Editar cardápio', 'Ver relatórios', 'Gerenciar clientes', 'Configurações gerais'],
+  ATTENDANT:       ['Gerenciar pedidos', 'Kanban', 'Criar pedidos no PDV'],
+  STAFF:           ['Confirmar pedido', 'Iniciar preparo', 'Marcar como pronto'],
+  DELIVERY_PERSON: ['Ver pedidos Delivery', 'Saiu para entrega', 'Marcar como entregue', 'Confirmar pagamento pós-entrega'],
 }
 
 const ROLE_COLORS: Record<string, string> = {
   TENANT_ADMIN:    'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   MANAGER:         'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   ATTENDANT:       'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-  WAITER:          'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  STAFF:          'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
   DELIVERY_PERSON: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
 }
 
@@ -55,15 +69,15 @@ interface UsersManagerProps {
 }
 
 export function UsersManager({ users: initial, currentUserId, canAddMore, plan }: UsersManagerProps) {
-  const [users,    setUsers]    = useState(initial)
-  const [showForm, setShowForm] = useState(false)
-  const [isPending, start]     = useTransition()
-  const [formState, formAction] = useFormState(createUserAction, {})
+  const [users,     setUsers]     = useState(initial)
+  const [showForm,  setShowForm]  = useState(false)
+  const [isPending, start]        = useTransition()
+  const [formState, formAction]   = useFormState(createUserAction, {})
+  const [roleSelected, setRoleSelected] = useState<string>('STAFF')
 
-  // Fechar formulário e recarregar após criar
   if (formState.success && showForm) {
     setShowForm(false)
-    toast.success('Usuário criado! Um email será enviado com as instruções de acesso.')
+    toast.success('Usuário criado! Compartilhe a senha com ele para o primeiro acesso.')
     window.location.reload()
   }
 
@@ -85,11 +99,27 @@ export function UsersManager({ users: initial, currentUserId, canAddMore, plan }
           <p className="font-semibold">Limite de usuários atingido</p>
           <p className="text-xs mt-0.5">
             Faça upgrade do plano para adicionar mais usuários.
-            {plan === 'STARTER' && ' O plano Starter suporta apenas 1 usuário.'}
-            {plan === 'PRO'     && ' O plano Pro suporta até 5 usuários.'}
+            {plan === 'STARTER' && ' O plano Starter suporta até 3 usuários.'}
+            {plan === 'PRO'     && ' O plano Pro suporta até 10 usuários.'}
           </p>
         </div>
       )}
+
+      {/* Info permissões operador */}
+      <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex gap-3">
+        <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+        <div className="text-sm text-blue-700 dark:text-blue-300">
+          <p className="font-semibold">Permissões por função</p>
+          <ul className="mt-1 text-xs space-y-0.5">
+            {Object.entries(ROLE_DESC).map(([role, desc]) => (
+              <li key={role}><span className="font-medium">{ROLE_LABELS[role]}:</span> {desc}</li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-xs opacity-80">
+            Todas as ações realizadas pelos usuários (confirmação de pagamento, mudança de status) ficam registradas no histórico de cada pedido.
+          </p>
+        </div>
+      </div>
 
       <div className="flex justify-end">
         <button
@@ -132,13 +162,26 @@ export function UsersManager({ users: initial, currentUserId, canAddMore, plan }
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Função *</label>
-              <select name="role" required
+              <select name="role" required value={roleSelected}
+                onChange={(e) => setRoleSelected(e.target.value)}
                 className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
                 <option value="MANAGER">Gerente</option>
                 <option value="ATTENDANT">Atendente</option>
-                <option value="WAITER">Garçom</option>
+                <option value="STAFF">Operador</option>
                 <option value="DELIVERY_PERSON">Entregador</option>
               </select>
+              {roleSelected && (
+                <div className="mt-2 p-3 rounded-lg bg-muted/50 space-y-1.5">
+                  <p className="text-xs text-muted-foreground">{ROLE_DESC[roleSelected]}</p>
+                  {ROLE_PERMISSIONS[roleSelected] && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {ROLE_PERMISSIONS[roleSelected].map((p) => (
+                        <span key={p} className="text-[11px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">✓ {p}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div>
@@ -171,7 +214,7 @@ export function UsersManager({ users: initial, currentUserId, canAddMore, plan }
           </thead>
           <tbody>
             {users.map((user) => (
-              <tr key={user.id} className="border-b border-border last:border-0">
+              <tr key={user.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -222,6 +265,11 @@ export function UsersManager({ users: initial, currentUserId, canAddMore, plan }
             ))}
           </tbody>
         </table>
+        {users.length === 0 && (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            Nenhum usuário cadastrado ainda.
+          </div>
+        )}
       </div>
     </div>
   )

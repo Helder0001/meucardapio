@@ -20,6 +20,7 @@ import crypto from 'crypto'
 import { checkAndPublishStockAlerts } from '@/lib/utils/stock-alerts'
 import { prisma } from '@/lib/db/client'
 import { calculateOrder } from '@/lib/utils/order-calculator'
+import { formatCurrency } from '@/lib/utils/format'
 import { getNextOrderNumber } from '@/lib/db/tenant'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { notifyOrderReceived } from '@/lib/messaging/evolution'
@@ -49,6 +50,8 @@ const createOrderSchema = z.object({
   })).min(1, 'Carrinho vazio'),
   type: z.enum(['TABLE', 'DELIVERY', 'PICKUP', 'PDV']),
   tableId: z.string().cuid().optional(),
+  pdvId: z.string().optional(),            // PDV que criou o pedido
+  createdByUserId: z.string().optional(),   // usuário que criou
   couponCode: z.string().max(50).optional(),
   deliveryBairro: z.string().max(100).optional(),
   customerPhone: z.string().min(10).max(20).optional(),
@@ -61,21 +64,29 @@ const createOrderSchema = z.object({
   paymentMethod: z.enum(['PIX', 'CASH', 'CARD', 'CREDIT_CARD', 'DEBIT_CARD']).optional(),
   changeFor: z.number().positive().optional(),
 
-  cashbackToUse: z.number().min(0).optional(),
+  cashbackToUse:  z.number().min(0).optional(),
+  pointsToRedeem: z.number().int().min(0).optional(),
   deliveryAddress: z.string().max(300).optional(),
   notes: z.string().max(500).optional(),
 })
+  // CORREÇÃO: endereço de entrega agora é obrigatório no servidor para
+  // pedidos do tipo DELIVERY — validação no cart-drawer (cliente) pode ser
+  // contornada, então validamos novamente aqui.
+  .refine(
+    (data) => data.type !== 'DELIVERY' || (data.deliveryAddress && data.deliveryAddress.trim().length >= 5),
+    { message: 'Endereço de entrega é obrigatório para pedidos com entrega', path: ['deliveryAddress'] }
+  )
 
 type CreateOrderInput = z.infer<typeof createOrderSchema>
 
 interface CreateOrderResult {
   orderId?: string
+  statusToken?: string          // ← ADICIONADO: token para polling de status
   paymentData?: {
     method: string
     pixQrCode?: string
     pixQrCodeBase64?: string
     total: number
-    // Múltiplos pagamentos: resumo de cada um
     payments?: Array<{ method: string; amount: number }>
   }
   error?: string
@@ -101,9 +112,10 @@ export async function createOrderAction(
         ? [{ method: data.paymentMethod, amount: 0 /* será preenchido com o total calculado */, changeFor: data.changeFor }]
         : []
 
-  if (paymentsList.length === 0) {
+  if (paymentsList.length === 0 && data.type !== 'PDV') {
     return { error: 'Informe pelo menos uma forma de pagamento' }
   }
+  // PDV sem pagamento = "cobrar no final" — pedido criado sem pagamento registrado
 
   // 2. Verificar se tenant existe e está ativo
   const tenant = await prisma.tenant.findFirst({
@@ -151,28 +163,29 @@ export async function createOrderAction(
     deliveryBairro: data.deliveryBairro,
     deliveryType: data.type === 'DELIVERY' ? 'DELIVERY' : undefined,
     customerId: customer?.id,
-    cashbackToUse: data.cashbackToUse,
+    cashbackToUse:  data.cashbackToUse,
+    pointsToRedeem: data.pointsToRedeem,
   })
 
   if (calculation.errors.length > 0) {
     return { error: calculation.errors[0] }
   }
 
-  // Validar que os valores dos pagamentos somam o total (tolerância de R$ 0,05)
-  if (data.payments) {
-    const sumPaid = data.payments.reduce((s, p) => s + p.amount, 0)
-    if (Math.abs(sumPaid - calculation.total) > 0.05) {
-      return { error: `Total dos pagamentos (${sumPaid.toFixed(2)}) não confere com o valor do pedido (${calculation.total.toFixed(2)})` }
+  // Validar e preencher amounts — só quando há pagamentos (cobrar agora)
+  if (paymentsList.length > 0) {
+    if (data.payments) {
+      const sumPaid = data.payments.reduce((s, p) => s + p.amount, 0)
+      if (Math.abs(sumPaid - calculation.total) > 0.05) {
+        return { error: `Total dos pagamentos (${sumPaid.toFixed(2)}) não confere com o valor do pedido (${calculation.total.toFixed(2)})` }
+      }
+      paymentsList.forEach((p) => {
+        if (p.amount === 0) p.amount = calculation.total
+      })
+    } else {
+      paymentsList[0].amount = calculation.total
     }
-
-    // Preencher amount nos pagamentos legados
-    paymentsList.forEach((p) => {
-      if (p.amount === 0) p.amount = calculation.total
-    })
-  } else {
-    // Legado: pagamento único com o total completo
-    paymentsList[0].amount = calculation.total
   }
+  // paymentsList vazio = "cobrar no final" para pedidos PDV
 
   // 5. Criar pedido em transação
   const orderNumber = await getNextOrderNumber(data.tenantId)
@@ -186,6 +199,8 @@ export async function createOrderAction(
         status: 'PENDING',
         paymentStatus: 'PENDING',
         tableId: data.tableId,
+        pdvId: data.pdvId,
+        createdById: data.createdByUserId,
         customerId: customer?.id,
         couponId: calculation.coupon?.id,
         couponCode: calculation.coupon?.code,
@@ -273,6 +288,25 @@ export async function createOrderAction(
       })
     }
 
+    // Debitar pontos resgatados
+    if (calculation.pointsRedeemed > 0 && customer) {
+      await tx.customer.update({
+        where: { id: customer.id },
+        data: { loyaltyPoints: { decrement: calculation.pointsRedeemed } },
+      })
+      await tx.loyaltyTransaction.create({
+        data: {
+          tenantId: data.tenantId,
+          customerId: customer.id,
+          orderId: newOrder.id,
+          type: 'REDEEM',
+          points: -calculation.pointsRedeemed,
+          balance: customer.loyaltyPoints - calculation.pointsRedeemed,
+          description: `Resgate: ${calculation.pointsRedeemed} pts = ${formatCurrency(calculation.pointsDiscount)} de desconto`,
+        },
+      })
+    }
+
     if (customer) {
       await tx.customer.update({
         where: { id: customer.id },
@@ -352,14 +386,17 @@ export async function createOrderAction(
 
   return {
     orderId: order.id,
-    // Token para polling de status sem autenticação (válido para este pedido)
     statusToken,
-    paymentData: {
+    paymentData: paymentsList.length > 0 ? {
       method: paymentsList[0].method,
       total: calculation.total,
       pixQrCode: pixResult?.pixQrCode,
       pixQrCodeBase64: pixResult?.pixQrCodeBase64,
       payments: paymentsList.map((p) => ({ method: p.method, amount: p.amount })),
+    } : {
+      method: 'PENDING',
+      total: calculation.total,
+      payments: [],
     },
   }
 }
@@ -395,12 +432,13 @@ async function createPixPayment(params: {
       transaction_amount: params.amount,
       payment_method_id: 'pix',
       payer: {
-        email: 'cliente@foodsaas.com',
+        email: 'cliente@meucardapio.com',
         identification: { type: 'CPF', number: '00000000000' },
       },
       description: `Pedido #${params.orderId.slice(-8).toUpperCase()}`,
       external_reference: params.orderId,
       notification_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/mercadopago`,
+      date_of_expiration: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
     }),
   })
 
@@ -422,7 +460,7 @@ async function createPixPayment(params: {
       mercadoPagoStatus: mpData.status,
       pixQrCode: mpData.point_of_interaction?.transaction_data?.qr_code,
       pixQrCodeBase64: mpData.point_of_interaction?.transaction_data?.qr_code_base64,
-      pixExpiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      pixExpiresAt: mpData.date_of_expiration ? new Date(mpData.date_of_expiration) : new Date(Date.now() + 5 * 60 * 1000),
     },
   })
 

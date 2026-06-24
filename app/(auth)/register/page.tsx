@@ -4,6 +4,7 @@ import type { Metadata } from 'next'
 import { RegisterForm } from './register-form'
 import Link from 'next/link'
 import { Check } from 'lucide-react'
+import { AuthLogo } from '@/components/shared/auth-logo'
 
 export const metadata: Metadata = {
   title: 'Criar conta grátis',
@@ -22,12 +23,8 @@ export default function RegisterPage() {
     <div className="min-h-screen flex">
       {/* Lado esquerdo */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-orange-500 to-orange-700 flex-col justify-center p-12">
-        <div className="flex items-center gap-2 mb-12">
-          <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-            <span className="text-orange-600 font-bold text-sm">F</span>
-          </div>
-          <span className="text-white font-semibold text-lg">FoodSaaS</span>
-        </div>
+        {/* CORREÇÃO: marca "Meu Cardápio" + logo enviada pelo cliente */}
+        <AuthLogo variant="light" className="mb-12" />
 
         <h2 className="text-3xl font-bold text-white mb-3">
           7 dias grátis,<br />sem compromisso
@@ -51,12 +48,8 @@ export default function RegisterPage() {
       {/* Lado direito: formulário */}
       <div className="w-full lg:w-1/2 flex flex-col justify-center px-6 py-12 lg:px-16 overflow-y-auto">
         <div className="mx-auto w-full max-w-sm">
-          <div className="flex items-center gap-2 mb-8 lg:hidden">
-            <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">F</span>
-            </div>
-            <span className="font-semibold text-lg">FoodSaaS</span>
-          </div>
+          {/* CORREÇÃO: marca "Meu Cardápio" + logo enviada pelo cliente */}
+          <AuthLogo className="mb-8 lg:hidden" />
 
           <h1 className="text-2xl font-bold text-foreground mb-1">
             Criar conta grátis

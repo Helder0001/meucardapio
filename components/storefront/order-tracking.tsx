@@ -9,7 +9,6 @@ import {
 import { formatCurrency, formatOrderNumber } from '@/lib/utils/format'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
-import Image from 'next/image'
 
 const STATUS_STEPS = [
   { key: 'PENDING',          label: 'Recebido',    icon: Clock,        desc: 'Aguardando confirmação' },
@@ -61,6 +60,8 @@ interface OrderTrackingProps {
     }>
     payments: Payment[]
   }
+  // ✅ Token HMAC gerado no servidor para autorizar o polling
+  statusToken: string
 }
 
 // ─── Componente countdown PIX ────────────────────────────────────────────────
@@ -137,7 +138,6 @@ function PixSection({
     setTimeout(() => setCopied(false), 2500)
   }
 
-  // QR Code image: usar base64 se disponível
   const qrImageSrc = payment.pixQrCodeBase64
     ? `data:image/png;base64,${payment.pixQrCodeBase64}`
     : null
@@ -177,7 +177,6 @@ function PixSection({
 
       <div className="p-5 space-y-4">
         {expired ? (
-          /* QR Expirado */
           <div className="text-center py-8 space-y-3">
             <div className="w-16 h-16 rounded-3xl bg-red-50 dark:bg-red-950/20 flex items-center justify-center mx-auto">
               <AlertCircle className="w-8 h-8 text-red-400" />
@@ -196,7 +195,6 @@ function PixSection({
           </div>
         ) : (
           <>
-            {/* QR Code Image */}
             {qrImageSrc ? (
               <div className="flex justify-center">
                 <div className="relative p-3 bg-white rounded-2xl shadow-inner border border-gray-100">
@@ -220,7 +218,6 @@ function PixSection({
               </div>
             )}
 
-            {/* Countdown */}
             {payment.pixExpiresAt && (
               <PixCountdown
                 expiresAt={new Date(payment.pixExpiresAt)}
@@ -228,7 +225,6 @@ function PixSection({
               />
             )}
 
-            {/* Código copia e cola */}
             {payment.pixQrCode && (
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pix Copia e Cola</p>
@@ -254,7 +250,6 @@ function PixSection({
               </div>
             )}
 
-            {/* Instruções */}
             <div className="bg-blue-50 dark:bg-blue-950/20 rounded-2xl p-3 space-y-1.5">
               <p className="text-xs font-bold text-blue-700 dark:text-blue-300">Como pagar:</p>
               {[
@@ -281,7 +276,7 @@ function PixSection({
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export function OrderTracking({ order: initialOrder }: OrderTrackingProps) {
+export function OrderTracking({ order: initialOrder, statusToken }: OrderTrackingProps) {
   const [order, setOrder] = useState(initialOrder)
   const [isRefreshingPix, setIsRefreshingPix] = useState(false)
 
@@ -293,7 +288,7 @@ export function OrderTracking({ order: initialOrder }: OrderTrackingProps) {
   const currentStepIndex = steps.findIndex((s) => s.key === order.status)
   const statusMsg = STATUS_MESSAGES[order.status]
 
-  // Polling de status (a cada 5s enquanto ativo)
+  // ✅ Polling de status com token HMAC para autorizar a requisição
   useEffect(() => {
     const isDone = ['DELIVERED', 'CANCELLED', 'REFUNDED'].includes(order.status) && order.paymentStatus === 'PAID'
     if (isDone) return
@@ -312,7 +307,7 @@ export function OrderTracking({ order: initialOrder }: OrderTrackingProps) {
       } catch {}
     }, 5000)
     return () => clearInterval(interval)
-  }, [order.id, order.status, order.paymentStatus])
+  }, [order.id, order.status, order.paymentStatus, statusToken])
 
   // Regenerar PIX expirado
   const handleRefreshPix = useCallback(async () => {

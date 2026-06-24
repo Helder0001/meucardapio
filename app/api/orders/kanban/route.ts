@@ -31,16 +31,46 @@ export async function GET(request: Request) {
   }
 
   const tenantId = session.user.tenantId
+  const userId   = session.user.id
+  const role     = session.user.role
+
+  // Multi-PDV isolation: se o usuário está vinculado a PDV(s) específicos,
+  // só vê pedidos desses PDVs.
+  // Exceção: PDV do tipo DELIVERY também exibe pedidos online sem pdvId.
+  // Admin e Gerente veem tudo.
+  let pdvFilter: object | undefined
+  if (!['TENANT_ADMIN', 'MASTER_ADMIN', 'MANAGER'].includes(role)) {
+    const pdvAccess = await prisma.pDVUser.findMany({
+      where: { userId },
+      select: { pdvId: true, pdv: { select: { type: true } } },
+    })
+    if (pdvAccess.length > 0) {
+      const pdvIds = pdvAccess.map((p) => p.pdvId)
+      const hasDeliveryPdv = pdvAccess.some((p) => p.pdv.type === 'DELIVERY')
+
+      if (hasDeliveryPdv) {
+        // PDVs de entrega: vê pedidos dos seus PDVs OU pedidos delivery sem PDV (online)
+        pdvFilter = {
+          OR: [
+            { pdvId: { in: pdvIds } },
+            { pdvId: null, type: 'DELIVERY' },
+          ],
+        }
+      } else {
+        pdvFilter = { pdvId: { in: pdvIds } }
+      }
+    }
+  }
 
   // 2. Buscar estado inicial dos pedidos ativos
   const activeOrders = await prisma.order.findMany({
     where: {
       tenantId,
+      ...(pdvFilter ?? {}),
       status: {
         notIn: ['DELIVERED', 'CANCELLED', 'REFUNDED'],
       },
       createdAt: {
-        // Apenas pedidos das últimas 12 horas
         gte: new Date(Date.now() - 12 * 60 * 60 * 1000),
       },
     },
@@ -101,13 +131,17 @@ export async function GET(request: Request) {
       }, 30_000)
 
       // Criar cliente Redis dedicado para subscribe
-      // (não podemos usar o cliente principal enquanto está subscrito)
-      const subscriber = redis
-
+      // (o cliente principal não pode ser usado enquanto está no modo subscribe)
+      let subscriber: any = null
       try {
+        // Importar Redis e criar instância separada
+        const { Redis } = await import('@upstash/redis')
+        subscriber = new Redis({
+          url:   process.env.UPSTASH_REDIS_REST_URL!,
+          token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+        })
+
         // Inscrever no canal do tenant
-        // Quando createOrderAction ou updateOrderStatus publicar evento,
-        // este callback é chamado e envia o SSE para o cliente
         await (subscriber as any).subscribe(
           CacheKeys.orderChannel(tenantId),
           (message: string) => {
@@ -121,13 +155,14 @@ export async function GET(request: Request) {
         )
       } catch {
         // Redis Pub/Sub não disponível — modo degradado (apenas estado inicial)
+        subscriber = null
       }
 
       // Limpar quando o cliente desconectar
       request.signal.addEventListener('abort', () => {
         clearInterval(heartbeat)
         try {
-          ;(subscriber as any).unsubscribe?.()
+          if (subscriber) subscriber.unsubscribe?.()
         } catch {}
         try {
           controller.close()

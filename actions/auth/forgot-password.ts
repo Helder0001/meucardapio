@@ -62,12 +62,12 @@ async function sendPasswordResetEmail(email: string, name: string, resetUrl: str
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from:    process.env.EMAIL_FROM ?? 'noreply@foodsaas.com',
+      from:    process.env.EMAIL_FROM ?? 'noreply@meucardapio.com',
       to:      [email],
-      subject: 'Recuperação de senha — FoodSaaS',
+      subject: 'Recuperação de senha — Meu Cardápio',
       html: `
         <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
-          <h1 style="color:#f97316;font-size:24px;margin-bottom:8px">FoodSaaS</h1>
+          <h1 style="color:#f97316;font-size:24px;margin-bottom:8px">Meu Cardápio</h1>
           <p style="color:#374151;margin-bottom:16px">Olá${name ? `, ${name}` : ''}!</p>
           <p style="color:#374151;margin-bottom:24px">
             Recebemos uma solicitação para redefinir a senha da sua conta.

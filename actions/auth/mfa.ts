@@ -32,7 +32,7 @@ export async function generateMfaSecret(): Promise<{
   if (!user) return { secret: '', otpauthUrl: '', error: 'Usuário não encontrado' }
 
   const secret = authenticator.generateSecret()
-  const otpauthUrl = authenticator.keyuri(user.email, 'FoodSaaS', secret)
+  const otpauthUrl = authenticator.keyuri(user.email, 'Meu Cardápio', secret)
 
   // Armazenar secret criptografado temporariamente (pendente de verificação)
   await prisma.user.update({

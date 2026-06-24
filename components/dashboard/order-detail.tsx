@@ -6,17 +6,32 @@ import { useState, useTransition } from 'react'
 import { formatCurrency, formatDate, formatPhone, formatOrderNumber } from '@/lib/utils/format'
 import { OrderStatusBadge } from './order-status-badge'
 import { cn } from '@/lib/utils'
-import { Loader2, CheckCircle2, XCircle } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, CreditCard } from 'lucide-react'
 import { toast } from 'sonner'
 
 const PAYMENT_METHODS: Record<string, string> = {
   PIX:         '⚡ PIX',
   CASH:        '💵 Dinheiro',
-  CREDIT_CARD: '💳 Crédito',
-  DEBIT_CARD:  '💳 Débito',
+  CREDIT_CARD: '💳 Cartão de Crédito',
+  DEBIT_CARD:  '💳 Cartão de Débito',
   VOUCHER:     '🎟️ Voucher',
   CASHBACK:    '💰 Cashback',
+  TRANSFER:    '🏦 Transferência',
 }
+
+// Tradução dos status do histórico para português
+const STATUS_PT: Record<string, string> = {
+  PENDING:          'Recebido',
+  CONFIRMED:        'Confirmado',
+  PREPARING:        'Preparando',
+  READY:            'Pronto',
+  OUT_FOR_DELIVERY: 'Saiu p/ entrega',
+  DELIVERED:        'Entregue',
+  CANCELLED:        'Cancelado',
+}
+
+// Métodos que podem ser confirmados manualmente (não precisam de webhook)
+const MANUAL_METHODS = ['CASH', 'CREDIT_CARD', 'DEBIT_CARD', 'VOUCHER', 'TRANSFER']
 
 const STATUS_FLOW = [
   { key: 'PENDING',           label: 'Recebido' },
@@ -35,20 +50,90 @@ const NEXT_STATUS: Record<string, string> = {
   OUT_FOR_DELIVERY: 'DELIVERED',
 }
 
+// Para pedidos que não são delivery (mesa, retirada, balcão),
+// pula OUT_FOR_DELIVERY e vai direto de READY para DELIVERED.
+function getNextStatus(currentStatus: string, orderType: string): string | undefined {
+  if (currentStatus === 'READY' && orderType !== 'DELIVERY') return 'DELIVERED'
+  return NEXT_STATUS[currentStatus]
+}
+
 const NEXT_LABEL: Record<string, string> = {
   PENDING:          'Confirmar pedido',
   CONFIRMED:        'Iniciar preparo',
   PREPARING:        'Marcar como pronto',
-  READY:            'Saiu para entrega',
+  READY:            'Marcar como entregue',   // label genérico — sobrescrito abaixo para delivery
   OUT_FOR_DELIVERY: 'Marcar como entregue',
 }
 
-export function OrderDetail({ order }: { order: any }) {
-  const [status, setStatus] = useState(order.status)
-  const [isPending, start]  = useTransition()
+// Regras de avanço de status por role e tipo de pedido:
+//
+// DELIVERY_PERSON → só pedidos DELIVERY, fluxo completo (todas as etapas)
+// STAFF           → todos os tipos EXCETO marcar DELIVERED em DELIVERY
+// ATTENDANT       → todos os tipos EXCETO marcar DELIVERED em DELIVERY
+// MANAGER/ADMIN   → tudo liberado
+
+function getAllowedNextStatus(
+  status: string, orderType: string, role: string
+): { next: string; label: string } | undefined {
+  const isDelivery = orderType === 'DELIVERY'
+
+  // DELIVERY_PERSON: só pedidos DELIVERY, só saiu-p/entrega e entregue
+  if (role === 'DELIVERY_PERSON') {
+    if (!isDelivery) return undefined
+    if (status === 'READY')            return { next: 'OUT_FOR_DELIVERY', label: 'Saiu para entrega' }
+    if (status === 'OUT_FOR_DELIVERY') return { next: 'DELIVERED',        label: 'Marcar como entregue' }
+    return undefined
+  }
+
+  // STAFF: pode confirmar, preparar, pronto — mas NÃO entregue
+  if (role === 'STAFF') {
+    if (['PENDING', 'CONFIRMED', 'PREPARING'].includes(status)) {
+      return { next: getNextStatus(status, orderType)!, label: NEXT_LABEL[status] }
+    }
+    return undefined // READY e OUT_FOR_DELIVERY: sem ação de avanço
+  }
+
+  // MANAGER / TENANT_ADMIN: fluxo completo
+  const next = getNextStatus(status, orderType)
+  if (!next) return undefined
+  const label = status === 'READY' && isDelivery ? 'Saiu para entrega' : (NEXT_LABEL[status] ?? '')
+  return { next, label }
+}
+
+export function OrderDetail({ order, userRole }: { order: any; userRole: string }) {
+  const [status,   setStatus]   = useState(order.status)
+  const [payments, setPayments] = useState<any[]>(order.payments)
+  const [isPending, start]      = useTransition()
+
+  const isAttendant      = userRole === 'ATTENDANT'
+  const isStaff          = userRole === 'STAFF'
+  const isDeliveryPerson = userRole === 'DELIVERY_PERSON'
+
+  const nextAction   = getAllowedNextStatus(status, order.type, userRole)
+  const advanceTarget = nextAction?.next
+  const advanceLabel  = nextAction?.label
+
+  // Confirmar pagamento manual:
+  // - DELIVERY_PERSON: só após DELIVERED (pedido entregue, cobrança no ato)
+  // - ATTENDANT e STAFF: bloqueados em pedidos DELIVERY
+  // - Admin/Gerente: sempre
+  const canConfirmPayment = (payment: any) => {
+    if (payment.status === 'PAID') return false
+    const isManualMethod = ['CASH', 'CREDIT_CARD', 'DEBIT_CARD'].includes(payment.method)
+    if (!isManualMethod) return false
+    if (isDeliveryPerson) {
+      // Entregador só confirma pagamento de pedidos DELIVERY, e só após entregue
+      return order.type === 'DELIVERY' && status === 'DELIVERED'
+    }
+    if (order.type === 'DELIVERY') {
+      // ATTENDANT e STAFF não confirmam pagamento de delivery
+      if (isAttendant || isStaff) return false
+    }
+    return true
+  }
 
   const advanceStatus = () => {
-    const next = NEXT_STATUS[status]
+    const next = advanceTarget
     if (!next) return
     start(async () => {
       const res = await fetch(`/api/orders/${order.id}/update-status`, {
@@ -60,14 +145,15 @@ export function OrderDetail({ order }: { order: any }) {
         setStatus(next)
         toast.success('Status atualizado!')
       } else {
-        toast.error('Erro ao atualizar status')
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error ?? 'Erro ao atualizar status')
       }
     })
   }
 
   const cancelOrder = () => {
     const reason = prompt('Motivo do cancelamento (opcional):')
-    if (reason === null) return // clicou em cancelar no prompt
+    if (reason === null) return
     start(async () => {
       const res = await fetch(`/api/orders/${order.id}/update-status`, {
         method: 'PATCH',
@@ -79,6 +165,28 @@ export function OrderDetail({ order }: { order: any }) {
         toast.success('Pedido cancelado')
       } else {
         toast.error('Erro ao cancelar')
+      }
+    })
+  }
+
+  // Marca um pagamento manual como pago
+  const markPaymentPaid = (paymentId: string) => {
+    start(async () => {
+      const res = await fetch(`/api/orders/${order.id}/mark-paid`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentId }),
+      })
+      if (res.ok) {
+        setPayments((prev) =>
+          prev.map((p) =>
+            p.id === paymentId ? { ...p, status: 'PAID', paidAt: new Date().toISOString() } : p
+          )
+        )
+        toast.success('Pagamento confirmado!')
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error ?? 'Erro ao confirmar pagamento')
       }
     })
   }
@@ -114,9 +222,7 @@ export function OrderDetail({ order }: { order: any }) {
             const current = stepIdx === currentStep
             return (
               <div key={s.key} className="flex items-center flex-1 min-w-0">
-                <div className={cn(
-                  'flex flex-col items-center flex-shrink-0',
-                )}>
+                <div className="flex flex-col items-center flex-shrink-0">
                   <div className={cn(
                     'w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-all',
                     done    ? 'bg-emerald-500 border-emerald-500 text-white' :
@@ -141,25 +247,34 @@ export function OrderDetail({ order }: { order: any }) {
         {/* Botões de ação */}
         {!isDone && (
           <div className="flex gap-3">
-            {NEXT_STATUS[status] && (
+            {advanceTarget && (
               <button
                 onClick={advanceStatus}
                 disabled={isPending}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 disabled:opacity-60 transition-colors"
               >
                 {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                {NEXT_LABEL[status]}
+                {advanceLabel}
               </button>
             )}
-            <button
-              onClick={cancelOrder}
-              disabled={isPending}
-              className="flex items-center gap-2 px-4 py-2.5 border border-destructive/30 text-destructive text-sm font-medium rounded-lg hover:bg-destructive/5 disabled:opacity-60 transition-colors"
-            >
-              <XCircle className="h-4 w-4" />
-              Cancelar
-            </button>
+            {/* Cancelar — Atendente e Entregador não podem cancelar */}
+            {!isAttendant && !isDeliveryPerson && (
+              <button
+                onClick={cancelOrder}
+                disabled={isPending}
+                className="flex items-center gap-2 px-4 py-2.5 border border-destructive/30 text-destructive text-sm font-medium rounded-lg hover:bg-destructive/5 disabled:opacity-60 transition-colors"
+              >
+                <XCircle className="h-4 w-4" />
+                Cancelar
+              </button>
+            )}
           </div>
+        )}
+        {/* CORREÇÃO: operador sem ação de avanço disponível neste status */}
+        {!isDone && (isStaff || isDeliveryPerson || isAttendant) && !advanceTarget && (
+          <p className="text-xs text-muted-foreground mt-2">
+            Este pedido está em preparo na cozinha. Você poderá marcá-lo como entregue quando estiver pronto.
+          </p>
         )}
       </div>
 
@@ -237,29 +352,136 @@ export function OrderDetail({ order }: { order: any }) {
             </div>
           )}
 
-          {/* Pagamento */}
+          {/* Pagamentos — mostra TODOS */}
           <div className="bg-card border border-border rounded-xl p-4">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-3">Pagamento</h3>
-            {order.payments.length === 0 ? (
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-3">
+              Pagamento{payments.length > 1 ? 's' : ''}
+            </h3>
+            {payments.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhum pagamento</p>
-            ) : order.payments.map((p: any) => (
-              <div key={p.id}>
-                <p className="text-sm font-medium text-foreground">{PAYMENT_METHODS[p.method] ?? p.method}</p>
-                <p className="text-xs text-muted-foreground">{formatCurrency(p.amount)}</p>
-                {p.paidAt && <p className="text-xs text-emerald-600 dark:text-emerald-400">Pago {formatDate(p.paidAt)}</p>}
-                {p.changeAmount && <p className="text-xs text-muted-foreground">Troco: {formatCurrency(p.changeAmount)}</p>}
+            ) : (
+              <div className="space-y-3">
+                {payments.map((p: any, idx: number) => {
+                  const isManual  = MANUAL_METHODS.includes(p.method)
+                  const isPaid    = p.status === 'PAID'
+                  return (
+                    <div key={p.id} className={cn(
+                      'rounded-lg p-3 border',
+                      isPaid
+                        ? 'border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800'
+                        : 'border-border bg-muted/30'
+                    )}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {PAYMENT_METHODS[p.method] ?? p.method}
+                          </p>
+                          <p className="text-xs font-semibold text-foreground mt-0.5">
+                            {formatCurrency(p.amount)}
+                          </p>
+                          {p.changeAmount > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              Troco: {formatCurrency(p.changeAmount)}
+                            </p>
+                          )}
+                          {isPaid && p.paidAt && (
+                            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">
+                              ✓ Pago {formatDate(p.paidAt)}
+                            </p>
+                          )}
+                          {!isPaid && p.method === 'PIX' && (
+                            p.pixExpiresAt && new Date(p.pixExpiresAt) < new Date() ? (
+                              <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
+                                PIX expirado — gere um novo código
+                              </p>
+                            ) : (
+                              <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                                Aguardando confirmação PIX
+                              </p>
+                            )
+                          )}
+                          {!isPaid && isManual && (
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Pendente de confirmação
+                            </p>
+                          )}
+                        </div>
+                        {/* Confirmar pagamento — controlado por canConfirmPayment() */}
+                        {canConfirmPayment(p) && (
+                          <button
+                            onClick={() => markPaymentPaid(p.id)}
+                            disabled={isPending}
+                            title="Confirmar recebimento"
+                            className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 bg-primary text-white text-xs font-medium rounded-lg hover:bg-primary/90 disabled:opacity-60 transition-colors"
+                          >
+                            {isPending
+                              ? <Loader2 className="h-3 w-3 animate-spin" />
+                              : <CreditCard className="h-3 w-3" />
+                            }
+                            Confirmar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            ))}
+            )}
           </div>
 
-          {/* Meta */}
+          {/* Meta + Endereço de entrega */}
           <div className="bg-card border border-border rounded-xl p-4 text-xs text-muted-foreground space-y-1">
             <p>Criado: {formatDate(order.createdAt)}</p>
-            {order.waiter && <p>Garçom: {order.waiter.name}</p>}
-            {order.pdv    && <p>PDV: {order.pdv.name}</p>}
-            {order.deliveryBairro && <p>Bairro: {order.deliveryBairro}</p>}
-            {order.cancelReason   && <p className="text-destructive">Cancelado: {order.cancelReason}</p>}
+            {order.waiter    && <p>Operador: <span className="font-medium text-foreground">{order.waiter.name}</span></p>}
+            {order.createdBy && !order.waiter && <p>Operador: <span className="font-medium text-foreground">{order.createdBy.name}</span></p>}
+            {order.pdv       && <p>PDV: {order.pdv.name}</p>}
+            {order.type === 'DELIVERY' && (
+              <div className="mt-2 pt-2 border-t border-border">
+                <p className="font-semibold text-foreground mb-1">🛵 Endereço de entrega</p>
+                {order.deliveryAddress && (() => {
+                  const raw = order.deliveryAddress
+                  // Pode ser { address: "rua xxx" } ou objeto estruturado
+                  const addrStr = typeof raw === 'object' && raw !== null
+                    ? (raw as any).address ?? JSON.stringify(raw)
+                    : String(raw)
+                  return <p>{addrStr}</p>
+                })()}
+                {order.deliveryBairro && (
+                  <p className="mt-0.5">Bairro: {order.deliveryBairro}</p>
+                )}
+                {!order.deliveryAddress && !order.deliveryBairro && (
+                  <p className="italic text-muted-foreground">Endereço não informado</p>
+                )}
+              </div>
+            )}
+            {order.cancelReason && <p className="text-destructive">Cancelado: {order.cancelReason}</p>}
           </div>
+
+          {/* Histórico de status */}
+          {order.statusHistory?.length > 0 && (
+            <div className="bg-card border border-border rounded-xl p-4">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-3">Histórico</h3>
+              <div className="space-y-2">
+                {order.statusHistory.map((h: any, i: number) => (
+                  <div key={i} className="flex items-start gap-2 text-xs">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                    <div>
+                      <span className="font-medium text-foreground">{STATUS_PT[h.status] ?? h.status}</span>
+                      <span className="text-muted-foreground ml-1.5">{formatDate(h.createdAt)}</span>
+                      {h.user && (
+                        <span className="ml-1.5 text-muted-foreground">
+                          · por <span className="font-medium text-foreground">{h.user.name}</span>
+                        </span>
+                      )}
+                      {h.notes && !h.notes.startsWith('Alterado por') && (
+                        <p className="text-muted-foreground italic mt-0.5">{h.notes}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

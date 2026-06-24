@@ -7,7 +7,7 @@ import { formatCurrency } from '@/lib/utils/format'
 import { toggleProductActive } from '@/actions/products/toggle-active'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
-import { Edit2, Star, TrendingUp, Package } from 'lucide-react'
+import { Edit2, TrendingUp, Package, Trash2, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import Image from 'next/image'
 
@@ -31,6 +31,7 @@ interface ProductsListProps {
 export function ProductsList({ products, categories }: ProductsListProps) {
   const [filter, setFilter] = useState<string>('all')
   const [isPending, startTransition] = useTransition()
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const filtered = filter === 'all'
     ? products
@@ -47,7 +48,25 @@ export function ProductsList({ products, categories }: ProductsListProps) {
     })
   }
 
-  // Agrupar por categoria
+  const handleDelete = async (product: Product) => {
+    if (!confirm(`Excluir "${product.name}"? Esta ação não pode ser desfeita.`)) return
+    setDeletingId(product.id)
+    try {
+      const res = await fetch(`/api/products/${product.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        toast.success('Produto excluído com sucesso!')
+        window.location.reload()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data?.error ?? 'Erro ao excluir produto')
+      }
+    } catch {
+      toast.error('Erro ao excluir produto')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   const categoryNames = ['all', ...categories.map((c) => c.name)]
 
   return (
@@ -77,11 +96,12 @@ export function ProductsList({ products, categories }: ProductsListProps) {
             key={product.id}
             className={cn(
               'bg-card border border-border rounded-xl overflow-hidden transition-all',
-              !product.isActive && 'opacity-60'
+              !product.isActive && 'opacity-60',
+              deletingId === product.id && 'opacity-40 pointer-events-none'
             )}
           >
             {/* Imagem */}
-            <div className="h-36 bg-muted relative">
+            <div className="relative aspect-square bg-muted">
               {product.image ? (
                 <Image
                   src={product.image}
@@ -152,6 +172,19 @@ export function ProductsList({ products, categories }: ProductsListProps) {
                   >
                     <Edit2 className="h-3.5 w-3.5" />
                   </Link>
+
+                  {/* Excluir */}
+                  <button
+                    onClick={() => handleDelete(product)}
+                    disabled={deletingId === product.id}
+                    title="Excluir produto"
+                    className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-md transition-colors"
+                  >
+                    {deletingId === product.id
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <Trash2 className="h-3.5 w-3.5" />
+                    }
+                  </button>
                 </div>
               </div>
             </div>
