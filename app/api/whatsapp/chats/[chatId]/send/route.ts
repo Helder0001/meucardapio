@@ -38,7 +38,6 @@ export async function POST(
     data: {
       chatId: chat.id,
       tenantId: session.user.tenantId,
-      tenantId: session.user.tenantId,
       body: body.trim(),
       fromMe: true,
       sentById: session.user.id,
