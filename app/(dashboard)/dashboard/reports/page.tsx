@@ -162,7 +162,17 @@ export default async function ReportsPage({ searchParams }: PageProps) {
       orderBy: { name: 'asc' },
     }),
     prisma.user.findMany({
-      where: { tenantId, isActive: true },
+      where: {
+        tenantId,
+        isActive: true,
+        // filtra apenas roles válidas no enum atual — ignora valores legados como 'WAITER'
+        role: {
+          in: [
+            'MASTER_ADMIN', 'TENANT_ADMIN', 'MANAGER',
+            'ATTENDANT', 'STAFF', 'DELIVERY_PERSON',
+          ] as any[],
+        },
+      },
       select: { id: true, name: true, role: true },
       orderBy: { name: 'asc' },
     }),
