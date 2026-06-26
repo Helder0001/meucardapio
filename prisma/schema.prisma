@@ -147,6 +147,7 @@ model Tenant {
   whatsappConfig     WhatsappConfig?
   mercadoPagoConnection MercadoPagoConnection?
   whatsappChats      WhatsappChat[]
+  reportSchedules    ReportSchedule[]
   notifications      Notification[]
   auditLogs          AuditLog[]
   payments           Payment[]
@@ -214,6 +215,7 @@ model User {
   ordersAsWaiter    Order[]   @relation("AssignedWaiter")
   statusHistoryEntries OrderStatusHistory[] @relation("StatusHistoryUser")
   sentMessages         WhatsappMessage[]    @relation("SentMessages")
+  createdSchedules     ReportSchedule[]     @relation("CreatedSchedules")
   tableSessions     TableSession[]
   auditLogs         AuditLog[]
 
@@ -1014,4 +1016,25 @@ model AuditLog {
   @@index([action])
   @@index([resource, resourceId])
   @@index([createdAt])
+}
+
+model ReportSchedule {
+  id          String   @id @default(cuid())
+  tenantId    String
+  createdById String?
+  email       String
+  frequency   String   // DAILY | WEEKLY | MONTHLY
+  reportType  String   // orders | products
+  dayOfWeek   Int?     // 0=dom … 6=sab (para WEEKLY)
+  hour        Int      @default(8)
+  isActive    Boolean  @default(true)
+  lastSentAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id])
+  createdBy User?  @relation("CreatedSchedules", fields: [createdById], references: [id])
+
+  @@index([tenantId])
+  @@index([isActive, hour])
 }
