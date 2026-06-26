@@ -21,6 +21,10 @@
     {
       "path": "/api/internal/cron/whatsapp-reconnect",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/reports",
+      "schedule": "0 * * * *"
     }
   ],
   "headers": [
