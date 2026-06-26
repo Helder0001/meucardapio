@@ -5,28 +5,7 @@
   "regions": [
     "gru1"
   ],
-  "crons": [
-    {
-      "path": "/api/internal/cron/subscription-check",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/internal/cron/loyalty-expire",
-      "schedule": "0 3 * * 0"
-    },
-    {
-      "path": "/api/internal/cron/cleanup",
-      "schedule": "0 2 * * *"
-    },
-    {
-      "path": "/api/internal/cron/whatsapp-reconnect",
-      "schedule": "0 8 * * *"
-    },
-    {
-      "path": "/api/cron/reports",
-      "schedule": "0 * * * *"
-    }
-  ],
+  "crons": [],
   "headers": [
     {
       "source": "/(.*)",

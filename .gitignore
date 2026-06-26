@@ -54,3 +54,4 @@ cookies.txt
 *.cookies.txt
 *.session
 curl-cookies.txt
+.env*
