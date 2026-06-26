@@ -168,17 +168,6 @@ export function ReportsClient({
   const [start, setStart] = useState(startDate)
   const [end,   setEnd]   = useState(endDate)
   const [exporting, setExporting] = useState<string | null>(null)
-  const [showEmailModal, setShowEmailModal]     = useState(false)
-  const [showScheduleModal, setShowScheduleModal] = useState(false)
-  const [emailTo, setEmailTo]     = useState('')
-  const [emailType, setEmailType] = useState('orders')
-  const [sendingEmail, setSendingEmail] = useState(false)
-  const [schedFreq, setSchedFreq]   = useState('DAILY')
-  const [schedType, setSchedType]   = useState('orders')
-  const [schedEmail, setSchedEmail] = useState('')
-  const [schedDow, setSchedDow]     = useState(1)
-  const [schedHour, setSchedHour]   = useState(8)
-  const [savingSchedule, setSavingSchedule] = useState(false)
 
   const [pdv,      setPdv]      = useState(filterPdv)
   const [payment,  setPayment]  = useState(filterPayment)
@@ -320,6 +309,18 @@ export function ReportsClient({
     { label: '30 dias',    action: () => setPreset('30 dias', 30) },
     { label: 'Este mês',   action: setCurrentMonth },
     ]
+
+  const [showEmailModal, setShowEmailModal]     = useState(false)
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [emailTo, setEmailTo]     = useState('')
+  const [emailType, setEmailType] = useState('orders')
+  const [sendingEmail, setSendingEmail] = useState(false)
+  const [schedFreq, setSchedFreq]   = useState('DAILY')
+  const [schedType, setSchedType]   = useState('orders')
+  const [schedEmail, setSchedEmail] = useState('')
+  const [schedDow, setSchedDow]     = useState(1)
+  const [schedHour, setSchedHour]   = useState(8)
+  const [savingSchedule, setSavingSchedule] = useState(false)
 
   const sendEmail = async () => {
     if (!emailTo || !emailTo.includes('@')) { toast.error('E-mail inválido'); return }
