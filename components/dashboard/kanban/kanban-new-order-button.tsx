@@ -1,22 +1,33 @@
 'use client'
 // components/dashboard/kanban/kanban-new-order-button.tsx
 // Botão "Novo Pedido" com modal para criar pedido manual no balcão/PDV
+// NOVO: suporte a vínculo de mesa + tipo TABLE ao criar pedido no balcão
 
 import { useState, useTransition } from 'react'
-import { Plus, X, Loader2, Minus, ShoppingBag } from 'lucide-react'
+import { Plus, X, Loader2, Minus, ShoppingBag, Table2 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils/format'
 import { createOrderAction } from '@/actions/orders/create-order'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import { cn } from '@/lib/utils'
 
 interface Product { id: string; name: string; price: number }
 interface Category { id: string; name: string; products: Product[] }
+
+interface TableOption {
+  id: string
+  number: number
+  sector: string
+  status: string
+  pdvName: string
+}
 
 interface Props {
   tenantId: string
   pdvId?: string
   createdByUserId?: string
   categories: Category[]
+  tables?: TableOption[]
 }
 
 interface OrderItem {
@@ -31,11 +42,26 @@ interface PaymentEntry { method: PaymentMethodType; amount: number }
 
 interface PixData { qrCode: string; qrCodeBase64: string }
 
-export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categories }: Props) {
+const TABLE_STATUS_COLOR: Record<string, string> = {
+  AVAILABLE: 'text-emerald-600',
+  OCCUPIED:  'text-red-500',
+  RESERVED:  'text-yellow-600',
+  CLEANING:  'text-blue-500',
+}
+const TABLE_STATUS_LABEL: Record<string, string> = {
+  AVAILABLE: 'Livre',
+  OCCUPIED:  'Ocupada',
+  RESERVED:  'Reservada',
+  CLEANING:  'Limpeza',
+}
+
+export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categories, tables = [] }: Props) {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<OrderItem[]>([])
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerName, setCustomerName] = useState('')
+  // NOVO: mesa vinculada ao pedido
+  const [selectedTableId, setSelectedTableId] = useState<string>('')
   // CORREÇÃO: suporta múltiplas formas de pagamento no mesmo pedido (split)
   const [payments, setPayments] = useState<PaymentEntry[]>([{ method: 'PIX', amount: 0 }])
   const [notes, setNotes] = useState('')
@@ -81,6 +107,9 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
     setPayments((prev) => prev.map((p, i) => i === idx ? { ...p, amount } : p))
   }
 
+  // NOVO: pedido com mesa usa tipo TABLE, sem mesa usa PDV
+  const orderType = selectedTableId ? 'TABLE' : 'PDV'
+
   const handleSubmit = () => {
     if (items.length === 0) { toast.error('Adicione pelo menos um item'); return }
     // Com 1 só forma de pagamento, o valor é sempre o total do pedido.
@@ -99,7 +128,8 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
         const result = await createOrderAction({
           tenantId,
           items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, addonIds: [] })),
-          type: 'PDV',
+          type: orderType,
+          tableId: selectedTableId || undefined,
           pdvId,
           createdByUserId,
           customerPhone: customerPhone || undefined,
@@ -133,6 +163,7 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
     setPayments([{ method: 'PIX', amount: 0 }])
     setPayNow(true)
     setPixData(null); setCopied(false)
+    setSelectedTableId('')
   }
 
   const copyPixCode = async () => {
@@ -145,6 +176,15 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
       toast.error('Não foi possível copiar')
     }
   }
+
+  // Agrupa mesas por setor para exibição
+  const tablesBySector = tables.reduce<Record<string, TableOption[]>>((acc, t) => {
+    if (!acc[t.sector]) acc[t.sector] = []
+    acc[t.sector].push(t)
+    return acc
+  }, {})
+
+  const selectedTable = tables.find((t) => t.id === selectedTableId)
 
   return (
     <>
@@ -203,6 +243,74 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
             ) : (
               <>
             <div className="flex-1 overflow-y-auto p-5 space-y-5">
+
+              {/* ── NOVO: Vínculo de mesa ─────────────────────────────────── */}
+              {tables.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                      <Table2 className="h-4 w-4 text-primary" />
+                      Mesa (opcional)
+                    </p>
+                    {selectedTableId && (
+                      <button
+                        onClick={() => setSelectedTableId('')}
+                        className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                      >
+                        <X className="h-3 w-3" /> Remover mesa
+                      </button>
+                    )}
+                  </div>
+
+                  {selectedTableId ? (
+                    <div className="flex items-center gap-3 p-3 rounded-xl border border-primary/30 bg-primary/5">
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center font-bold text-primary text-lg">
+                        {selectedTable?.number}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">
+                          Mesa {selectedTable?.number} — {selectedTable?.sector}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{selectedTable?.pdvName}</p>
+                      </div>
+                      <span className={cn('ml-auto text-xs font-medium', TABLE_STATUS_COLOR[selectedTable?.status ?? 'AVAILABLE'])}>
+                        {TABLE_STATUS_LABEL[selectedTable?.status ?? 'AVAILABLE']}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-36 overflow-y-auto rounded-xl border border-border p-2">
+                      {Object.entries(tablesBySector).map(([sector, sectorTables]) => (
+                        <div key={sector}>
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1 mb-1">
+                            {sector}
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {sectorTables.map((t) => (
+                              <button
+                                key={t.id}
+                                onClick={() => setSelectedTableId(t.id)}
+                                className={cn(
+                                  'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors',
+                                  t.status === 'AVAILABLE'
+                                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400'
+                                    : 'border-border bg-muted text-muted-foreground hover:bg-muted/70'
+                                )}
+                              >
+                                {t.number}
+                                <span className="ml-1 opacity-60">{TABLE_STATUS_LABEL[t.status] ?? t.status}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Selecionar uma mesa cria o pedido como "Mesa" em vez de "Balcão".
+                  </p>
+                </div>
+              )}
+
               {/* Produtos */}
               <div>
                 <p className="text-sm font-semibold text-foreground mb-3">Selecionar produtos</p>
@@ -360,6 +468,12 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
                   </div>
                 </div>
               )}
+              {/* Indicador do tipo de pedido */}
+              <p className="text-[10px] text-muted-foreground mb-2 text-center">
+                {selectedTable
+                  ? `🍽️ Pedido vinculado à Mesa ${selectedTable.number} — ${selectedTable.sector}`
+                  : '💳 Pedido de Balcão (sem mesa)'}
+              </p>
               <button
                 onClick={handleSubmit}
                 disabled={isPending || items.length === 0}
