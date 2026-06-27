@@ -24,25 +24,26 @@ export default async function KanbanPage() {
       })
     : null
 
-  const [categories, tables] = await Promise.all([
-    prisma.category.findMany({
-      where: { tenantId: session.user.tenantId, isActive: true },
-      select: {
-        id: true, name: true,
-        products: {
-          where: { isActive: true },
-          select: { id: true, name: true, price: true },
-          orderBy: { sortOrder: 'asc' },
-        },
+  const categories = await prisma.category.findMany({
+    where: { tenantId: session.user.tenantId, isActive: true },
+    select: {
+      id: true, name: true,
+      products: {
+        where: { isActive: true },
+        select: { id: true, name: true, price: true },
+        orderBy: { sortOrder: 'asc' },
       },
-      orderBy: { sortOrder: 'asc' },
-    }),
-    // Buscar mesas ativas para vincular ao pedido PDV/Balcão
-    prisma.table.findMany({
+    },
+    orderBy: { sortOrder: 'asc' },
+  })
+
+  // Buscar mesas ativas — em try/catch para não quebrar o kanban se falhar
+  let tables: Array<{ id: string; number: number; sector: string; status: string; pdv: { id: string; name: string } }> = []
+  try {
+    tables = await prisma.table.findMany({
       where: {
         tenantId: session.user.tenantId,
         isActive: true,
-        // Se o usuário pertence a um PDV específico, filtra só as mesas daquele PDV
         ...(userPdv?.pdvId ? { pdvId: userPdv.pdvId } : {}),
       },
       select: {
@@ -52,9 +53,11 @@ export default async function KanbanPage() {
         status: true,
         pdv: { select: { id: true, name: true } },
       },
-      orderBy: [{ sector: 'asc' }, { number: 'asc' }],
-    }),
-  ])
+      orderBy: { number: 'asc' },
+    })
+  } catch (e) {
+    console.error('[kanban] Erro ao buscar mesas:', e)
+  }
 
   return (
     <div className="space-y-4">
