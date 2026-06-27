@@ -161,8 +161,6 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
   const isAttendant      = userRole === 'ATTENDANT'
   const isStaff          = userRole === 'STAFF'
   const isDeliveryPerson = userRole === 'DELIVERY_PERSON'
-  const isStaff          = userRole === 'STAFF'
-  const isDeliveryPerson = userRole === 'DELIVERY_PERSON'
 
   const nextAction   = getAllowedNextStatus(status, order.type, userRole)
   const advanceTarget = nextAction?.next
