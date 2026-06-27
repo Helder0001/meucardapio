@@ -112,12 +112,15 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
   const [showAddPayment, setShowAddPayment]     = useState(false)
   const [addPayments, setAddPayments]           = useState<AddPaymentEntry[]>([{ method: 'CASH', amount: Number(order.total) }])
   const [isAddingPayment, startAddPayment]      = useTransition()
+  // QR Code PIX após registrar pagamento posterior
+  const [addPixData, setAddPixData]             = useState<{ qrCode: string; qrCodeBase64: string } | null>(null)
+  const [addPixCopied, setAddPixCopied]         = useState(false)
 
   const totalOrder   = Number(order.total)
   const alreadyPaid  = payments.reduce((s: number, p: any) => s + Number(p.amount), 0)
   const stillOwed    = Math.max(0, Math.round((totalOrder - alreadyPaid) * 100) / 100)
 
-  const addPaymentsSum    = addPayments.reduce((s, p) => s + (p.amount || 0), 0)
+  const addPaymentsSum      = addPayments.reduce((s, p) => s + (p.amount || 0), 0)
   const addPaymentRemaining = Math.round((stillOwed - addPaymentsSum) * 100) / 100
 
   // Só mostra o botão de adicionar pagamento em pedidos PDV/TABLE/PICKUP
@@ -154,8 +157,25 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
       ])
       setShowAddPayment(false)
       setAddPayments([{ method: 'CASH', amount: stillOwed }])
-      toast.success('Pagamento registrado! Confirme o recebimento quando efetivado.')
+
+      // Se veio QR Code PIX, exibir modal
+      if (data.pixQrCode && data.pixQrCodeBase64) {
+        setAddPixData({ qrCode: data.pixQrCode, qrCodeBase64: data.pixQrCodeBase64 })
+      } else {
+        toast.success('Pagamento registrado! Confirme o recebimento quando efetivado.')
+      }
     })
+  }
+
+  const copyAddPixCode = async () => {
+    if (!addPixData) return
+    try {
+      await navigator.clipboard.writeText(addPixData.qrCode)
+      setAddPixCopied(true)
+      setTimeout(() => setAddPixCopied(false), 2000)
+    } catch {
+      toast.error('Não foi possível copiar')
+    }
   }
 
   const isAttendant      = userRole === 'ATTENDANT'
@@ -646,6 +666,48 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
           )}
         </div>
       </div>
+
+      {/* ── Modal QR Code PIX (pagamento posterior) ───────────────────────── */}
+      {addPixData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setAddPixData(null)} />
+          <div className="relative w-full max-w-sm bg-card border border-border rounded-2xl shadow-2xl p-6 flex flex-col items-center gap-4">
+            <div className="text-center">
+              <h3 className="font-bold text-foreground text-lg">Aguardando PIX</h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                Peça ao cliente escanear o QR Code ou usar o código copia e cola. Expira em 5 minutos.
+              </p>
+            </div>
+            <img
+              src={`data:image/png;base64,${addPixData.qrCodeBase64}`}
+              alt="QR Code PIX"
+              className="w-52 h-52 rounded-xl border border-border"
+            />
+            <div className="w-full">
+              <p className="text-xs font-medium text-foreground mb-1">Código copia e cola</p>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={addPixData.qrCode}
+                  className="flex-1 px-3 py-2 text-xs border border-input rounded-lg bg-muted truncate"
+                />
+                <button
+                  onClick={copyAddPixCode}
+                  className="px-3 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex-shrink-0"
+                >
+                  {addPixCopied ? 'Copiado!' : 'Copiar'}
+                </button>
+              </div>
+            </div>
+            <button
+              onClick={() => setAddPixData(null)}
+              className="w-full px-4 py-2.5 bg-muted text-foreground text-sm font-semibold rounded-lg hover:bg-muted/70 transition-colors"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
