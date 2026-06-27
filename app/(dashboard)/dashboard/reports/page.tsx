@@ -269,39 +269,27 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   const prevAvgTicket = previous._count.id > 0 ? prevRevenue / previous._count.id : 0
 
   // ── Clientes ─────────────────────────────────────────────────────────────
-  // Cliente recorrente = fez mais de 1 pedido no histórico total do tenant
-  // (independente do período selecionado no filtro)
+  // Recorrente = fez 2+ pedidos no período analisado (histórico total se sem filtro)
   let totalClients = 0, newClients = 0, returningClients = 0, returnRate = 0
   try {
-    // Telefones únicos que fizeram pedido NO PERÍODO ATUAL
-    const currentOrders = await prisma.order.findMany({
+    // Busca todos os pedidos do período com telefone do cliente
+    const periodOrders = await prisma.order.findMany({
       where: { ...baseWhere },
       select: { customer: { select: { phone: true } } },
     })
-    const currPhones = [...new Set(
-      currentOrders.map((o) => o.customer?.phone).filter(Boolean) as string[]
-    )]
 
-    totalClients = currPhones.length
-    if (totalClients > 0) {
-      // Para cada telefone do período atual, verifica se já fez pedido
-      // ANTES do início do período (histórico completo)
-      const prevOrders2 = await prisma.order.findMany({
-        where: {
-          tenantId,
-          status: PAID_STATUS_FILTER,
-          createdAt: { lt: startDate }, // qualquer pedido antes do período atual
-          customer: { phone: { in: currPhones } },
-        },
-        select: { customer: { select: { phone: true } } },
-      })
-      const prevPhones = new Set(
-        prevOrders2.map((o) => o.customer?.phone).filter(Boolean) as string[]
-      )
-      returningClients = currPhones.filter((p) => prevPhones.has(p)).length
-      newClients       = totalClients - returningClients
-      returnRate       = (returningClients / totalClients) * 100
+    // Conta quantos pedidos cada telefone fez no período
+    const phoneCount = new Map<string, number>()
+    for (const o of periodOrders) {
+      const phone = o.customer?.phone
+      if (!phone) continue
+      phoneCount.set(phone, (phoneCount.get(phone) ?? 0) + 1)
     }
+
+    totalClients     = phoneCount.size
+    returningClients = [...phoneCount.values()].filter((n) => n >= 2).length
+    newClients       = totalClients - returningClients
+    returnRate       = totalClients > 0 ? (returningClients / totalClients) * 100 : 0
   } catch (e) { console.error('[reports] clients error:', e) }
 
   return (
