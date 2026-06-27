@@ -111,16 +111,10 @@ export async function POST(
   }
 
   // ── Criar pagamentos ──────────────────────────────────────────────────────
-  const now = new Date()
-  const MANUAL_METHODS = ['CASH', 'CREDIT_CARD', 'DEBIT_CARD', 'VOUCHER', 'TRANSFER']
-
   const createdPayments: Array<{ id: string; method: string; status: string; amount: number }> = []
 
   await prisma.$transaction(async (tx) => {
     for (const p of payments) {
-      const isManual = MANUAL_METHODS.includes(p.method)
-      const status   = isManual ? 'PENDING' : 'PENDING' // PIX fica PENDING até webhook
-
       // Calcular troco para dinheiro
       let changeAmount: number | undefined
       if (p.method === 'CASH' && p.changeFor && p.changeFor > p.amount) {
@@ -133,11 +127,8 @@ export async function POST(
           orderId,
           method:       p.method as any,
           amount:       p.amount,
-          status:       status as any,
-          changeAmount: changeAmount ?? null,
-          // Para pagamentos manuais confirmados imediatamente (dinheiro, cartão)
-          // o operador ainda precisará clicar em "Confirmar" no order-detail,
-          // exatamente como no fluxo normal.
+          status:       'PENDING' as any,
+          ...(changeAmount !== undefined ? { changeAmount } : {}),
         },
       })
       createdPayments.push({ id: created.id, method: created.method, status: created.status, amount: Number(created.amount) })
