@@ -14,7 +14,7 @@ import {
   TrendingUp, TrendingDown, Minus, FileText, FileSpreadsheet,
   Loader2, Calendar, SlidersHorizontal, ChevronDown, ChevronUp,
   ShoppingBag, DollarSign, Users, Receipt, CreditCard,
-  Flame, Clock, Pizza, Mail, CalendarClock,
+  Flame, Clock, Pizza,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -309,55 +309,6 @@ export function ReportsClient({
     { label: '30 dias',    action: () => setPreset('30 dias', 30) },
     { label: 'Este mês',   action: setCurrentMonth },
     ]
-
-  const [showEmailModal, setShowEmailModal]     = useState(false)
-  const [showScheduleModal, setShowScheduleModal] = useState(false)
-  const [emailTo, setEmailTo]     = useState('')
-  const [emailType, setEmailType] = useState('orders')
-  const [sendingEmail, setSendingEmail] = useState(false)
-  const [schedFreq, setSchedFreq]   = useState('DAILY')
-  const [schedType, setSchedType]   = useState('orders')
-  const [schedEmail, setSchedEmail] = useState('')
-  const [schedDow, setSchedDow]     = useState(1)
-  const [schedHour, setSchedHour]   = useState(8)
-  const [savingSchedule, setSavingSchedule] = useState(false)
-
-  const sendEmail = async () => {
-    if (!emailTo || !emailTo.includes('@')) { toast.error('E-mail inválido'); return }
-    setSendingEmail(true)
-    try {
-      const res = await fetch('/api/reports/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: emailTo, type: emailType, start: startDate, end: endDate }),
-      })
-      const data = await res.json()
-      if (!res.ok) { toast.error(data.error ?? 'Erro ao enviar'); return }
-      toast.success(`Relatório enviado para ${emailTo}!`)
-      setShowEmailModal(false)
-    } catch { toast.error('Erro de conexão') }
-    finally { setSendingEmail(false) }
-  }
-
-  const saveSchedule = async () => {
-    if (!schedEmail || !schedEmail.includes('@')) { toast.error('E-mail inválido'); return }
-    setSavingSchedule(true)
-    try {
-      const res = await fetch('/api/reports/schedule', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: schedEmail, frequency: schedFreq, reportType: schedType,
-          dayOfWeek: schedFreq === 'WEEKLY' ? schedDow : undefined, hour: schedHour,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) { toast.error(data.error ?? 'Erro ao salvar'); return }
-      toast.success('Agendamento criado! Você receberá o relatório por e-mail.')
-      setShowScheduleModal(false)
-    } catch { toast.error('Erro de conexão') }
-    finally { setSavingSchedule(false) }
-  }
 
   return (
     <div className="space-y-5 pb-10">
@@ -849,14 +800,12 @@ export function ReportsClient({
         <p className="text-xs text-muted-foreground mb-4">
           Período: {startDate.split('-').reverse().join('/')} até {endDate.split('-').reverse().join('/')}
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-2 gap-3">
           {([
-            { type: 'orders',   format: 'xlsx', label: 'Pedidos Excel',   sub: 'Arquivo .xlsx', icon: FileSpreadsheet, color: 'text-emerald-600', bg: 'bg-emerald-100 dark:bg-emerald-900/30', action: 'download' },
-            { type: 'orders',   format: 'pdf',  label: 'Pedidos PDF',     sub: 'Arquivo .pdf',  icon: FileText,        color: 'text-red-500',     bg: 'bg-red-100 dark:bg-red-900/30',       action: 'download' },
-            { type: 'products', format: 'xlsx', label: 'Produtos Excel',  sub: 'Arquivo .xlsx', icon: FileSpreadsheet, color: 'text-teal-600',    bg: 'bg-teal-100 dark:bg-teal-900/30',     action: 'download' },
-            { type: 'products', format: 'pdf',  label: 'Produtos PDF',    sub: 'Arquivo .pdf',  icon: FileText,        color: 'text-orange-500',  bg: 'bg-orange-100 dark:bg-orange-900/30', action: 'download' },
-            { type: 'orders',   format: 'xlsx', label: 'Enviar por e-mail', sub: 'Em breve',    icon: Mail,            color: 'text-blue-600',    bg: 'bg-blue-100 dark:bg-blue-900/30',     action: 'soon' },
-            { type: 'orders',   format: 'xlsx', label: 'Agendar relatório', sub: 'Em breve',    icon: CalendarClock,   color: 'text-purple-600',  bg: 'bg-purple-100 dark:bg-purple-900/30', action: 'soon' },
+            { type: 'orders',   format: 'xlsx', label: 'Pedidos Excel',   sub: 'Arquivo .xlsx', icon: FileSpreadsheet, color: 'text-emerald-600', bg: 'bg-emerald-100 dark:bg-emerald-900/30' },
+            { type: 'orders',   format: 'pdf',  label: 'Pedidos PDF',     sub: 'Arquivo .pdf',  icon: FileText,        color: 'text-red-500',     bg: 'bg-red-100 dark:bg-red-900/30'         },
+            { type: 'products', format: 'xlsx', label: 'Produtos Excel',  sub: 'Arquivo .xlsx', icon: FileSpreadsheet, color: 'text-teal-600',    bg: 'bg-teal-100 dark:bg-teal-900/30'       },
+            { type: 'products', format: 'pdf',  label: 'Produtos PDF',    sub: 'Arquivo .pdf',  icon: FileText,        color: 'text-orange-500',  bg: 'bg-orange-100 dark:bg-orange-900/30'   },
           ] as const).map((exp) => {
             const key = `${exp.type}-${exp.format}`
             const isLoading = exporting === key
@@ -864,9 +813,9 @@ export function ReportsClient({
             return (
               <button
                 key={key}
-                onClick={() => exp.action === 'soon' && exp.label.includes('e-mail') ? setShowEmailModal(true) : exp.action === 'soon' && exp.label.includes('gendar') ? setShowScheduleModal(true) : exportFile(exp.format as 'xlsx' | 'pdf', exp.type, exp.label)}
-                disabled={!!exporting && exp.action !== 'soon'}
-                className={cn("flex items-center gap-3 p-4 border border-border rounded-xl hover:bg-muted/50 disabled:opacity-60 transition-colors text-left", exp.action === 'soon' && 'opacity-60 cursor-not-allowed')}
+                onClick={() => exportFile(exp.format as 'xlsx' | 'pdf', exp.type, exp.label)}
+                disabled={!!exporting}
+                className="flex items-center gap-3 p-4 border border-border rounded-xl hover:bg-muted/50 disabled:opacity-60 transition-colors text-left"
               >
                 <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0', exp.bg)}>
                   {isLoading
@@ -882,109 +831,6 @@ export function ReportsClient({
           })}
         </div>
       </div>
-      {/* ── Modal Enviar por E-mail ── */}
-      {showEmailModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-xl">
-            <h3 className="font-semibold text-foreground text-lg mb-4">Enviar relatório por e-mail</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground block mb-1">Tipo de relatório</label>
-                <select value={emailType} onChange={e => setEmailType(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring">
-                  <option value="orders">Pedidos</option>
-                  <option value="products">Produtos mais vendidos</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground block mb-1">Enviar para</label>
-                <input type="email" value={emailTo} onChange={e => setEmailTo(e.target.value)}
-                  placeholder="email@exemplo.com"
-                  className="w-full px-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Período: {startDate.split('-').reverse().join('/')} até {endDate.split('-').reverse().join('/')}
-              </p>
-            </div>
-            <div className="flex gap-2 mt-5">
-              <button onClick={() => setShowEmailModal(false)}
-                className="flex-1 px-4 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors">
-                Cancelar
-              </button>
-              <button onClick={sendEmail} disabled={sendingEmail}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-60 transition-colors">
-                {sendingEmail ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-                {sendingEmail ? 'Enviando...' : 'Enviar agora'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Modal Agendar Relatório ── */}
-      {showScheduleModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-md shadow-xl">
-            <h3 className="font-semibold text-foreground text-lg mb-4">Agendar relatório automático</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground block mb-1">Tipo de relatório</label>
-                <select value={schedType} onChange={e => setSchedType(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring">
-                  <option value="orders">Pedidos</option>
-                  <option value="products">Produtos mais vendidos</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground block mb-1">Frequência</label>
-                <select value={schedFreq} onChange={e => setSchedFreq(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring">
-                  <option value="DAILY">Diário (todo dia)</option>
-                  <option value="WEEKLY">Semanal (1x por semana)</option>
-                  <option value="MONTHLY">Mensal (dia 1 de cada mês)</option>
-                </select>
-              </div>
-              {schedFreq === 'WEEKLY' && (
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground block mb-1">Dia da semana</label>
-                  <select value={schedDow} onChange={e => setSchedDow(Number(e.target.value))}
-                    className="w-full px-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring">
-                    {['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'].map((d,i) => (
-                      <option key={i} value={i}>{d}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div>
-                <label className="text-sm font-medium text-muted-foreground block mb-1">Horário de envio</label>
-                <select value={schedHour} onChange={e => setSchedHour(Number(e.target.value))}
-                  className="w-full px-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring">
-                  {[6,7,8,9,10,12,18,20,22].map(h => (
-                    <option key={h} value={h}>{h}:00h</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground block mb-1">Enviar para</label>
-                <input type="email" value={schedEmail} onChange={e => setSchedEmail(e.target.value)}
-                  placeholder="email@exemplo.com"
-                  className="w-full px-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-5">
-              <button onClick={() => setShowScheduleModal(false)}
-                className="flex-1 px-4 py-2 text-sm border border-border rounded-lg hover:bg-muted transition-colors">
-                Cancelar
-              </button>
-              <button onClick={saveSchedule} disabled={savingSchedule}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-60 transition-colors">
-                {savingSchedule ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarClock className="h-4 w-4" />}
-                {savingSchedule ? 'Salvando...' : 'Criar agendamento'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
