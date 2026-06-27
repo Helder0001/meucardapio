@@ -113,10 +113,10 @@ export async function createOrderAction(
         ? [{ method: data.paymentMethod, amount: 0 /* será preenchido com o total calculado */, changeFor: data.changeFor }]
         : []
 
-  if (paymentsList.length === 0 && data.type !== 'PDV') {
+  if (paymentsList.length === 0 && data.type !== 'PDV' && data.type !== 'TABLE') {
     return { error: 'Informe pelo menos uma forma de pagamento' }
   }
-  // PDV sem pagamento = "cobrar no final" — pedido criado sem pagamento registrado
+  // PDV e TABLE sem pagamento = "cobrar no final" — pedido criado sem pagamento registrado
 
   // 2. Verificar se tenant existe e está ativo
   const tenant = await prisma.tenant.findFirst({
