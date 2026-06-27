@@ -269,41 +269,39 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   const prevAvgTicket = previous._count.id > 0 ? prevRevenue / previous._count.id : 0
 
   // ── Clientes ─────────────────────────────────────────────────────────────
-  // Usa telefone do customer para detectar recorrência, pois testes podem
-  // criar múltiplos registros de Customer com o mesmo número.
+  // Cliente recorrente = fez mais de 1 pedido no histórico total do tenant
+  // (independente do período selecionado no filtro)
   let totalClients = 0, newClients = 0, returningClients = 0, returnRate = 0
   try {
-    const [currentOrders, prevOrders2] = await Promise.all([
-      prisma.order.findMany({
-        where: { ...baseWhere },
-        select: { customerId: true, customer: { select: { phone: true } } },
-      }),
-      prisma.order.findMany({
+    // Telefones únicos que fizeram pedido NO PERÍODO ATUAL
+    const currentOrders = await prisma.order.findMany({
+      where: { ...baseWhere },
+      select: { customer: { select: { phone: true } } },
+    })
+    const currPhones = [...new Set(
+      currentOrders.map((o) => o.customer?.phone).filter(Boolean) as string[]
+    )]
+
+    totalClients = currPhones.length
+    if (totalClients > 0) {
+      // Para cada telefone do período atual, verifica se já fez pedido
+      // ANTES do início do período (histórico completo)
+      const prevOrders2 = await prisma.order.findMany({
         where: {
           tenantId,
           status: PAID_STATUS_FILTER,
-          createdAt: { gte: prevStart, lte: prevEnd },
+          createdAt: { lt: startDate }, // qualquer pedido antes do período atual
+          customer: { phone: { in: currPhones } },
         },
-        select: { customerId: true, customer: { select: { phone: true } } },
-      }),
-    ])
-
-    // Agrupa por telefone (remove nulls e duplicatas)
-    const currPhones = [...new Set(
-      currentOrders
-        .map((o) => o.customer?.phone)
-        .filter(Boolean) as string[]
-    )]
-    const prevPhones = new Set(
-      prevOrders2
-        .map((o) => o.customer?.phone)
-        .filter(Boolean) as string[]
-    )
-
-    totalClients     = currPhones.length
-    returningClients = currPhones.filter((p) => prevPhones.has(p)).length
-    newClients       = totalClients - returningClients
-    returnRate       = totalClients > 0 ? (returningClients / totalClients) * 100 : 0
+        select: { customer: { select: { phone: true } } },
+      })
+      const prevPhones = new Set(
+        prevOrders2.map((o) => o.customer?.phone).filter(Boolean) as string[]
+      )
+      returningClients = currPhones.filter((p) => prevPhones.has(p)).length
+      newClients       = totalClients - returningClients
+      returnRate       = (returningClients / totalClients) * 100
+    }
   } catch (e) { console.error('[reports] clients error:', e) }
 
   return (
