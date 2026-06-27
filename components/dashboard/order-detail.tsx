@@ -6,8 +6,11 @@ import { useState, useTransition } from 'react'
 import { formatCurrency, formatDate, formatPhone, formatOrderNumber } from '@/lib/utils/format'
 import { OrderStatusBadge } from './order-status-badge'
 import { cn } from '@/lib/utils'
-import { Loader2, CheckCircle2, XCircle, CreditCard } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, CreditCard, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
+
+type AddPaymentMethod = 'PIX' | 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'VOUCHER' | 'TRANSFER'
+interface AddPaymentEntry { method: AddPaymentMethod; amount: number }
 
 const PAYMENT_METHODS: Record<string, string> = {
   PIX:         '⚡ PIX',
@@ -105,7 +108,59 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
   const [payments, setPayments] = useState<any[]>(order.payments)
   const [isPending, start]      = useTransition()
 
+  // ── Modal de pagamento posterior ──────────────────────────────────────────
+  const [showAddPayment, setShowAddPayment]     = useState(false)
+  const [addPayments, setAddPayments]           = useState<AddPaymentEntry[]>([{ method: 'CASH', amount: Number(order.total) }])
+  const [isAddingPayment, startAddPayment]      = useTransition()
+
+  const totalOrder   = Number(order.total)
+  const alreadyPaid  = payments.reduce((s: number, p: any) => s + Number(p.amount), 0)
+  const stillOwed    = Math.max(0, Math.round((totalOrder - alreadyPaid) * 100) / 100)
+
+  const addPaymentsSum    = addPayments.reduce((s, p) => s + (p.amount || 0), 0)
+  const addPaymentRemaining = Math.round((stillOwed - addPaymentsSum) * 100) / 100
+
+  // Só mostra o botão de adicionar pagamento em pedidos PDV/TABLE/PICKUP
+  // com pagamento pendente (cobrar no final ou pagamento ainda não registrado)
+  const canAddPayment =
+    order.type !== 'DELIVERY' &&
+    !['CANCELLED', 'REFUNDED'].includes(status) &&
+    stillOwed > 0 &&
+    ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'STAFF'].includes(userRole)
+
+  const handleAddPayment = () => {
+    if (addPaymentsSum < stillOwed - 0.01) {
+      toast.error(`Valor insuficiente. Ainda faltam ${formatCurrency(stillOwed - addPaymentsSum)}.`)
+      return
+    }
+    startAddPayment(async () => {
+      const res = await fetch(`/api/orders/${order.id}/add-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payments: addPayments }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(data.error ?? 'Erro ao registrar pagamento'); return }
+
+      // Atualizar lista de pagamentos localmente
+      setPayments((prev) => [
+        ...prev,
+        ...(data.payments ?? []).map((p: any) => ({
+          ...p,
+          paidAt: null,
+          changeAmount: null,
+          pixExpiresAt: null,
+        })),
+      ])
+      setShowAddPayment(false)
+      setAddPayments([{ method: 'CASH', amount: stillOwed }])
+      toast.success('Pagamento registrado! Confirme o recebimento quando efetivado.')
+    })
+  }
+
   const isAttendant      = userRole === 'ATTENDANT'
+  const isStaff          = userRole === 'STAFF'
+  const isDeliveryPerson = userRole === 'DELIVERY_PERSON'
   const isStaff          = userRole === 'STAFF'
   const isDeliveryPerson = userRole === 'DELIVERY_PERSON'
 
@@ -354,12 +409,121 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
 
           {/* Pagamentos — mostra TODOS */}
           <div className="bg-card border border-border rounded-xl p-4">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-3">
-              Pagamento{payments.length > 1 ? 's' : ''}
-            </h3>
-            {payments.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhum pagamento</p>
-            ) : (
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase">
+                Pagamento{payments.length > 1 ? 's' : ''}
+              </h3>
+              {/* NOVO: botão para adicionar pagamento posterior */}
+              {canAddPayment && !showAddPayment && (
+                <button
+                  onClick={() => {
+                    setAddPayments([{ method: 'CASH', amount: stillOwed }])
+                    setShowAddPayment(true)
+                  }}
+                  className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                >
+                  <Plus className="h-3 w-3" /> Registrar pagamento
+                </button>
+              )}
+            </div>
+
+            {/* NOVO: Banner de pagamento pendente */}
+            {stillOwed > 0 && payments.length === 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3 mb-3">
+                <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                  ⏳ Pagamento pendente — {formatCurrency(stillOwed)}
+                </p>
+                <p className="text-[10px] text-amber-600 dark:text-amber-500 mt-0.5">
+                  Este pedido foi criado com "cobrar no final". Use o botão acima para registrar o pagamento.
+                </p>
+              </div>
+            )}
+
+            {stillOwed > 0 && payments.length > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-2.5 mb-3">
+                <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                  Saldo restante: {formatCurrency(stillOwed)}
+                </p>
+              </div>
+            )}
+
+            {/* NOVO: Formulário inline de adicionar pagamento */}
+            {showAddPayment && (
+              <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 mb-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-foreground">Registrar pagamento</p>
+                  <button onClick={() => setShowAddPayment(false)} className="text-muted-foreground hover:text-foreground">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Total a receber: <strong className="text-foreground">{formatCurrency(stillOwed)}</strong>
+                </p>
+
+                {addPayments.map((p, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <select
+                      value={p.method}
+                      onChange={(e) => setAddPayments((prev) => prev.map((x, i) => i === idx ? { ...x, method: e.target.value as AddPaymentMethod } : x))}
+                      className="flex-1 px-2 py-1.5 text-xs border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="CASH">💵 Dinheiro</option>
+                      <option value="CREDIT_CARD">💳 Crédito</option>
+                      <option value="DEBIT_CARD">💳 Débito</option>
+                      <option value="PIX">⚡ PIX</option>
+                      <option value="VOUCHER">🎟️ Voucher</option>
+                      <option value="TRANSFER">🏦 Transferência</option>
+                    </select>
+                    <input
+                      type="number" min="0.01" step="0.01"
+                      value={p.amount || ''}
+                      onChange={(e) => setAddPayments((prev) => prev.map((x, i) => i === idx ? { ...x, amount: Number(e.target.value) } : x))}
+                      placeholder="0,00"
+                      className="w-24 px-2 py-1.5 text-xs border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    {addPayments.length > 1 && (
+                      <button
+                        onClick={() => setAddPayments((prev) => prev.filter((_, i) => i !== idx))}
+                        className="w-6 h-6 flex-shrink-0 rounded-md bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => setAddPayments((prev) => [...prev, { method: 'CASH', amount: Math.max(addPaymentRemaining, 0) }])}
+                    className="text-[10px] font-medium text-primary hover:underline"
+                  >
+                    + Dividir em outra forma
+                  </button>
+                  {addPayments.length > 1 && (
+                    <span className={cn('text-[10px] font-semibold', addPaymentRemaining === 0 ? 'text-emerald-600' : 'text-amber-600')}>
+                      {addPaymentRemaining > 0
+                        ? `Faltam ${formatCurrency(addPaymentRemaining)}`
+                        : addPaymentRemaining < 0
+                          ? `Excede em ${formatCurrency(-addPaymentRemaining)}`
+                          : 'OK ✓'}
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  onClick={handleAddPayment}
+                  disabled={isAddingPayment || addPaymentsSum <= 0}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 bg-primary text-primary-foreground text-xs font-semibold rounded-lg hover:bg-primary/90 disabled:opacity-60 transition-colors"
+                >
+                  {isAddingPayment ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />}
+                  {isAddingPayment ? 'Registrando...' : 'Confirmar pagamento'}
+                </button>
+              </div>
+            )}
+
+            {payments.length === 0 && !showAddPayment ? (
+              <p className="text-sm text-muted-foreground">Nenhum pagamento registrado</p>
+            ) : payments.length > 0 ? (
               <div className="space-y-3">
                 {payments.map((p: any, idx: number) => {
                   const isManual  = MANUAL_METHODS.includes(p.method)
@@ -426,7 +590,7 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
                   )
                 })}
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* Meta + Endereço de entrega */}
