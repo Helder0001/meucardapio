@@ -4,13 +4,25 @@
 
 ### Bugs corrigidos (a feature já existia no código, mas nunca funcionava)
 - `vercel.json` tinha `"crons": []` — o cron **nunca foi registrado** na Vercel,
-  então nunca rodava em produção. Agora roda a cada 15 minutos.
+  então nunca rodava em produção.
 - A rota verificava o header `x-cron-secret`, mas a Vercel envia o segredo como
   `Authorization: Bearer <CRON_SECRET>`. A rota agora aceita os dois.
-- **Nenhum dos 4 pontos que cancelam pedido automaticamente devolvia o estoque
-  debitado na compra.** Corrigido nos quatro:
-  1. `app/api/internal/cron/cleanup` — cancelamento por falta de pagamento (2h)
-  2. `app/api/orders/[id]/status` — cancelamento quando o PIX expira (5 min, no polling)
+- **O plano Hobby da Vercel só permite cron com frequência de no máximo 1x/dia.**
+  Um cron a cada 15 min (necessário para cumprir a janela de 2h com precisão)
+  é rejeitado no deploy ("Hobby accounts are limited to daily cron jobs").
+  Por isso, a verificação de "pagamento pendente há mais de 2h" agora roda em
+  **dois lugares**:
+  1. `app/api/orders/[id]/status` — a cada vez que o storefront consulta o
+     status do pedido (polling do cliente). Cobre o caso comum: cliente com
+     a aba aberta acompanhando o pedido.
+  2. `app/api/internal/cron/cleanup` — roda 1x/dia (às 6h) como rede de
+     segurança, para pedidos cujo cliente nunca voltou a consultar o status
+     (fechou a aba, perdeu o link, etc.).
+- **Nenhum dos pontos que cancelam pedido automaticamente devolvia o estoque
+  debitado na compra.** Corrigido em todos:
+  1. `app/api/orders/[id]/status` — cancelamento por PIX expirado (5 min) OU
+     por falta de pagamento geral (2h), no polling do cliente
+  2. `app/api/internal/cron/cleanup` — rede de segurança diária
   3. `app/api/webhooks/mercadopago` — cancelamento quando o MP confirma PIX expirado/cancelado
   4. `app/api/orders/[id]/update-status` — cancelamento manual pelo lojista no dashboard
 

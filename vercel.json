@@ -8,7 +8,7 @@
   "crons": [
     {
       "path": "/api/internal/cron/cleanup",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 6 * * *"
     }
   ],
   "headers": [
