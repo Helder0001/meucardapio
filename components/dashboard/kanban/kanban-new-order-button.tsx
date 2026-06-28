@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
-interface Product { id: string; name: string; price: number }
+interface Product { id: string; name: string; price: number; isOutOfStock?: boolean }
 interface Category { id: string; name: string; products: Product[] }
 
 interface TableOption {
@@ -72,6 +72,10 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
   const router = useRouter()
 
   const addItem = (product: Product) => {
+    if (product.isOutOfStock) {
+      toast.error(`"${product.name}" está esgotado`)
+      return
+    }
     setItems((prev) => {
       const existing = prev.find((i) => i.productId === product.id)
       if (existing) {
@@ -322,12 +326,24 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
                         {cat.products.map((product) => {
                           const item = items.find((i) => i.productId === product.id)
                           return (
-                            <div key={product.id} className="flex items-center justify-between p-2.5 bg-muted rounded-lg">
+                            <div
+                              key={product.id}
+                              className={cn(
+                                'flex items-center justify-between p-2.5 bg-muted rounded-lg',
+                                product.isOutOfStock && 'opacity-60'
+                              )}
+                            >
                               <div className="min-w-0 flex-1">
                                 <p className="text-xs font-medium text-foreground truncate">{product.name}</p>
-                                <p className="text-xs text-primary font-bold">{formatCurrency(product.price)}</p>
+                                {product.isOutOfStock ? (
+                                  <p className="text-[10px] font-bold text-destructive uppercase tracking-wide">Esgotado</p>
+                                ) : (
+                                  <p className="text-xs text-primary font-bold">{formatCurrency(product.price)}</p>
+                                )}
                               </div>
-                              {item ? (
+                              {product.isOutOfStock ? (
+                                <div className="w-6 h-6 ml-2 flex-shrink-0" />
+                              ) : item ? (
                                 <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
                                   <button onClick={() => updateQty(product.id, -1)} className="w-6 h-6 rounded-md bg-background border border-border flex items-center justify-center">
                                     <Minus className="h-3 w-3" />
