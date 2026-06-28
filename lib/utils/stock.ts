@@ -18,6 +18,8 @@
 //   - app/api/webhooks/mercadopago        → restockCancelledOrder (PIX cancelado no MP)
 //   - app/api/orders/[id]/update-status   → restockCancelledOrder (cancelamento manual)
 //   - actions/stock/adjust-stock.ts       → adjustStockManually (ajuste do lojista)
+//   - app/(storefront)/menu/[slug]/page.tsx, kanban/page.tsx → isOutOfStock
+//     (esconder/bloquear produto esgotado no cardápio e no PDV)
 
 import type { PrismaClient, StockMovementType } from '@prisma/client'
 
@@ -26,6 +28,52 @@ type Tx = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction'
 export interface OrderItemForStock {
   productId: string
   quantity: number
+}
+
+/**
+ * Revalida o cardápio digital de um tenant fora do ISR de 60s padrão,
+ * para refletir "em tempo real" (na prática, no próximo carregamento da
+ * página) uma mudança de estoque que pode ter zerado ou repovoado um
+ * produto. Chamar DEPOIS que a transação de estoque for confirmada
+ * (commit), nunca de dentro dela — revalidatePath é cache do Next.js,
+ * não faz parte da transação do banco.
+ *
+ * O slug do tenant é necessário porque a rota é /menu/[slug]; quando não
+ * disponível no chamador, busca-se rapidamente pelo tenantId.
+ */
+export async function revalidateStorefrontForTenant(
+  tenantId: string,
+  opts?: { slug?: string }
+): Promise<void> {
+  try {
+    const { revalidatePath } = await import('next/cache')
+    let slug = opts?.slug
+    if (!slug) {
+      const { prisma } = await import('@/lib/db/client')
+      const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { slug: true } })
+      slug = tenant?.slug
+    }
+    if (slug) revalidatePath(`/menu/${slug}`)
+  } catch (err) {
+    // Revalidação é um efeito colateral de cache — uma falha aqui não deve
+    // derrubar o fluxo principal (venda/cancelamento/ajuste já confirmados).
+    console.error('[stock] Falha ao revalidar cardápio digital:', err)
+  }
+}
+
+/**
+ * Indica se um produto está esgotado para fins de exibição no cardápio
+ * digital e no PDV/balcão.
+ *
+ * Regra: um produto SEM nenhum registro de Stock é considerado "estoque
+ * infinito" (a loja não optou por controlar esse item) — nunca aparece
+ * como esgotado. Um produto COM Stock cadastrado está esgotado quando a
+ * soma do saldo em todos os PDVs do tenant for <= 0.
+ */
+export function isOutOfStock(stocks: Array<{ quantity: number | string | { toString(): string } }>): boolean {
+  if (!stocks || stocks.length === 0) return false
+  const total = stocks.reduce((sum, s) => sum + Number(s.quantity), 0)
+  return total <= 0
 }
 
 /**
@@ -45,8 +93,9 @@ export interface OrderItemForStock {
 export async function decrementStockForOrder(
   tx: Tx,
   params: { tenantId: string; orderId: string; items: OrderItemForStock[] }
-): Promise<void> {
+): Promise<{ affectedProductIds: string[] }> {
   const { tenantId, orderId, items } = params
+  const affectedProductIds = new Set<string>()
 
   for (const item of items) {
     let remaining = item.quantity
@@ -84,6 +133,7 @@ export async function decrementStockForOrder(
         })
         if (retried.count === 0) continue
         remaining -= retryDecrement
+        affectedProductIds.add(item.productId)
         await recordMovement(tx, {
           tenantId, stockId: stock.id, productId: item.productId, pdvId: stock.pdvId,
           orderId, type: 'SALE', quantity: retryDecrement,
@@ -92,6 +142,7 @@ export async function decrementStockForOrder(
       }
 
       remaining -= decrement
+      affectedProductIds.add(item.productId)
       await recordMovement(tx, {
         tenantId, stockId: stock.id, productId: item.productId, pdvId: stock.pdvId,
         orderId, type: 'SALE', quantity: decrement,
@@ -103,6 +154,8 @@ export async function decrementStockForOrder(
     // saldo apenas chega a zero (nunca negativo) e o produto fica visível
     // como esgotado para os próximos pedidos.
   }
+
+  return { affectedProductIds: [...affectedProductIds] }
 }
 
 /**
@@ -122,7 +175,7 @@ export async function decrementStockForOrder(
 export async function restockCancelledOrder(
   tx: Tx,
   params: { tenantId: string; orderId: string }
-): Promise<void> {
+): Promise<{ affectedProductIds: string[] }> {
   const { tenantId, orderId } = params
 
   const [sales, alreadyRefunded] = await Promise.all([
@@ -135,18 +188,22 @@ export async function restockCancelledOrder(
     }),
   ])
 
-  if (sales.length === 0) return // pedido sem itens com controle de estoque
+  if (sales.length === 0) return { affectedProductIds: [] } // pedido sem itens com controle de estoque
 
   // Idempotência: se já existe QUALQUER estorno para este pedido, não
   // estorna de novo (evita duplo-crédito se o cancelamento automático e
   // o manual disputarem a mesma corrida).
-  if (alreadyRefunded.length > 0) return
+  if (alreadyRefunded.length > 0) return { affectedProductIds: [] }
+
+  const affectedProductIds = new Set<string>()
 
   for (const sale of sales) {
     const updated = await tx.stock.update({
       where: { id: sale.stockId },
       data: { quantity: { increment: sale.quantity } },
     })
+
+    affectedProductIds.add(sale.productId)
 
     await recordMovement(tx, {
       tenantId,
@@ -159,6 +216,8 @@ export async function restockCancelledOrder(
       balanceAfterOverride: Number(updated.quantity),
     })
   }
+
+  return { affectedProductIds: [...affectedProductIds] }
 }
 
 /**
@@ -175,7 +234,7 @@ export async function adjustStockManually(
     userId?: string
     reason?: string
   }
-): Promise<{ quantity: number }> {
+): Promise<{ quantity: number; productId: string }> {
   const { tenantId, stockId, type, quantity, userId, reason } = params
   if (quantity < 0) throw new Error('Quantidade não pode ser negativa')
 
@@ -209,7 +268,7 @@ export async function adjustStockManually(
     balanceAfterOverride: Number(updated.quantity),
   })
 
-  return { quantity: Number(updated.quantity) }
+  return { quantity: Number(updated.quantity), productId: current.productId }
 }
 
 async function recordMovement(
