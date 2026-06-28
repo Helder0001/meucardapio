@@ -71,6 +71,7 @@ export async function GET(
         tenantId: true,
         status: true,
         paymentStatus: true,
+        createdAt: true,
         confirmedAt: true,
         readyAt: true,
         deliveredAt: true,
@@ -93,43 +94,71 @@ export async function GET(
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
+    const PENDING_PAYMENT_TIMEOUT_MS = 2 * 60 * 60 * 1000 // 2 horas
+
     // CORREÇÃO: cancelar automaticamente quando o PIX expira, sem depender só
     // do webhook do MP (que pode demorar/falhar) nem do cron diário (no plano
     // Hobby da Vercel só roda 1x/dia — muito lento pra uma janela de 5min).
     const expiredPix = order.payments[0]
-    if (
+    const pixExpired = !!(
       order.status === 'PENDING' &&
       expiredPix?.status === 'PENDING' &&
       expiredPix.pixExpiresAt &&
       expiredPix.pixExpiresAt < new Date()
-    ) {
+    )
+
+    // Regra geral: qualquer pedido PENDING sem pagamento confirmado há mais
+    // de 2h é cancelado. Roda aqui (a cada vez que o cliente consulta o
+    // status) porque o plano Hobby da Vercel só permite cron 1x/dia — não dá
+    // pra confiar só no cron pra cumprir a janela de 2h. O cron diário fica
+    // como rede de segurança para pedidos cujo cliente nunca voltou a
+    // consultar o status (ex.: fechou a aba).
+    const paymentTimedOut = !!(
+      order.status === 'PENDING' &&
+      order.paymentStatus === 'PENDING' &&
+      Date.now() - order.createdAt.getTime() > PENDING_PAYMENT_TIMEOUT_MS
+    )
+
+    if (pixExpired || paymentTimedOut) {
+      const cancelReason = pixExpired
+        ? 'PIX expirado sem pagamento'
+        : 'Cancelamento automático por falta de pagamento (2h)'
+      const historyNote = pixExpired
+        ? 'Cancelamento automático: PIX expirado sem pagamento'
+        : 'Cancelamento automático: pagamento pendente há mais de 2 horas'
+
       await prisma.$transaction(async (tx) => {
-        await tx.payment.updateMany({
-          where: { orderId: id, method: 'PIX', status: 'PENDING' },
-          data: { status: 'FAILED', failedAt: new Date() },
-        })
-        await tx.order.update({
-          where: { id },
+        // Só cancela se ainda estiver PENDING no momento exato da transação
+        // (evita corrida com o webhook do MP ou outra consulta concorrente).
+        const updated = await tx.order.updateMany({
+          where: { id, status: 'PENDING' },
           data: {
             status: 'CANCELLED',
-            paymentStatus: 'FAILED',
+            paymentStatus: pixExpired ? 'FAILED' : order.paymentStatus,
             cancelledAt: new Date(),
-            cancelReason: 'PIX expirado sem pagamento',
+            cancelReason,
           },
         })
+        if (updated.count === 0) return // outra rotina já tratou este pedido
+
+        if (pixExpired) {
+          await tx.payment.updateMany({
+            where: { orderId: id, method: 'PIX', status: 'PENDING' },
+            data: { status: 'FAILED', failedAt: new Date() },
+          })
+        }
         await tx.orderStatusHistory.create({
-          data: {
-            orderId: id,
-            status: 'CANCELLED',
-            notes: 'Cancelamento automático: PIX expirado sem pagamento',
-          },
+          data: { orderId: id, status: 'CANCELLED', notes: historyNote },
         })
         // Devolve ao estoque tudo que foi debitado na criação do pedido
         await restockCancelledOrder(tx, { tenantId: order.tenantId, orderId: id })
       })
+
       order.status = 'CANCELLED'
-      order.paymentStatus = 'FAILED'
-      order.payments[0].status = 'FAILED'
+      if (pixExpired) {
+        order.paymentStatus = 'FAILED'
+        if (order.payments[0]) order.payments[0].status = 'FAILED'
+      }
     }
 
     // Não retornar QR Code de PIX expirado
