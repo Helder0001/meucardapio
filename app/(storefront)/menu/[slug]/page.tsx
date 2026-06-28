@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/db/client'
 import { StorefrontClient } from '@/components/storefront/storefront-client'
+import { isOutOfStock } from '@/lib/utils/stock'
 import type { Metadata } from 'next'
 
 export const revalidate = 60
@@ -40,6 +41,7 @@ async function getTenantMenu(slug: string) {
               id: true, name: true, description: true, price: true,
               comparePrice: true, image: true, isFeatured: true,
               isBestSeller: true, preparationTime: true, tags: true,
+              stocks: { select: { quantity: true } },
               addonGroups: {
                 select: {
                   addonGroup: {
@@ -126,6 +128,8 @@ export default async function StorefrontPage({ params, searchParams }: PageProps
         ...p,
         price:        Number(p.price),
         comparePrice: p.comparePrice ? Number(p.comparePrice) : null,
+        isOutOfStock: isOutOfStock(p.stocks),
+        stocks:       undefined, // não enviar saldo bruto ao cliente, só o booleano
         addonGroups:  p.addonGroups.map((g) => ({
           ...g.addonGroup,
           addons: g.addonGroup.addons.map((a) => ({ ...a, price: Number(a.price) })),
