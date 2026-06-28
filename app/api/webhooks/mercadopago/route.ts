@@ -20,7 +20,7 @@ import { prisma } from '@/lib/db/client'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { applyCashback, applyLoyaltyPoints } from '@/lib/loyalty/apply-rewards'
-import { restockCancelledOrder } from '@/lib/utils/stock'
+import { restockCancelledOrder, revalidateStorefrontForTenant } from '@/lib/utils/stock'
 import crypto from 'crypto'
 
 export const runtime = 'nodejs'
@@ -211,6 +211,7 @@ export async function POST(request: Request) {
       // o pedido por outro meio, ex.: combinou pagamento em dinheiro na entrega).
       const shouldCancelOrder = payment.order.status === 'PENDING'
 
+      let affectedProductIds: string[] = []
       await prisma.$transaction(async (tx) => {
         await tx.payment.update({
           where: { id: payment.id },
@@ -238,9 +239,14 @@ export async function POST(request: Request) {
             },
           })
           // Devolve ao estoque tudo que foi debitado na criação do pedido
-          await restockCancelledOrder(tx, { tenantId: payment.order.tenantId, orderId: payment.order.id })
+          const result = await restockCancelledOrder(tx, { tenantId: payment.order.tenantId, orderId: payment.order.id })
+          affectedProductIds = result.affectedProductIds
         }
       })
+
+      if (affectedProductIds.length > 0) {
+        await revalidateStorefrontForTenant(payment.order.tenantId)
+      }
     }
 
     if (mpStatus === 'refunded') {
