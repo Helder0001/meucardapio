@@ -3,7 +3,7 @@
 
 import { NextResponse, after } from 'next/server'
 import { prisma } from '@/lib/db/client'
-import { restockCancelledOrder } from '@/lib/utils/stock'
+import { restockCancelledOrder, revalidateStorefrontForTenant } from '@/lib/utils/stock'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { notifyOrderStatus } from '@/lib/messaging/evolution'
@@ -67,6 +67,7 @@ export async function GET(request: Request) {
   let cancelledCount = 0
   for (const order of expiredOrders) {
     try {
+      let affectedProductIds: string[] = []
       const didCancel = await prisma.$transaction(async (tx) => {
         // Só cancela se ainda estiver PENDING no momento exato da transação
         // (evita corrida com o webhook do MP ou uma confirmação manual
@@ -90,12 +91,17 @@ export async function GET(request: Request) {
         })
 
         // Devolve ao estoque tudo que foi debitado na criação do pedido
-        await restockCancelledOrder(tx, { tenantId: order.tenantId, orderId: order.id })
+        const result = await restockCancelledOrder(tx, { tenantId: order.tenantId, orderId: order.id })
+        affectedProductIds = result.affectedProductIds
         return true
       })
 
       if (!didCancel) continue
       cancelledCount += 1
+
+      if (affectedProductIds.length > 0) {
+        await revalidateStorefrontForTenant(order.tenantId)
+      }
 
       // Efeitos colaterais não-críticos rodam após a transação confirmar
       after(async () => {
