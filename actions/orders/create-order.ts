@@ -18,6 +18,7 @@
 import { z } from 'zod'
 import crypto from 'crypto'
 import { checkAndPublishStockAlerts } from '@/lib/utils/stock-alerts'
+import { decrementStockForOrder } from '@/lib/utils/stock'
 import { prisma } from '@/lib/db/client'
 import { calculateOrder } from '@/lib/utils/order-calculator'
 import { formatCurrency } from '@/lib/utils/format'
@@ -243,27 +244,16 @@ export async function createOrderAction(
       },
     })
 
-    // Decrementar estoque dos produtos vendidos
-    for (const item of calculation.items) {
-      // Buscar stocks existentes para este produto (todos PDVs do tenant)
-      const stocks = await tx.stock.findMany({
-        where: { tenantId: data.tenantId, productId: item.productId },
-        orderBy: { quantity: 'desc' }, // decrementa do PDV com mais estoque
-      })
-
-      let remaining = item.quantity
-      for (const stock of stocks) {
-        if (remaining <= 0) break
-        const decrement = Math.min(remaining, Number(stock.quantity))
-        if (decrement > 0) {
-          await tx.stock.update({
-            where: { id: stock.id },
-            data: { quantity: { decrement } },
-          })
-          remaining -= decrement
-        }
-      }
-    }
+    // Decrementar estoque dos produtos vendidos (com proteção contra
+    // concorrência e registro de histórico — ver lib/utils/stock.ts)
+    await decrementStockForOrder(tx, {
+      tenantId: data.tenantId,
+      orderId: newOrder.id,
+      items: calculation.items.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+      })),
+    })
 
     if (calculation.coupon) {
       await tx.coupon.update({
