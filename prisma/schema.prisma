@@ -218,6 +218,7 @@ model User {
   createdSchedules     ReportSchedule[]     @relation("CreatedSchedules")
   tableSessions     TableSession[]
   auditLogs         AuditLog[]
+  stockMovements    StockMovement[]
 
   @@unique([email, tenantId])
   @@index([tenantId])
@@ -438,9 +439,45 @@ model Stock {
 
   pdv         PDV      @relation(fields: [pdvId], references: [id])
   product     Product  @relation(fields: [productId], references: [id])
+  movements   StockMovement[]
 
   @@unique([pdvId, productId])
   @@index([tenantId])
+}
+
+// Histórico imutável de movimentações de estoque.
+// Toda alteração de Stock.quantity (venda, estorno por cancelamento,
+// ajuste manual do lojista) gera um registro aqui — nunca editar/excluir.
+enum StockMovementType {
+  SALE          // baixa automática ao criar pedido
+  CANCEL_REFUND // devolução automática ao cancelar pedido (estorno)
+  MANUAL_IN     // entrada manual (compra, reposição)
+  MANUAL_OUT    // saída manual (perda, quebra, ajuste de inventário)
+  ADJUSTMENT    // correção/definição direta de quantidade pelo lojista
+}
+
+model StockMovement {
+  id           String            @id @default(cuid())
+  tenantId     String
+  stockId      String
+  productId    String
+  pdvId        String
+  orderId      String?           // presente quando vier de venda/estorno
+  type         StockMovementType
+  quantity     Decimal           @db.Decimal(10, 3) // sempre positivo; o sinal é dado por `type`
+  balanceAfter Decimal           @db.Decimal(10, 3) // quantidade resultante após o movimento
+  userId       String?           // quem fez o ajuste manual (null = automático/sistema)
+  reason       String?
+  createdAt    DateTime          @default(now())
+
+  stock        Stock             @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  order        Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  user         User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([stockId])
+  @@index([orderId])
+  @@index([createdAt])
 }
 
 // ══════════════════════════════════════════════════════════
@@ -561,6 +598,7 @@ model Order {
   items          OrderItem[]
   payments       Payment[]
   statusHistory  OrderStatusHistory[]
+  stockMovements StockMovement[]
   review         Review?
 
   @@unique([tenantId, orderNumber])
