@@ -6,7 +6,7 @@ import { prisma } from '@/lib/db/client'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { notifyOrderStatus } from '@/lib/messaging/evolution'
-import { restockCancelledOrder } from '@/lib/utils/stock'
+import { restockCancelledOrder, revalidateStorefrontForTenant } from '@/lib/utils/stock'
 import { z } from 'zod'
 
 const ROLE_LABELS: Record<string, string> = {
@@ -146,6 +146,7 @@ export async function PATCH(
     ...(role === 'STAFF' && !order.waiterId ? { waiterId: session.user.id } : {}),
   }
 
+  let affectedProductIds: string[] = []
   await prisma.$transaction(async (tx) => {
     await tx.order.update({ where: { id }, data: updateData })
     await tx.orderStatusHistory.create({
@@ -181,9 +182,14 @@ export async function PATCH(
     // Devolver ao estoque tudo que foi debitado na criação do pedido,
     // já que o cancelamento implica que os itens não serão entregues.
     if (status === 'CANCELLED') {
-      await restockCancelledOrder(tx, { tenantId, orderId: id })
+      const result = await restockCancelledOrder(tx, { tenantId, orderId: id })
+      affectedProductIds = result.affectedProductIds
     }
   })
+
+  if (affectedProductIds.length > 0) {
+    await revalidateStorefrontForTenant(tenantId)
+  }
 
   await publishOrderEvent(tenantId, {
     type: 'ORDER_UPDATED',
