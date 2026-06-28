@@ -1,15 +1,31 @@
 // app/api/internal/cron/cleanup/route.ts
 // Limpeza diária de dados temporários
 
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { prisma } from '@/lib/db/client'
+import { restockCancelledOrder } from '@/lib/utils/stock'
+import { publishOrderEvent } from '@/lib/cache/redis'
+import { auditLog, AuditActions } from '@/lib/utils/audit'
+import { notifyOrderStatus } from '@/lib/messaging/evolution'
 
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+const PENDING_PAYMENT_TIMEOUT_MS = 2 * 60 * 60 * 1000 // 2 horas
 
 export async function GET(request: Request) {
-  // Verificar segredo do cron
-  const secret = request.headers.get('x-cron-secret')
-  if (secret !== process.env.CRON_SECRET) {
+  // Verificar segredo do cron.
+  // A Vercel envia o CRON_SECRET automaticamente como
+  // "Authorization: Bearer <CRON_SECRET>" — é assim que ela autentica
+  // os crons configurados em vercel.json. Mantemos também o header
+  // legado "x-cron-secret" para chamadas manuais (curl/monitoramento
+  // externo), como documentado em DEPLOY.md.
+  const authHeader = request.headers.get('authorization')
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
+  const legacySecret = request.headers.get('x-cron-secret')
+
+  const expected = process.env.CRON_SECRET
+  if (!expected || (bearerToken !== expected && legacySecret !== expected)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -34,20 +50,81 @@ export async function GET(request: Request) {
   })
   results.clearedOtps = clearedOtps
 
-  // 3. Marcar pedidos PENDING sem pagamento há mais de 2h como CANCELLED
-  const { count: cancelledOrders } = await prisma.order.updateMany({
+  // 3. Cancelar pedidos PENDING sem pagamento há mais de 2h.
+  // Cada pedido é cancelado em sua própria transação (estoque + status
+  // juntos, atomicamente), em vez de um updateMany solto — porque
+  // precisamos estornar o estoque debitado na criação do pedido, e
+  // updateMany não permite rodar lógica adicional por linha.
+  const expiredOrders = await prisma.order.findMany({
     where: {
       status: 'PENDING',
       paymentStatus: 'PENDING',
-      createdAt: { lt: new Date(Date.now() - 2 * 60 * 60 * 1000) },
+      createdAt: { lt: new Date(Date.now() - PENDING_PAYMENT_TIMEOUT_MS) },
     },
-    data: {
-      status: 'CANCELLED',
-      cancelledAt: new Date(),
-      cancelReason: 'Cancelamento automático por falta de pagamento',
-    },
+    select: { id: true, tenantId: true, orderNumber: true },
   })
-  results.cancelledOrders = cancelledOrders
+
+  let cancelledCount = 0
+  for (const order of expiredOrders) {
+    try {
+      const didCancel = await prisma.$transaction(async (tx) => {
+        // Só cancela se ainda estiver PENDING no momento exato da transação
+        // (evita corrida com o webhook do MP ou uma confirmação manual
+        // que tenha acontecido entre o findMany acima e agora).
+        const updated = await tx.order.updateMany({
+          where: { id: order.id, status: 'PENDING', paymentStatus: 'PENDING' },
+          data: {
+            status: 'CANCELLED',
+            cancelledAt: new Date(),
+            cancelReason: 'Cancelamento automático por falta de pagamento (2h)',
+          },
+        })
+        if (updated.count === 0) return false // outra rotina já tratou este pedido
+
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId: order.id,
+            status: 'CANCELLED',
+            notes: 'Cancelamento automático: pagamento pendente há mais de 2 horas',
+          },
+        })
+
+        // Devolve ao estoque tudo que foi debitado na criação do pedido
+        await restockCancelledOrder(tx, { tenantId: order.tenantId, orderId: order.id })
+        return true
+      })
+
+      if (!didCancel) continue
+      cancelledCount += 1
+
+      // Efeitos colaterais não-críticos rodam após a transação confirmar
+      after(async () => {
+        try {
+          await publishOrderEvent(order.tenantId, {
+            type: 'ORDER_UPDATED',
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            status: 'CANCELLED',
+          })
+          await auditLog({
+            tenantId: order.tenantId,
+            action: AuditActions.ORDER_CANCELLED,
+            resource: 'orders',
+            resourceId: order.id,
+            newValue: { status: 'CANCELLED', reason: 'Falta de pagamento (2h) — cancelamento automático' },
+          })
+          await notifyOrderStatus(order.id, 'CANCELLED')
+        } catch (err) {
+          console.error('[cron/cleanup] Erro em efeito colateral pós-cancelamento:', err)
+        }
+      })
+    } catch (err) {
+      console.error('[cron/cleanup] Falha ao cancelar pedido expirado:', order.id, err)
+      // Continua para os próximos pedidos — uma falha isolada não deve
+      // interromper a limpeza dos demais.
+    }
+  }
+  results.cancelledOrders = cancelledCount
 
   console.log('[cron/cleanup]', results)
   return NextResponse.json({ ok: true, ...results })
