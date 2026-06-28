@@ -55,35 +55,24 @@ export async function getTenantById(id: string) {
 }
 
 // Verifica se o tenant está com assinatura válida para acessar um recurso
+// Com plano único PRO, qualquer tenant com assinatura ativa tem acesso total
 export function canUsePlan(
-  tenantPlan: string,
-  requiredPlan: 'STARTER' | 'PRO' | 'PREMIUM'
+  _tenantPlan: string,
+  _requiredPlan: 'STARTER' | 'PRO' | 'PREMIUM'
 ): boolean {
-  const planOrder = { STARTER: 0, PRO: 1, PREMIUM: 2 }
-  return planOrder[tenantPlan as keyof typeof planOrder] >= planOrder[requiredPlan]
+  return true
 }
 
 // Verifica limite de produtos pelo plano
-export async function checkProductLimit(tenantId: string, plan: string): Promise<boolean> {
-  if (plan !== 'STARTER') return true // PRO e PREMIUM sem limite
-
-  const count = await prisma.product.count({
-    where: { tenantId, isActive: true },
-  })
-  return count < 50
+// Plano PRO: sem limite de produtos
+export async function checkProductLimit(_tenantId: string, _plan: string): Promise<boolean> {
+  return true
 }
 
 // Verifica limite de usuários pelo plano
-export async function checkUserLimit(tenantId: string, plan: string): Promise<boolean> {
-  const limits = { STARTER: 3, PRO: 10, PREMIUM: Infinity }
-  const limit = limits[plan as keyof typeof limits] ?? 3
-
-  if (limit === Infinity) return true
-
-  const count = await prisma.user.count({
-    where: { tenantId, isActive: true },
-  })
-  return count < limit
+// Plano PRO: sem limite de usuários
+export async function checkUserLimit(_tenantId: string, _plan: string): Promise<boolean> {
+  return true
 }
 
 // Gera próximo número de pedido para o tenant (sequencial por tenant)
