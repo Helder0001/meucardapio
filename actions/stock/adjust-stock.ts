@@ -14,7 +14,7 @@ import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/client'
 import { revalidatePath } from 'next/cache'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
-import { adjustStockManually } from '@/lib/utils/stock'
+import { adjustStockManually, revalidateStorefrontForTenant } from '@/lib/utils/stock'
 import { z } from 'zod'
 
 const adjustSchema = z.object({
@@ -61,7 +61,7 @@ export async function adjustStockAction(
   })
   if (!stock) return { error: 'Registro de estoque não encontrado' }
 
-  let result: { quantity: number }
+  let result: { quantity: number; productId: string }
   try {
     result = await prisma.$transaction((tx) =>
       adjustStockManually(tx, {
@@ -78,6 +78,9 @@ export async function adjustStockAction(
   }
 
   revalidatePath('/dashboard/stock')
+  // O ajuste pode ter zerado ou repovoado o produto — revalida o cardápio
+  // digital pra refletir isso sem esperar o ISR de 60s.
+  await revalidateStorefrontForTenant(tenantId)
 
   await auditLog({
     tenantId,
