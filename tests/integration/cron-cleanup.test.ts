@@ -29,7 +29,8 @@ vi.mock('@/lib/messaging/evolution', () => ({
 }))
 
 vi.mock('@/lib/utils/stock', () => ({
-  restockCancelledOrder: vi.fn(),
+  restockCancelledOrder: vi.fn().mockResolvedValue({ affectedProductIds: [] }),
+  revalidateStorefrontForTenant: vi.fn(),
 }))
 
 // `after()` do Next.js não existe fora de uma request real — executamos a
