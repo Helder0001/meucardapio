@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { KanbanBoard } from '@/components/dashboard/kanban/kanban-board'
 import { KanbanNewOrderButton } from '@/components/dashboard/kanban/kanban-new-order-button'
 import { prisma } from '@/lib/db/client'
+import { isOutOfStock } from '@/lib/utils/stock'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Kanban de Pedidos' }
@@ -30,7 +31,7 @@ export default async function KanbanPage() {
       id: true, name: true,
       products: {
         where: { isActive: true },
-        select: { id: true, name: true, price: true },
+        select: { id: true, name: true, price: true, stocks: { select: { quantity: true } } },
         orderBy: { sortOrder: 'asc' },
       },
     },
@@ -83,7 +84,12 @@ export default async function KanbanPage() {
               createdByUserId={session.user.id}
               categories={categories.map(c => ({
                 ...c,
-                products: c.products.map(p => ({ ...p, price: Number(p.price) }))
+                products: c.products.map(p => ({
+                  id: p.id,
+                  name: p.name,
+                  price: Number(p.price),
+                  isOutOfStock: isOutOfStock(p.stocks),
+                }))
               }))}
               tables={tables.map(t => ({
                 id: t.id,
