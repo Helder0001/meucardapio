@@ -62,7 +62,7 @@ async function sendPasswordResetEmail(email: string, name: string, resetUrl: str
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from:    process.env.EMAIL_FROM ?? 'noreply@meucardapio.com',
+      from:    process.env.EMAIL_FROM ?? 'onboarding@resend.dev',
       to:      [email],
       subject: 'Recuperação de senha — Meu Cardápio',
       html: `
