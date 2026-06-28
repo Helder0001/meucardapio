@@ -438,7 +438,7 @@ async function createPixPayment(params: {
       transaction_amount: params.amount,
       payment_method_id: 'pix',
       payer: {
-        email: 'cliente@meucardapio.com',
+        email: 'onboarding@resend.dev',
         identification: { type: 'CPF', number: '00000000000' },
       },
       description: `Pedido #${params.orderId.slice(-8).toUpperCase()}`,
