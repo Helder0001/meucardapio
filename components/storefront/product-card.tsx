@@ -9,7 +9,7 @@ interface ProductCardProps {
   product: {
     id: string; name: string; description: string | null
     price: number; comparePrice: number | null; image: string | null
-    isFeatured: boolean; isBestSeller: boolean
+    isFeatured: boolean; isBestSeller: boolean; isOutOfStock?: boolean
     preparationTime: number | null; tags: string[]; addonGroups: any[]
   }
   onSelect: () => void
@@ -35,16 +35,23 @@ export function ProductCard({ product, onSelect, disabled, primaryColor }: Produ
         {product.image ? (
           <Image
             src={product.image} alt={product.name} fill
-            className="object-cover group-hover:scale-105 transition-transform duration-400"
+            className={`object-cover group-hover:scale-105 transition-transform duration-400 ${product.isOutOfStock ? 'grayscale opacity-60' : ''}`}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-3xl bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700">
             🍽️
           </div>
         )}
-        {hasDiscount && (
+        {hasDiscount && !product.isOutOfStock && (
           <div className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-lg shadow-sm">
             -{discountPct}%
+          </div>
+        )}
+        {product.isOutOfStock && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+            <span className="bg-white/95 dark:bg-gray-900/95 text-gray-900 dark:text-gray-100 text-[10px] font-black px-2 py-1 rounded-lg shadow-sm">
+              Esgotado
+            </span>
           </div>
         )}
       </div>

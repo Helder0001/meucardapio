@@ -17,6 +17,7 @@ interface ProductModalProps {
   product: {
     id: string; name: string; description: string | null
     price: number; image: string | null; addonGroups: AddonGroup[]
+    isOutOfStock?: boolean
   }
   onClose: () => void
   disabled?: boolean
@@ -210,7 +211,7 @@ export function ProductModal({ product, onClose, disabled, primaryColor }: Produ
         </div>
 
         {/* Footer */}
-        {!disabled && (
+        {!disabled ? (
           <div className="px-5 py-4 border-t border-gray-100 dark:border-gray-800 flex items-center gap-3 flex-shrink-0">
             {/* Quantidade */}
             <div className="flex items-center gap-3 bg-gray-100 dark:bg-gray-800 rounded-2xl px-2 py-1.5">
@@ -242,6 +243,12 @@ export function ProductModal({ product, onClose, disabled, primaryColor }: Produ
               <span>Adicionar</span>
               <span>{formatCurrency(total)}</span>
             </button>
+          </div>
+        ) : (
+          <div className="px-5 py-4 border-t border-gray-100 dark:border-gray-800 flex-shrink-0">
+            <div className="w-full text-center py-3.5 rounded-2xl font-black bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500">
+              {product.isOutOfStock ? 'Produto esgotado' : 'Loja fechada no momento'}
+            </div>
           </div>
         )}
       </div>

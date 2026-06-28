@@ -21,7 +21,7 @@ import Image from 'next/image'
 interface Product {
   id: string; name: string; description: string | null
   price: number; comparePrice: number | null; image: string | null
-  isFeatured: boolean; isBestSeller: boolean
+  isFeatured: boolean; isBestSeller: boolean; isOutOfStock?: boolean
   preparationTime: number | null; tags: string[]; addonGroups: AddonGroup[]
 }
 interface AddonGroup {
@@ -802,7 +802,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
                     key={product.id}
                     product={product}
                     onSelect={() => setSelectedProduct(product)}
-                    disabled={!isOpen}
+                    disabled={!isOpen || product.isOutOfStock}
                     primaryColor={color}
                   />
                 ))}
@@ -850,7 +850,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
                       key={product.id}
                       product={product}
                       onSelect={() => setSelectedProduct(product)}
-                      disabled={!isOpen}
+                      disabled={!isOpen || product.isOutOfStock}
                       color={color}
                     />
                   ))}
@@ -873,7 +873,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
                       key={product.id}
                       product={product}
                       onSelect={() => setSelectedProduct(product)}
-                      disabled={!isOpen}
+                      disabled={!isOpen || product.isOutOfStock}
                       primaryColor={color}
                     />
                   ))}
@@ -905,7 +905,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
                       key={product.id}
                       product={product}
                       onSelect={() => setSelectedProduct(product)}
-                      disabled={!isOpen}
+                      disabled={!isOpen || product.isOutOfStock}
                       primaryColor={color}
                     />
                   ))}
@@ -1042,7 +1042,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
         <ProductModal
           product={selectedProduct}
           onClose={() => setSelectedProduct(null)}
-          disabled={!isOpen}
+          disabled={!isOpen || selectedProduct.isOutOfStock}
           primaryColor={color}
         />
       )}
@@ -1096,18 +1096,25 @@ function FeaturedCard({
         {product.image ? (
           <Image
             src={product.image} alt={product.name} fill
-            className="object-cover group-hover:scale-105 transition-transform duration-500"
+            className={`object-cover group-hover:scale-105 transition-transform duration-500 ${product.isOutOfStock ? 'grayscale opacity-60' : ''}`}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-4xl bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700">🍽️</div>
         )}
-        {hasDiscount && (
+        {hasDiscount && !product.isOutOfStock && (
           <div className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-lg">
             -{discountPct}%
           </div>
         )}
-        {product.isBestSeller && (
+        {product.isBestSeller && !product.isOutOfStock && (
           <div className="absolute top-2 right-2 text-xs" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}>🔥</div>
+        )}
+        {product.isOutOfStock && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+            <span className="bg-white/95 dark:bg-gray-900/95 text-gray-900 dark:text-gray-100 text-[10px] font-black px-2 py-1 rounded-lg shadow-sm">
+              Esgotado
+            </span>
+          </div>
         )}
       </div>
       <div className="p-3 flex-1 flex flex-col">
