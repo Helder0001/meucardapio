@@ -31,9 +31,9 @@ export async function POST(req: NextRequest) {
   const frequencyType = isAnnual ? 'years' : 'months'
   const isPixPayment  = !card_token_id
 
-  // Trial de 7 dias
   const startDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
+  // SEMPRE status 'pending' no POST — o PUT vai autorizar o cartão
   const mpPayload: Record<string, any> = {
     reason: reason ?? `Meu Cardápio — Plano PRO ${isAnnual ? 'Anual' : 'Mensal'}`,
     payer_email,
@@ -45,12 +45,8 @@ export async function POST(req: NextRequest) {
     },
     start_date: startDate.toISOString(),
     back_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
-    status: isPixPayment ? 'pending' : 'authorized',
+    status: 'pending',
     payer,
-  }
-
-  if (!isPixPayment) {
-    mpPayload.card_token_id = card_token_id
   }
 
   console.log('[mp/preapproval] payload:', JSON.stringify({
@@ -59,6 +55,7 @@ export async function POST(req: NextRequest) {
   }))
 
   try {
+    // Passo 1: POST com status pending (sempre)
     const mpRes = await fetch('https://api.mercadopago.com/preapproval', {
       method: 'POST',
       headers: {
@@ -100,7 +97,7 @@ export async function POST(req: NextRequest) {
 
     const subscriptionId = String(data.id)
 
-    // Se cartão: PUT para confirmar autorização
+    // Passo 2: se cartão, PUT para autorizar
     if (!isPixPayment) {
       try {
         const putRes = await fetch(`https://api.mercadopago.com/preapproval/${subscriptionId}`, {
@@ -113,9 +110,18 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify({ card_token_id, status: 'authorized' }),
         })
         const putText = await putRes.text()
-        console.log('[mp/preapproval] PUT authorize status:', putRes.status, putText)
+        console.log('[mp/preapproval] PUT authorize status:', putRes.status, 'body:', putText)
+
+        if (!putRes.ok) {
+          const putData = JSON.parse(putText)
+          const putMsg = putData?.message ?? 'Erro ao autorizar cartão'
+          console.error('[mp/preapproval] PUT authorize erro completo:', putText)
+          // PUT falhou — cancela a preapproval criada e retorna erro
+          return NextResponse.json({ error: `Cartão recusado: ${putMsg}` }, { status: 400 })
+        }
       } catch (putErr) {
-        console.error('[mp/preapproval] PUT authorize error (não crítico):', putErr)
+        console.error('[mp/preapproval] PUT authorize error:', putErr)
+        return NextResponse.json({ error: 'Erro ao autorizar cartão. Tente novamente.' }, { status: 502 })
       }
     }
 
