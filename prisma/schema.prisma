@@ -18,9 +18,12 @@ datasource db {
 // ══════════════════════════════════════════════════════════
 
 enum Plan {
-  STARTER   // até 50 produtos, 1 usuário
-  PRO       // ilimitado, 5 usuários, delivery
-  PREMIUM   // ilimitado, multi-PDV, IA, cashback
+  PRO   // acesso completo — usuários ilimitados, todos os recursos
+}
+
+enum BillingCycle {
+  MONTHLY
+  ANNUAL
 }
 
 enum SubscriptionStatus {
@@ -97,7 +100,7 @@ model Tenant {
   name               String
   slug               String             @unique // ex: "pizzaria-do-ze" → /menu/pizzaria-do-ze
   customDomain       String?            @unique // ex: "pedidos.pizzariadoze.com.br"
-  plan               Plan               @default(STARTER)
+  plan               Plan               @default(PRO)
   subscriptionStatus SubscriptionStatus @default(TRIAL)
   trialEndsAt        DateTime?
 
@@ -163,6 +166,7 @@ model Subscription {
   tenantId           String             @unique
   mercadoPagoSubId   String?            @unique
   plan               Plan
+  billingCycle       BillingCycle       @default(MONTHLY)
   status             SubscriptionStatus
   amount             Decimal            @db.Decimal(10, 2)
   currency           String             @default("BRL")
