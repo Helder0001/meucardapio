@@ -17,6 +17,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/client'
+import { restockCancelledOrder } from '@/lib/utils/stock'
 import crypto from 'crypto'
 
 function generateStatusToken(orderId: string): string {
@@ -67,6 +68,7 @@ export async function GET(
       where: { id, ...tenantFilter },
       select: {
         id: true,
+        tenantId: true,
         status: true,
         paymentStatus: true,
         confirmedAt: true,
@@ -101,12 +103,12 @@ export async function GET(
       expiredPix.pixExpiresAt &&
       expiredPix.pixExpiresAt < new Date()
     ) {
-      await prisma.$transaction([
-        prisma.payment.updateMany({
+      await prisma.$transaction(async (tx) => {
+        await tx.payment.updateMany({
           where: { orderId: id, method: 'PIX', status: 'PENDING' },
           data: { status: 'FAILED', failedAt: new Date() },
-        }),
-        prisma.order.update({
+        })
+        await tx.order.update({
           where: { id },
           data: {
             status: 'CANCELLED',
@@ -114,8 +116,17 @@ export async function GET(
             cancelledAt: new Date(),
             cancelReason: 'PIX expirado sem pagamento',
           },
-        }),
-      ])
+        })
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId: id,
+            status: 'CANCELLED',
+            notes: 'Cancelamento automático: PIX expirado sem pagamento',
+          },
+        })
+        // Devolve ao estoque tudo que foi debitado na criação do pedido
+        await restockCancelledOrder(tx, { tenantId: order.tenantId, orderId: id })
+      })
       order.status = 'CANCELLED'
       order.paymentStatus = 'FAILED'
       order.payments[0].status = 'FAILED'

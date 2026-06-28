@@ -37,6 +37,28 @@ export default async function KanbanPage() {
     orderBy: { sortOrder: 'asc' },
   })
 
+  // Buscar mesas ativas — em try/catch para não quebrar o kanban se falhar
+  let tables: Array<{ id: string; number: number; sector: string; status: string; pdv: { id: string; name: string } }> = []
+  try {
+    tables = await prisma.table.findMany({
+      where: {
+        tenantId: session.user.tenantId,
+        isActive: true,
+        ...(userPdv?.pdvId ? { pdvId: userPdv.pdvId } : {}),
+      },
+      select: {
+        id: true,
+        number: true,
+        sector: true,
+        status: true,
+        pdv: { select: { id: true, name: true } },
+      },
+      orderBy: { number: 'asc' },
+    })
+  } catch (e) {
+    console.error('[kanban] Erro ao buscar mesas:', e)
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -62,6 +84,13 @@ export default async function KanbanPage() {
               categories={categories.map(c => ({
                 ...c,
                 products: c.products.map(p => ({ ...p, price: Number(p.price) }))
+              }))}
+              tables={tables.map(t => ({
+                id: t.id,
+                number: t.number,
+                sector: t.sector,
+                status: t.status,
+                pdvName: t.pdv.name,
               }))}
             />
           )}

@@ -20,6 +20,7 @@ import { prisma } from '@/lib/db/client'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { applyCashback, applyLoyaltyPoints } from '@/lib/loyalty/apply-rewards'
+import { restockCancelledOrder } from '@/lib/utils/stock'
 import crypto from 'crypto'
 
 export const runtime = 'nodejs'
@@ -205,28 +206,41 @@ export async function POST(request: Request) {
     // "cancelled" — sem tratar isso aqui, o pedido ficava travado pra sempre
     // em "Aguardando confirmação PIX" mesmo depois de expirado.
     if (mpStatus === 'cancelled' && payment.status === 'PENDING') {
-      await prisma.payment.update({
-        where: { id: payment.id },
-        data: { status: 'FAILED', mercadoPagoStatus: mpStatus, failedAt: new Date() },
-      })
-      await prisma.order.update({
-        where: { id: payment.order.id },
-        data: { paymentStatus: 'FAILED' },
-      })
-
       // CORREÇÃO: cancelar o pedido automaticamente quando o PIX expira —
       // só se ainda estiver PENDING (não cancela se a loja já confirmou/avançou
       // o pedido por outro meio, ex.: combinou pagamento em dinheiro na entrega).
-      if (payment.order.status === 'PENDING') {
-        await prisma.order.update({
-          where: { id: payment.order.id },
-          data: {
-            status: 'CANCELLED',
-            cancelledAt: new Date(),
-            cancelReason: 'PIX expirado sem pagamento',
-          },
+      const shouldCancelOrder = payment.order.status === 'PENDING'
+
+      await prisma.$transaction(async (tx) => {
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: { status: 'FAILED', mercadoPagoStatus: mpStatus, failedAt: new Date() },
         })
-      }
+        await tx.order.update({
+          where: { id: payment.order.id },
+          data: { paymentStatus: 'FAILED' },
+        })
+
+        if (shouldCancelOrder) {
+          await tx.order.update({
+            where: { id: payment.order.id },
+            data: {
+              status: 'CANCELLED',
+              cancelledAt: new Date(),
+              cancelReason: 'PIX expirado sem pagamento',
+            },
+          })
+          await tx.orderStatusHistory.create({
+            data: {
+              orderId: payment.order.id,
+              status: 'CANCELLED',
+              notes: 'Cancelamento automático: PIX expirado sem pagamento (webhook MP)',
+            },
+          })
+          // Devolve ao estoque tudo que foi debitado na criação do pedido
+          await restockCancelledOrder(tx, { tenantId: payment.order.tenantId, orderId: payment.order.id })
+        }
+      })
     }
 
     if (mpStatus === 'refunded') {

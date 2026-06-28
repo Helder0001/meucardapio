@@ -5,7 +5,12 @@
   "regions": [
     "gru1"
   ],
-  "crons": [],
+  "crons": [
+    {
+      "path": "/api/internal/cron/cleanup",
+      "schedule": "*/15 * * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

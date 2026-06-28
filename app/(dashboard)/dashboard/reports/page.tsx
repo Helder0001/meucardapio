@@ -1,10 +1,7 @@
-// app/(dashboard)/dashboard/reports/page.tsx
-
 import { auth } from '@/lib/auth/session'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db/client'
 import { ReportsClient } from '@/components/dashboard/reports-client'
-import { startOfMonth, startOfDay, endOfDay } from 'date-fns'
 import type { Metadata } from 'next'
 import type { OrderStatus, OrderType } from '@prisma/client'
 
@@ -20,6 +17,17 @@ interface PageProps {
 
 const PAID_STATUS_FILTER = { notIn: ['CANCELLED', 'REFUNDED'] as OrderStatus[] }
 
+// Converte "YYYY-MM-DD" para início/fim do dia no fuso de São Paulo (UTC-3)
+const toSpStart = (d: string) => new Date(d + 'T00:00:00-03:00')
+const toSpEnd   = (d: string) => new Date(d + 'T23:59:59-03:00')
+
+// Retorna o início do mês atual no fuso SP
+function startOfMonthSP(): Date {
+  const now = new Date()
+  const sp  = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
+  return toSpStart(`${sp.getFullYear()}-${String(sp.getMonth() + 1).padStart(2, '0')}-01`)
+}
+
 function buildPdvWhere(filterPdv: string, filterSaleType: string) {
   const pdvCondition = filterPdv === 'null'
     ? { pdvId: null }
@@ -33,6 +41,7 @@ function buildPdvWhere(filterPdv: string, filterSaleType: string) {
 async function queryRevenueChart(
   tenantId: string, startDate: Date, endDate: Date,
   filterPdv: string, filterSaleType: string,
+  filterPayment: string, filterProduct: string,
 ): Promise<Array<{ date: string; revenue: number; orders: number }>> {
   const orders = await prisma.order.findMany({
     where: {
@@ -40,6 +49,8 @@ async function queryRevenueChart(
       status: { notIn: ['CANCELLED', 'REFUNDED'] },
       createdAt: { gte: startDate, lte: endDate },
       ...buildPdvWhere(filterPdv, filterSaleType),
+      ...(filterPayment ? { payments: { some: { method: filterPayment as any } } } : {}),
+      ...(filterProduct ? { items: { some: { productId: filterProduct } } } : {}),
     },
     select: { total: true, createdAt: true },
   })
@@ -84,6 +95,7 @@ async function queryRevenueChartSimple(
 async function queryHourChart(
   tenantId: string, startDate: Date, endDate: Date,
   filterPdv: string, filterSaleType: string,
+  filterPayment: string, filterProduct: string,
 ): Promise<Array<{ hour: number; orders: number }>> {
   const orders = await prisma.order.findMany({
     where: {
@@ -91,6 +103,8 @@ async function queryHourChart(
       status: { notIn: ['CANCELLED', 'REFUNDED'] },
       createdAt: { gte: startDate, lte: endDate },
       ...buildPdvWhere(filterPdv, filterSaleType),
+      ...(filterPayment ? { payments: { some: { method: filterPayment as any } } } : {}),
+      ...(filterProduct ? { items: { some: { productId: filterProduct } } } : {}),
     },
     select: { createdAt: true },
   })
@@ -114,9 +128,9 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   const now      = new Date()
   const params   = await searchParams
 
-  const defaultStart = startOfMonth(now)
-  const startDate = params.start ? startOfDay(new Date(params.start)) : defaultStart
-  const endDate   = params.end   ? endOfDay(new Date(params.end))     : endOfDay(now)
+  const defaultStart = startOfMonthSP()
+  const startDate = params.start ? toSpStart(params.start) : defaultStart
+  const endDate   = params.end   ? toSpEnd(params.end)     : toSpEnd(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }))
 
   const filterPdv      = params.pdv      || ''
   const filterPayment  = params.payment  || ''
@@ -143,6 +157,9 @@ export default async function ReportsPage({ searchParams }: PageProps) {
       },
     }
   }
+  // Filtros de pagamento e produto aplicados globalmente
+  if (filterPayment) baseWhere.payments = { some: { method: filterPayment as any } }
+  if (filterProduct) baseWhere.items    = { some: { productId: filterProduct } }
 
   // Período anterior
   const periodLen = endDate.getTime() - startDate.getTime()
@@ -183,7 +200,7 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   let revenueChartPrev: Array<{ date: string; revenue: number }> = []
   try {
     ;[revenueChart, revenueChartPrev] = await Promise.all([
-      queryRevenueChart(tenantId, startDate, endDate, filterPdv, filterSaleType),
+      queryRevenueChart(tenantId, startDate, endDate, filterPdv, filterSaleType, filterPayment, filterProduct),
       queryRevenueChartSimple(tenantId, prevStart, prevEnd),
     ])
   } catch (e) { console.error('[reports] revenueChart error:', e) }
@@ -191,15 +208,12 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   // ── Pico por horário ─────────────────────────────────────────────────────
   let salesByHour: Array<{ hour: number; orders: number }> = []
   try {
-    salesByHour = await queryHourChart(tenantId, startDate, endDate, filterPdv, filterSaleType)
+    salesByHour = await queryHourChart(tenantId, startDate, endDate, filterPdv, filterSaleType, filterPayment, filterProduct)
   } catch (e) { console.error('[reports] salesByHour error:', e) }
 
   // ── Produtos mais vendidos ───────────────────────────────────────────────
   const productWhere: any = {
-    order: {
-      ...baseWhere,
-      ...(filterPayment ? { payments: { some: { method: filterPayment, status: 'PAID' } } } : {}),
-    },
+    order: { ...baseWhere },
   }
   if (filterProduct) productWhere.productId = filterProduct
 
@@ -214,21 +228,14 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   // ── Vendas por tipo ──────────────────────────────────────────────────────
   const salesByType = await prisma.order.groupBy({
     by: ['type'],
-    where: {
-      ...baseWhere,
-      ...(filterPayment ? { payments: { some: { method: filterPayment, status: 'PAID' } } } : {}),
-      ...(filterProduct ? { items: { some: { productId: filterProduct } } } : {}),
-    },
+    where: { ...baseWhere },
     _sum: { total: true },
     _count: { id: true },
   })
 
   // ── Formas de pagamento ──────────────────────────────────────────────────
   const paymentWhere: any = {
-    order: {
-      ...baseWhere,
-      ...(filterProduct ? { items: { some: { productId: filterProduct } } } : {}),
-    },
+    order: { ...baseWhere },
     status: 'PAID',
   }
   if (filterPayment) paymentWhere.method = filterPayment
@@ -262,29 +269,25 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   const prevAvgTicket = previous._count.id > 0 ? prevRevenue / previous._count.id : 0
 
   // ── Clientes ─────────────────────────────────────────────────────────────
+  // Recorrente = fez 2+ pedidos no período analisado (histórico total se sem filtro)
   let totalClients = 0, newClients = 0, returningClients = 0, returnRate = 0
   try {
-    const [currentCustomers, prevCustomers] = await Promise.all([
-      prisma.order.findMany({
-        where: { ...baseWhere, customerId: { not: null } },
-        select: { customerId: true },
-        distinct: ['customerId'],
-      }),
-      prisma.order.findMany({
-        where: {
-          tenantId,
-          status: PAID_STATUS_FILTER,
-          createdAt: { gte: prevStart, lte: prevEnd },
-          customerId: { not: null },
-        },
-        select: { customerId: true },
-        distinct: ['customerId'],
-      }),
-    ])
-    const prevIds = new Set(prevCustomers.map((o) => o.customerId))
-    const currIds = currentCustomers.map((o) => o.customerId as string)
-    totalClients     = currIds.length
-    returningClients = currIds.filter((id) => prevIds.has(id)).length
+    // Busca todos os pedidos do período com telefone do cliente
+    const periodOrders = await prisma.order.findMany({
+      where: { ...baseWhere },
+      select: { customer: { select: { phone: true } } },
+    })
+
+    // Conta quantos pedidos cada telefone fez no período
+    const phoneCount = new Map<string, number>()
+    for (const o of periodOrders) {
+      const phone = o.customer?.phone
+      if (!phone) continue
+      phoneCount.set(phone, (phoneCount.get(phone) ?? 0) + 1)
+    }
+
+    totalClients     = phoneCount.size
+    returningClients = [...phoneCount.values()].filter((n) => n >= 2).length
     newClients       = totalClients - returningClients
     returnRate       = totalClients > 0 ? (returningClients / totalClients) * 100 : 0
   } catch (e) { console.error('[reports] clients error:', e) }

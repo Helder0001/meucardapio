@@ -33,6 +33,31 @@ const METHOD_PT: Record<string, string> = {
   TRANSFER:    'Transferência',
 }
 
+const STATUS_PT: Record<string, string> = {
+  PENDING:          'Pendente',
+  CONFIRMED:        'Confirmado',
+  PREPARING:        'Preparando',
+  READY:            'Pronto',
+  OUT_FOR_DELIVERY: 'Saiu p/ entrega',
+  DELIVERED:        'Entregue',
+  CANCELLED:        'Cancelado',
+  REFUNDED:         'Estornado',
+}
+
+const PGTO_PT: Record<string, string> = {
+  PENDING: 'Pendente',
+  PAID:    'Pago',
+  FAILED:  'Falhou',
+  REFUNDED:'Estornado',
+}
+
+const TYPE_PT: Record<string, string> = {
+  DELIVERY: 'Delivery',
+  TABLE:    'Mesa',
+  PICKUP:   'Retirada',
+  PDV:      'Balcão',
+}
+
 export async function GET(request: Request) {
   const session = await auth()
   if (!session?.user?.tenantId) {
@@ -58,9 +83,14 @@ export async function GET(request: Request) {
   const endDate   = endParsed.data   ?? null
   const tenantId  = session.user.tenantId
 
+  // Converter datas para fuso de São Paulo (UTC-3)
+  // "2026-06-27" no fuso SP = "2026-06-27T03:00:00Z" (início) e "2026-06-28T02:59:59Z" (fim)
+  const toSpStart = (d: string) => new Date(d + 'T00:00:00-03:00')
+  const toSpEnd   = (d: string) => new Date(d + 'T23:59:59-03:00')
+
   const dateFilter = {
-    ...(startDate ? { gte: new Date(startDate) } : {}),
-    ...(endDate   ? { lte: new Date(endDate + 'T23:59:59') } : {}),
+    ...(startDate ? { gte: toSpStart(startDate) } : {}),
+    ...(endDate   ? { lte: toSpEnd(endDate) }     : {}),
   }
 
   const tenant = await prisma.tenant.findFirst({ where: { id: tenantId }, select: { name: true } })
@@ -102,9 +132,9 @@ export async function GET(request: Request) {
       rows = orders.map((o) => [
         formatOrderNumber(o.orderNumber),
         formatDate(o.createdAt),
-        o.status,
-        o.paymentStatus,
-        o.type,
+        STATUS_PT[o.status]        ?? o.status,
+        PGTO_PT[o.paymentStatus]   ?? o.paymentStatus,
+        TYPE_PT[o.type]            ?? o.type,
         o.customer?.name ?? '',
         o.customer?.phone ?? '',
         o.deliveryBairro ?? '',
@@ -551,9 +581,9 @@ function buildOrdersPdf({ tenantName, orders, totalRevenue, startDate, endDate }
     <td>${formatOrderNumber(o.orderNumber)}</td>
     <td>${formatDate(o.createdAt)}</td>
     <td>${o.customer?.name ?? '—'}</td>
-    <td>${o.type}</td>
-    <td>${o.status}</td>
-    <td>${o.paymentStatus}</td>
+    <td>${TYPE_PT[o.type]          ?? o.type}</td>
+    <td>${STATUS_PT[o.status]      ?? o.status}</td>
+    <td>${PGTO_PT[o.paymentStatus] ?? o.paymentStatus}</td>
     <td>${o.payments?.map((p: any) => METHOD_PT[p.method] ?? p.method).join(', ') ?? '—'}</td>
     <td style="text-align:right;font-weight:bold">${formatCurrency(Number(o.total))}</td>
   </tr>`).join('')

@@ -19,9 +19,12 @@ interface RecentOrdersProps {
 }
 
 const typeLabel: Record<string, string> = {
-  DINE_IN: 'Mesa',
+  DINE_IN:  'Mesa',
   TAKEAWAY: 'Retirada',
   DELIVERY: 'Delivery',
+  TABLE:    'Mesa',
+  PICKUP:   'Retirada',
+  PDV:      'Balcão',
 }
 
 export function RecentOrders({ orders }: RecentOrdersProps) {
