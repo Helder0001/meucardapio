@@ -76,7 +76,7 @@ export async function registerAction(
         data: {
           name: tenantName,
           slug,
-          plan: 'STARTER',
+          plan: 'PRO',
           subscriptionStatus: 'TRIAL',
           trialEndsAt,
           primaryColor: '#f97316',
@@ -100,7 +100,7 @@ export async function registerAction(
         await tx.subscription.create({
           data: {
             tenantId: tenant.id,
-            plan: 'STARTER',
+            plan: 'PRO',
             status: 'TRIAL',
             mercadoPagoSubId: mpResult.subscriptionId,
             currentPeriodStart: new Date(),
