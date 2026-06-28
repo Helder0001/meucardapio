@@ -7,6 +7,7 @@ import {
   decrementStockForOrder,
   restockCancelledOrder,
   adjustStockManually,
+  isOutOfStock,
 } from '@/lib/utils/stock'
 
 // ── Mock de uma transação Prisma em memória ────────────────────────────────
@@ -277,5 +278,102 @@ describe('adjustStockManually', () => {
         tenantId: 'tenant-1', stockId: 'inexistente', type: 'MANUAL_IN', quantity: 1,
       })
     ).rejects.toThrow(/não encontrado/)
+  })
+
+  it('retorna o productId do estoque ajustado, para acionar revalidação do cardápio', async () => {
+    const { tx } = createMockTx([
+      { id: 'stk-1', pdvId: 'pdv-1', productId: 'prod-1', quantity: 5 },
+    ])
+
+    const result = await adjustStockManually(tx as any, {
+      tenantId: 'tenant-1', stockId: 'stk-1', type: 'MANUAL_IN', quantity: 1,
+    })
+
+    expect(result.productId).toBe('prod-1')
+  })
+})
+
+describe('isOutOfStock', () => {
+  it('produto sem nenhum registro de Stock nunca está esgotado (estoque "infinito")', () => {
+    expect(isOutOfStock([])).toBe(false)
+  })
+
+  it('produto com saldo positivo em um PDV não está esgotado', () => {
+    expect(isOutOfStock([{ quantity: 5 }])).toBe(false)
+  })
+
+  it('produto com saldo zero em todos os PDVs está esgotado', () => {
+    expect(isOutOfStock([{ quantity: 0 }])).toBe(true)
+  })
+
+  it('soma o saldo de múltiplos PDVs antes de decidir', () => {
+    expect(isOutOfStock([{ quantity: 0 }, { quantity: 3 }])).toBe(false)
+    expect(isOutOfStock([{ quantity: 0 }, { quantity: 0 }])).toBe(true)
+  })
+
+  it('aceita Decimal do Prisma (objeto com toString) e valores string', () => {
+    expect(isOutOfStock([{ quantity: '0' }])).toBe(true)
+    expect(isOutOfStock([{ quantity: { toString: () => '2.5' } }])).toBe(false)
+  })
+})
+
+describe('affectedProductIds — sinal para revalidação do cardápio digital', () => {
+  it('decrementStockForOrder retorna o productId vendido', async () => {
+    const { tx } = createMockTx([
+      { id: 'stk-1', pdvId: 'pdv-1', productId: 'prod-1', quantity: 5 },
+    ])
+
+    const { affectedProductIds } = await decrementStockForOrder(tx as any, {
+      tenantId: 'tenant-1', orderId: 'order-1',
+      items: [{ productId: 'prod-1', quantity: 2 }],
+    })
+
+    expect(affectedProductIds).toEqual(['prod-1'])
+  })
+
+  it('decrementStockForOrder não retorna nada para produto sem controle de estoque', async () => {
+    const { tx } = createMockTx([])
+
+    const { affectedProductIds } = await decrementStockForOrder(tx as any, {
+      tenantId: 'tenant-1', orderId: 'order-1',
+      items: [{ productId: 'prod-sem-controle', quantity: 2 }],
+    })
+
+    expect(affectedProductIds).toEqual([])
+  })
+
+  it('restockCancelledOrder retorna os productIds estornados', async () => {
+    const { tx } = createMockTx([
+      { id: 'stk-1', pdvId: 'pdv-1', productId: 'prod-1', quantity: 7 },
+    ])
+    await tx.stockMovement.create({
+      data: {
+        tenantId: 'tenant-1', stockId: 'stk-1', productId: 'prod-1', pdvId: 'pdv-1',
+        orderId: 'order-1', type: 'SALE', quantity: 3, balanceAfter: 7,
+      },
+    })
+
+    const { affectedProductIds } = await restockCancelledOrder(tx as any, {
+      tenantId: 'tenant-1', orderId: 'order-1',
+    })
+
+    expect(affectedProductIds).toEqual(['prod-1'])
+  })
+
+  it('restockCancelledOrder não retorna nada quando já foi estornado (idempotência)', async () => {
+    const { tx } = createMockTx([
+      { id: 'stk-1', pdvId: 'pdv-1', productId: 'prod-1', quantity: 7 },
+    ])
+    await tx.stockMovement.create({
+      data: {
+        tenantId: 'tenant-1', stockId: 'stk-1', productId: 'prod-1', pdvId: 'pdv-1',
+        orderId: 'order-1', type: 'SALE', quantity: 3, balanceAfter: 7,
+      },
+    })
+
+    await restockCancelledOrder(tx as any, { tenantId: 'tenant-1', orderId: 'order-1' })
+    const second = await restockCancelledOrder(tx as any, { tenantId: 'tenant-1', orderId: 'order-1' })
+
+    expect(second.affectedProductIds).toEqual([])
   })
 })
