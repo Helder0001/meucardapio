@@ -18,7 +18,7 @@
 import { z } from 'zod'
 import crypto from 'crypto'
 import { checkAndPublishStockAlerts } from '@/lib/utils/stock-alerts'
-import { decrementStockForOrder } from '@/lib/utils/stock'
+import { decrementStockForOrder, revalidateStorefrontForTenant } from '@/lib/utils/stock'
 import { prisma } from '@/lib/db/client'
 import { calculateOrder } from '@/lib/utils/order-calculator'
 import { formatCurrency } from '@/lib/utils/format'
@@ -192,7 +192,7 @@ export async function createOrderAction(
   // 5. Criar pedido em transação
   const orderNumber = await getNextOrderNumber(data.tenantId)
 
-  const order = await prisma.$transaction(async (tx) => {
+  const txResult = await prisma.$transaction(async (tx) => {
     const newOrder = await tx.order.create({
       data: {
         tenantId: data.tenantId,
@@ -246,7 +246,7 @@ export async function createOrderAction(
 
     // Decrementar estoque dos produtos vendidos (com proteção contra
     // concorrência e registro de histórico — ver lib/utils/stock.ts)
-    await decrementStockForOrder(tx, {
+    const { affectedProductIds } = await decrementStockForOrder(tx, {
       tenantId: data.tenantId,
       orderId: newOrder.id,
       items: calculation.items.map((item) => ({
@@ -309,8 +309,15 @@ export async function createOrderAction(
       })
     }
 
-    return newOrder
+    return { newOrder, affectedProductIds }
   })
+
+  // Revalida o cardápio digital se algum produto pode ter zerado o
+  // estoque com esta venda — fora da transação, é só efeito de cache.
+  if (txResult.affectedProductIds.length > 0) {
+    await revalidateStorefrontForTenant(data.tenantId)
+  }
+  const order = txResult.newOrder
 
   // 6. Criar registros de pagamento (um por forma de pagamento)
   let pixResult: { pixQrCode?: string; pixQrCodeBase64?: string } | null = null
