@@ -17,7 +17,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/client'
-import { restockCancelledOrder } from '@/lib/utils/stock'
+import { restockCancelledOrder, revalidateStorefrontForTenant } from '@/lib/utils/stock'
 import crypto from 'crypto'
 
 function generateStatusToken(orderId: string): string {
@@ -127,6 +127,7 @@ export async function GET(
         ? 'Cancelamento automático: PIX expirado sem pagamento'
         : 'Cancelamento automático: pagamento pendente há mais de 2 horas'
 
+      let affectedProductIds: string[] = []
       await prisma.$transaction(async (tx) => {
         // Só cancela se ainda estiver PENDING no momento exato da transação
         // (evita corrida com o webhook do MP ou outra consulta concorrente).
@@ -151,8 +152,13 @@ export async function GET(
           data: { orderId: id, status: 'CANCELLED', notes: historyNote },
         })
         // Devolve ao estoque tudo que foi debitado na criação do pedido
-        await restockCancelledOrder(tx, { tenantId: order.tenantId, orderId: id })
+        const result = await restockCancelledOrder(tx, { tenantId: order.tenantId, orderId: id })
+        affectedProductIds = result.affectedProductIds
       })
+
+      if (affectedProductIds.length > 0) {
+        await revalidateStorefrontForTenant(order.tenantId)
+      }
 
       order.status = 'CANCELLED'
       if (pixExpired) {
