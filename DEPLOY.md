@@ -80,6 +80,39 @@ postgresql://user:password@ep-xxx.us-east-1.aws.neon.tech/foodsaas?sslmode=requi
 
 ---
 
+## Passo 5.1 — iFood e 99Food (opcional)
+
+Diferente do Mercado Pago, **você (a plataforma) precisa virar parceiro homologado**
+antes de qualquer restaurante conseguir conectar a loja. Não é algo que se resolve
+só com uma variável de ambiente — veja o roteiro:
+
+### iFood
+1. Crie conta em [developer.ifood.com.br](https://developer.ifood.com.br) com "Perfil Profissional".
+2. Cadastre um aplicativo do tipo **Centralizado** (controla várias lojas com um único client).
+3. Em ambiente de sandbox, gere `clientId`/`clientSecret` e teste o fluxo completo
+   (autorização → polling → confirm → dispatch) com lojas de teste.
+4. Submeta para homologação. Aprovado, você recebe as credenciais de produção.
+5. Configure na Vercel: `IFOOD_APP_ID`, `IFOOD_CLIENT_ID`, `IFOOD_CLIENT_SECRET`.
+
+### 99Food
+1. A 99Food não tem auto-cadastro de desenvolvedor totalmente público — fale com o
+   time comercial da 99Food (developer-food.99app.com) para liberar um slot de
+   integração via **Open Delivery**.
+2. Cada loja autoriza manualmente no 99Food Admin e fornece um `AppShopID`, que é
+   colado pelo lojista na tela `/dashboard/settings/integrations` (fluxo manual,
+   sem redirect automático).
+3. Não há credencial global obrigatória além de `NINETYNINE_FOOD_API_BASE_URL`
+   — a credencial real (AppShopID) fica por conexão/loja.
+
+### Após homologado
+O `vercel.json` já inclui um cron de polling a cada minuto
+(`/api/internal/cron/marketplace-polling`). Isso exige **plano Vercel Pro**
+(o Hobby só permite crons diários). Sem plano Pro, oriente o lojista a usar o
+botão "Atualizar agora" no dashboard (chama `/api/marketplace/[provider]/sync-now`
+sob demanda) como alternativa manual enquanto não migrar de plano.
+
+---
+
 ## Passo 6 — Deploy na Vercel
 
 ### 6.1 Instalar CLI
@@ -135,6 +168,14 @@ pnpm prisma migrate deploy
 pnpm db:seed   # Opcional: dados de exemplo
 ```
 
+> **Nota — integração iFood/99Food:** a migration `20260628_marketplace_integrations`
+> foi escrita como SQL manual (mesmo padrão usado em `20260628_billing_cycle`).
+> Se `migrate deploy` não a aplicar automaticamente no seu setup, rode:
+> ```bash
+> npx prisma db execute --file prisma/migrations/20260628_marketplace_integrations/migration.sql
+> npx prisma generate
+> ```
+
 ### 6.5 Deploy
 ```bash
 vercel --prod
@@ -176,6 +217,9 @@ curl -X POST https://seuapp.vercel.app/api/webhooks/mercadopago \
 # Verificar cron jobs
 curl -H "x-cron-secret: SEU_SECRET" \
   https://seuapp.vercel.app/api/internal/cron/cleanup
+
+curl -H "x-cron-secret: SEU_SECRET" \
+  https://seuapp.vercel.app/api/internal/cron/marketplace-polling
 
 # Verificar health geral
 curl https://seuapp.vercel.app/api/auth/providers

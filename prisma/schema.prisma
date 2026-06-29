@@ -91,6 +91,32 @@ enum TableStatus {
   CLEANING
 }
 
+// ── Marketplaces de delivery (iFood, 99Food) ────────────────────────────────
+enum MarketplaceProvider {
+  IFOOD
+  NINETYNINE_FOOD // 99Food
+}
+
+enum MarketplaceConnectionStatus {
+  PENDING       // aguardando autorização do lojista na plataforma do marketplace
+  CONNECTED     // autorizado e operando
+  DISCONNECTED  // desconectado manualmente pelo lojista
+  ERROR         // token expirado/revogado ou erro persistente — precisa reconectar
+}
+
+// Espelha o ciclo de vida do pedido na plataforma de origem (iFood/99Food),
+// separado do nosso OrderStatus interno porque os nomes/etapas não coincidem 1:1.
+enum MarketplaceOrderStatus {
+  RECEIVED            // evento de novo pedido chegou, ainda não confirmado
+  CONFIRMED           // confirmamos o pedido na plataforma
+  PREPARING
+  READY_FOR_PICKUP
+  DISPATCHED          // saiu para entrega (entregador do marketplace ou próprio)
+  CONCLUDED
+  CANCELLED
+  CANCELLATION_REQUESTED // cliente/plataforma pediu cancelamento, aguardando decisão do lojista
+}
+
 // ══════════════════════════════════════════════════════════
 // PLATAFORMA (nivel master)
 // ══════════════════════════════════════════════════════════
@@ -155,6 +181,8 @@ model Tenant {
   auditLogs          AuditLog[]
   payments           Payment[]
   reviews            Review[]
+  marketplaceConnections MarketplaceConnection[]
+  marketplaceOrders      MarketplaceOrder[]
 
   @@index([slug])
   @@index([customDomain])
@@ -375,6 +403,7 @@ model Product {
   addonGroups     ProductAddonGroup[]
   orderItems      OrderItem[]
   stocks          Stock[]
+  marketplaceMappings MarketplaceProductMapping[]
 
   @@index([tenantId])
   @@index([categoryId])
@@ -604,6 +633,7 @@ model Order {
   statusHistory  OrderStatusHistory[]
   stockMovements StockMovement[]
   review         Review?
+  marketplaceOrder MarketplaceOrder?
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId])
@@ -1079,4 +1109,140 @@ model ReportSchedule {
 
   @@index([tenantId])
   @@index([isActive, hour])
+}
+
+// ══════════════════════════════════════════════════════════
+// MARKETPLACES DE DELIVERY (iFood / 99Food)
+//
+// Modelo de autorização: a PLATAFORMA (este SaaS) é quem se cadastra e é
+// homologada como "app/integrador" no iFood e na 99Food, uma única vez.
+// Cada Tenant (restaurante) apenas AUTORIZA o app da plataforma a acessar
+// a loja dele — fluxo igual ao MercadoPagoConnection (OAuth), nunca pedimos
+// para o lojista colar client_id/client_secret manualmente.
+//
+// accessToken/refreshToken sempre criptografados em repouso (AES-256-GCM,
+// ver lib/security/crypto.ts) — nunca armazenar em texto plano.
+// ══════════════════════════════════════════════════════════
+
+model MarketplaceConnection {
+  id          String                      @id @default(cuid())
+  tenantId    String
+  provider    MarketplaceProvider
+  status      MarketplaceConnectionStatus @default(PENDING)
+
+  // Identificador da loja na plataforma do marketplace
+  // iFood: merchantId (UUID) · 99Food: AppShopID (Open Delivery)
+  externalMerchantId String?
+  merchantName       String?   // nome da loja como cadastrado no marketplace (auditoria/exibição)
+
+  // Sensível — sempre criptografado (AES-256-GCM). Nulo até a autorização ser concluída.
+  accessTokenEnc  String?
+  refreshTokenEnc String?
+  tokenType       String?   @default("bearer")
+  scope           String?
+  expiresAt       DateTime?
+
+  // Estado usado durante o handshake OAuth (CSRF) — descartado após o callback
+  oauthState      String?
+  authorizationCodeVerifier String? // iFood usa o fluxo "Authorization Code" com verifier curto (PKCE-like)
+
+  // Repasse de catálogo: liga produtos do cardápio aos itens vendáveis no marketplace
+  lastCatalogSyncAt DateTime?
+  lastCatalogSyncError String?
+
+  // Operação
+  autoAcceptOrders Boolean   @default(false) // aceitar pedidos automaticamente ao chegar
+  isOpen           Boolean   @default(true)  // loja aberta para receber pedidos no marketplace
+  lastPolledAt     DateTime?                  // última vez que o polling de eventos rodou com sucesso
+  lastPollingError String?
+
+  connectedAt       DateTime?
+  connectedByUserId String?
+  disconnectedAt    DateTime?
+  revokedAt         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant       Tenant             @relation(fields: [tenantId], references: [id])
+  orders       MarketplaceOrder[]
+  productMappings MarketplaceProductMapping[]
+
+  @@unique([tenantId, provider])
+  @@index([tenantId])
+  @@index([provider, status])
+  @@index([externalMerchantId])
+}
+
+// Liga um Product do cardápio interno ao item correspondente no catálogo
+// do marketplace — necessário porque cada plataforma exige seu próprio
+// cadastro de item (nome, categoria, preço podem divergir do cardápio interno).
+model MarketplaceProductMapping {
+  id           String   @id @default(cuid())
+  connectionId String
+  productId    String
+
+  // ID do item/sellable no catálogo do marketplace (preenchido após o sync)
+  externalItemId String?
+  // Preço pode ser diferenciado por canal (comum cobrir taxa do marketplace)
+  overridePrice   Decimal? @db.Decimal(10, 2)
+  isActive        Boolean  @default(true)
+
+  lastSyncedAt DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  connection MarketplaceConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  product    Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, productId])
+  @@index([connectionId])
+  @@index([productId])
+}
+
+// Um pedido vindo do iFood/99Food. Ao ser processado, gera um Order interno
+// normal (type=DELIVERY) — esta tabela guarda o vínculo e os dados brutos
+// de origem para rastreabilidade, conciliação financeira e suporte.
+model MarketplaceOrder {
+  id           String   @id @default(cuid())
+  tenantId     String
+  connectionId String
+  orderId      String?  @unique // Order interno gerado (null até o processamento terminar)
+
+  provider         MarketplaceProvider
+  externalOrderId  String              // ID do pedido na plataforma de origem
+  externalDisplayId String?             // código curto exibido ao cliente (#1234)
+  status           MarketplaceOrderStatus @default(RECEIVED)
+
+  // Snapshot do payload recebido — auditoria e reprocessamento em caso de bug
+  rawPayload   Json
+  // Eventos já confirmados (acknowledgment) para não reprocessar no próximo polling
+  acknowledgedEventIds String[] @default([])
+
+  // Repasse financeiro informado pela plataforma (comissão, taxas, valor líquido)
+  grossAmount      Decimal? @db.Decimal(10, 2)
+  commissionAmount Decimal? @db.Decimal(10, 2)
+  netAmount        Decimal? @db.Decimal(10, 2)
+
+  // Quem faz a entrega: o próprio marketplace (FULL_SERVICE) ou o lojista (MARKETPLACE_DELIVERY)
+  deliveredBy String? // MERCHANT | MARKETPLACE
+
+  receivedAt   DateTime  @default(now())
+  confirmedAt  DateTime?
+  cancelledAt  DateTime?
+  cancelReason String?
+  syncError    String?   // erro ao tentar transformar em Order interno (visível no dashboard)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant     Tenant                @relation(fields: [tenantId], references: [id])
+  connection MarketplaceConnection @relation(fields: [connectionId], references: [id])
+  order      Order?                @relation(fields: [orderId], references: [id])
+
+  @@unique([provider, externalOrderId])
+  @@index([tenantId])
+  @@index([connectionId])
+  @@index([status])
+  @@index([receivedAt])
 }
