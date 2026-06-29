@@ -9,7 +9,7 @@ import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Users, Table2,
   Truck, BarChart3, Settings, Tag, Star, MessageSquare, MessageCircle, Printer,
   Store, QrCode, ShieldCheck, X, Menu,
-  Bell, ClipboardList, Boxes,
+  Bell, ClipboardList, Boxes, Plug,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
@@ -48,6 +48,7 @@ const navItems: NavItem[] = [
   { label: 'Relatórios',   href: '/dashboard/reports',            icon: BarChart3,         allowedRoles: MANAGER_UP },
   { label: 'Impressoras',  href: '/dashboard/printers',           icon: Printer,           allowedRoles: MANAGER_UP },
   { label: 'Pagamentos',   href: '/dashboard/settings/payments',  icon: QrCode,            allowedRoles: MANAGER_UP },
+  { label: 'Integrações',  href: '/dashboard/settings/integrations', icon: Plug,           minPlan: 'PRO', allowedRoles: MANAGER_UP },
   { label: 'Configurações',href: '/dashboard/settings',           icon: Settings,          allowedRoles: ADMIN_ROLES },
 ]
 
