@@ -5,9 +5,7 @@
 import { z } from 'zod'
 import { prisma } from '@/lib/db/client'
 import { hashPassword } from '@/lib/auth/password'
-import { signIn } from '@/lib/auth/session'
 import { nanoid } from 'nanoid'
-import { redirect } from 'next/navigation'
 
 const registerSchema = z.object({
   tenantName:   z.string().min(2).max(100),
@@ -19,7 +17,7 @@ const registerSchema = z.object({
   cardToken:    z.string().optional(),
 })
 
-export type RegisterState = { error?: string; success?: boolean; pixInitPoint?: string }
+export type RegisterState = { error?: string; success?: boolean; pixInitPoint?: string; email?: string; password?: string }
 
 function generateSlug(name: string): string {
   return name
@@ -50,12 +48,7 @@ export async function registerAction(
     return { error: parsed.error.errors[0].message }
   }
 
-  const { tenantName, slug: rawSlug, name, email, password, billingCycle, cardToken } = parsed.data
-
-  const cardName = (formData.get('cardName') as string | null) ?? ''
-  const cardCpf  = (formData.get('cardCpf')  as string | null) ?? ''
-  const [firstName = '', ...lastParts] = cardName.trim().split(' ')
-  const lastName = lastParts.join(' ')
+  const { tenantName, slug: rawSlug, name, email, password, billingCycle } = parsed.data
 
   // 1. Email duplicado
   const exists = await prisma.user.findFirst({ where: { email } })
@@ -67,15 +60,7 @@ export async function registerAction(
   if (existingSlug) slug = `${slug}-${nanoid(4)}`
 
   // 3. Criar assinatura no Mercado Pago
-  const mpResult = await createMpSubscription({
-    tenantName,
-    email,
-    billingCycle,
-    cardToken,
-    firstName,
-    lastName,
-    cpf: cardCpf,
-  })
+  const mpResult = await createMpSubscription({ tenantName, email, billingCycle })
   if (mpResult.error) return { error: mpResult.error }
 
   const passwordHash = await hashPassword(password)
@@ -142,31 +127,20 @@ export async function registerAction(
     return { error: 'Erro ao criar conta. Tente novamente.' }
   }
 
-  // 5. Login automático — fora da transaction, lança NEXT_REDIRECT que é intencional
-  try {
-    await signIn('credentials', { email, password, redirect: false })
-  } catch (err: any) {
-    // signIn pode lançar mesmo em sucesso em algumas versões do NextAuth
-    console.error('[register] signIn error (pode ser normal):', err?.message)
+  // 5. Retornar sucesso com credenciais para o cliente fazer login via signIn do NextAuth
+  // Não fazemos signIn no servidor para evitar conflito com NEXT_REDIRECT
+  return {
+    success: true,
+    pixInitPoint: mpResult.pixInitPoint,
+    email,
+    password, // necessário para auto-login no cliente
   }
-
-  // PIX: retorna sucesso com init_point para mostrar na tela
-  if (mpResult.pixInitPoint) {
-    return { success: true, pixInitPoint: mpResult.pixInitPoint }
-  }
-
-  // Cartão: redireciona para onboarding
-  redirect('/dashboard/onboarding')
 }
 
 async function createMpSubscription(params: {
   tenantName:   string
   email:        string
   billingCycle: string
-  cardToken?:   string
-  firstName:    string
-  lastName:     string
-  cpf:          string
 }): Promise<{ subscriptionId?: string; pixInitPoint?: string; error?: string }> {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL
   if (!appUrl) {
@@ -188,16 +162,12 @@ async function createMpSubscription(params: {
       body: JSON.stringify({
         reason:        `Meu Cardápio — Plano PRO ${params.billingCycle === 'ANNUAL' ? 'Anual' : 'Mensal'} — ${params.tenantName}`,
         payer_email:   params.email,
-        card_token_id: params.cardToken || undefined,
         billing_cycle: params.billingCycle,
         payer: {
           email:      params.email,
-          first_name: params.firstName || params.email.split('@')[0],
-          last_name:  params.lastName  || 'Cliente',
-          identification: {
-            type:   'CPF',
-            number: params.cpf || '',
-          },
+          first_name: params.email.split('@')[0],
+          last_name:  'Cliente',
+          identification: { type: 'CPF', number: '' },
         },
       }),
     })

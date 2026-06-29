@@ -1,65 +1,75 @@
 'use client'
 
 // app/(auth)/register/register-form.tsx
-// Fluxo simplificado: sem tokenização de cartão no frontend.
-// O MP cuida do pagamento via init_point (link de checkout).
 
-import { useState, useActionState } from 'react'
+import { useState, useActionState, useEffect } from 'react'
 import { registerAction } from '@/actions/auth/register'
+import { signIn } from 'next-auth/react'
 import { Eye, EyeOff, Loader2, CheckCircle2, Calendar, Zap } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 
 const PLAN_PRICE_MONTHLY = 1.00
 const PLAN_PRICE_ANNUAL  = parseFloat((PLAN_PRICE_MONTHLY * 12 * 0.9).toFixed(2))
 const ANNUAL_DISCOUNT_PCT = 10
 
-const INITIAL_STATE = { error: undefined as string | undefined, success: false, pixInitPoint: undefined as string | undefined }
+const INITIAL_STATE = {
+  error:        undefined as string | undefined,
+  success:      false,
+  pixInitPoint: undefined as string | undefined,
+  email:        undefined as string | undefined,
+  password:     undefined as string | undefined,
+}
 
 export function RegisterForm() {
+  const router = useRouter()
   const [state, formAction, isPending] = useActionState(registerAction, INITIAL_STATE)
-  const [showPass, setShowPass]        = useState(false)
+  const [showPass, setShowPass]         = useState(false)
   const [billingCycle, setBillingCycle] = useState<'MONTHLY' | 'ANNUAL'>('MONTHLY')
+  const [loggingIn, setLoggingIn]       = useState(false)
 
   const isAnnual     = billingCycle === 'ANNUAL'
-  const currentPrice = isAnnual ? PLAN_PRICE_ANNUAL : PLAN_PRICE_MONTHLY
   const monthlyEquiv = isAnnual ? (PLAN_PRICE_ANNUAL / 12).toFixed(2) : null
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  // Auto-login após conta criada com sucesso
+  useEffect(() => {
+    if (state.success && state.email && state.password) {
+      setLoggingIn(true)
+      signIn('credentials', {
+        email:    state.email,
+        password: state.password,
+        redirect: false,
+      }).then((result) => {
+        if (result?.ok) {
+          // Se tem link do MP, redireciona para lá; senão vai para o dashboard
+          if (state.pixInitPoint) {
+            window.location.href = state.pixInitPoint
+          } else {
+            router.push('/dashboard')
+          }
+        } else {
+          // Login automático falhou — manda para login manual
+          router.push('/login?cadastro=ok')
+        }
+      }).catch(() => {
+        router.push('/login?cadastro=ok')
+      })
+    }
+  }, [state.success, state.email, state.password])
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
     fd.set('billingCycle', billingCycle)
     formAction(fd)
   }
 
-  // Sucesso: mostrar botão para ir ao MP finalizar pagamento
-  if (state.success) {
+  // Tela de loading enquanto faz login automático
+  if (loggingIn) {
     return (
-      <div className="text-center space-y-4">
-        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
-          <CheckCircle2 className="w-8 h-8 text-emerald-600" />
-        </div>
-        <h2 className="text-xl font-bold text-gray-900">Conta criada com sucesso!</h2>
-        <p className="text-gray-500 text-sm">
-          Seus 7 dias de teste começaram. Para ativar a assinatura, finalize o pagamento no Mercado Pago.
-        </p>
-
-        {state.pixInitPoint && (
-          <a
-            href={state.pixInitPoint}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block py-3 px-6 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl transition-colors text-center"
-          >
-            Finalizar pagamento no Mercado Pago
-          </a>
-        )}
-
-        <Link
-          href="/dashboard"
-          className="block py-3 px-6 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl transition-colors text-center"
-        >
-          Ir para o painel →
-        </Link>
+      <div className="text-center space-y-4 py-8">
+        <Loader2 className="w-10 h-10 animate-spin text-orange-500 mx-auto" />
+        <p className="text-gray-600 font-medium">Entrando na sua conta...</p>
       </div>
     )
   }
@@ -180,7 +190,7 @@ export function RegisterForm() {
 
       {/* Info trial */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs text-blue-700">
-        <strong>7 dias grátis</strong> — nenhuma cobrança durante o trial. Após criar a conta, você será redirecionado para o Mercado Pago para ativar a assinatura com cartão de crédito ou PIX.
+        <strong>7 dias grátis</strong> — nenhuma cobrança durante o trial. Após criar a conta, você será redirecionado para o Mercado Pago para ativar a assinatura com cartão de crédito.
       </div>
 
       <input type="hidden" name="billingCycle" value={billingCycle} />

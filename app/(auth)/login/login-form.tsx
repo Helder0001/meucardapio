@@ -5,7 +5,7 @@
 import { useFormState, useFormStatus } from 'react-dom'
 import { loginAction } from '@/actions/auth/login'
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -37,6 +37,8 @@ interface LoginFormProps {
 
 export function LoginForm({ callbackUrl, urlError }: LoginFormProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const cadastroOk = searchParams.get('cadastro') === 'ok'
   const [showPassword, setShowPassword] = useState(false)
   const [state, formAction] = useFormState(loginAction, {})
 
@@ -56,6 +58,13 @@ export function LoginForm({ callbackUrl, urlError }: LoginFormProps) {
       {/* Campo escondido para redirecionar após login */}
       {callbackUrl && (
         <input type="hidden" name="callbackUrl" value={callbackUrl} />
+      )}
+
+      {/* Sucesso: veio do cadastro */}
+      {cadastroOk && (
+        <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+          ✅ Conta criada com sucesso! Faça login para acessar o painel.
+        </div>
       )}
 
       {/* Erro geral */}
