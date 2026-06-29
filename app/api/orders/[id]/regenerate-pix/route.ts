@@ -4,6 +4,7 @@
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
+import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
 import crypto from 'crypto'
 
 function validateStatusToken(orderId: string, token: string): boolean {
@@ -34,13 +35,11 @@ export async function POST(
       tenantId: true,
       total: true,
       customer: { select: { phone: true, name: true } },
-      tenant: { select: { settings: true } },
     },
   })
   if (!order) return NextResponse.json({ error: 'Pedido não encontrado' }, { status: 404 })
 
-  const settings  = order.tenant.settings as any
-  const accessToken = settings?.mercadoPagoAccessToken ?? process.env.MERCADOPAGO_ACCESS_TOKEN
+  const accessToken = await resolveTenantMpAccessToken(order.tenantId)
 
   if (!accessToken) {
     return NextResponse.json({ error: 'Mercado Pago não configurado' }, { status: 503 })

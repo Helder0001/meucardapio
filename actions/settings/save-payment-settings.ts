@@ -1,14 +1,17 @@
 'use server'
 // actions/settings/save-payment-settings.ts
 //
-// Salva as credenciais do Mercado Pago de cada restaurante.
-// O accessToken é armazenado em tenant.settings.mercadoPagoAccessToken
-// e usado automaticamente em create-order.ts para gerar PIX.
+// Salva a configuração de PIX/pagamentos de cada restaurante.
+//
+// HISTÓRICO: este arquivo cuidava de salvar o Access Token do Mercado Pago
+// colado manualmente pelo lojista. Isso foi substituído pelo fluxo OAuth
+// (Mercado Pago Connect — ver app/api/mercadopago/connect e callback), que
+// é mais seguro (token nunca passa pelo navegador do lojista) e não expira
+// sem avisar. Esta action agora só cuida do que sobrou fora do OAuth:
+// o Webhook Secret e o toggle de "PIX habilitado".
 //
 // SEGURANÇA:
-// - O token nunca é retornado ao frontend (apenas uma flag "configurado")
-// - Validamos o token chamando a API do MP antes de salvar
-// - Apenas TENANT_ADMIN e MASTER_ADMIN podem alterar
+// - Apenas TENANT_ADMIN, MASTER_ADMIN e MANAGER podem alterar
 
 import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/client'
@@ -16,11 +19,6 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
 const schema = z.object({
-  mercadoPagoAccessToken: z
-    .string()
-    .min(20, 'Token inválido')
-    .startsWith('APP_USR-', 'O token deve começar com APP_USR-')
-    .or(z.literal('')), // vazio = remover token
   mercadoPagoWebhookSecret: z.string().min(10, 'Secret inválido').or(z.literal('')),
   pixEnabled: z.enum(['true', 'false']),
 })
@@ -28,7 +26,6 @@ const schema = z.object({
 export type PaymentSettingsState = {
   error?: string
   success?: boolean
-  tokenValid?: boolean
 }
 
 export async function savePaymentSettings(
@@ -46,7 +43,6 @@ export async function savePaymentSettings(
   const tenantId = session.user.tenantId
 
   const raw = {
-    mercadoPagoAccessToken:     formData.get('mercadoPagoAccessToken') || '',
     mercadoPagoWebhookSecret:   formData.get('mercadoPagoWebhookSecret') || '',
     pixEnabled:                 formData.get('pixEnabled') || 'false',
   }
@@ -54,15 +50,7 @@ export async function savePaymentSettings(
   const parsed = schema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.errors[0].message }
 
-  const { mercadoPagoAccessToken, mercadoPagoWebhookSecret, pixEnabled } = parsed.data
-
-  // Se um token foi fornecido, valida contra a API do MP antes de salvar
-  if (mercadoPagoAccessToken) {
-    const isValid = await validateMercadoPagoToken(mercadoPagoAccessToken)
-    if (!isValid) {
-      return { error: 'Access Token inválido. Verifique se copiou corretamente do painel do Mercado Pago.' }
-    }
-  }
+  const { mercadoPagoWebhookSecret, pixEnabled } = parsed.data
 
   // Buscar settings atuais para fazer merge (não sobrescrever outros campos)
   const tenant = await prisma.tenant.findFirst({
@@ -74,11 +62,6 @@ export async function savePaymentSettings(
   const updatedSettings = {
     ...currentSettings,
     pixEnabled: pixEnabled === 'true',
-    // Só atualiza o token se um novo foi fornecido
-    // Se string vazia, remove do settings (undefined = Prisma ignora na serialização JSON)
-    ...(mercadoPagoAccessToken
-      ? { mercadoPagoAccessToken }
-      : { mercadoPagoAccessToken: null }),
     ...(mercadoPagoWebhookSecret
       ? { mercadoPagoWebhookSecret }
       : {}),
@@ -91,25 +74,12 @@ export async function savePaymentSettings(
 
   revalidatePath('/dashboard/settings/payments')
 
-  return { success: true, tokenValid: !!mercadoPagoAccessToken }
+  return { success: true }
 }
 
-// Valida o token chamando /users/me da API do MP
-async function validateMercadoPagoToken(token: string): Promise<boolean> {
-  try {
-    const res = await fetch('https://api.mercadopago.com/users/me', {
-      headers: { Authorization: `Bearer ${token}` },
-      // Timeout de 5s para não travar o formulário
-      signal: AbortSignal.timeout(5000),
-    })
-    return res.ok
-  } catch {
-    // Se a API do MP estiver fora do ar, deixa passar (não bloqueia o restaurante)
-    return true
-  }
-}
-
-// Action para remover as credenciais (limpar)
+// Action para remover o token LEGADO (colado manualmente antes do OAuth
+// existir) e o webhook secret manual. Não afeta a conexão OAuth — para
+// desconectar a conta MP via OAuth, use /api/mercadopago/disconnect.
 export async function removePaymentCredentials(): Promise<PaymentSettingsState> {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }

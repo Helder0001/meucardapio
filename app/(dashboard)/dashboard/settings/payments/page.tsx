@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth/session'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db/client'
 import { PaymentSettingsForm } from '@/components/dashboard/payment-settings-form'
+import { Suspense } from 'react'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Configurações de Pagamento' }
@@ -21,8 +22,6 @@ export default async function PaymentSettingsPage() {
 
   const settings = (tenant.settings as Record<string, any>) ?? {}
 
-  // Não passamos o token pro frontend — apenas se existe ou não
-  const hasToken  = !!settings.mercadoPagoAccessToken
   const hasSecret = !!settings.mercadoPagoWebhookSecret
   const pixEnabled = settings.pixEnabled === true
 
@@ -31,15 +30,16 @@ export default async function PaymentSettingsPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Pagamentos</h1>
         <p className="text-muted-foreground text-sm mt-0.5">
-          Configure o PIX via Mercado Pago para receber pagamentos dos seus clientes
+          Conecte sua conta do Mercado Pago para receber PIX e cartão dos seus clientes
         </p>
       </div>
 
-      <PaymentSettingsForm
-        hasToken={hasToken}
-        hasSecret={hasSecret}
-        pixEnabled={pixEnabled}
-      />
+      <Suspense fallback={null}>
+        <PaymentSettingsForm
+          hasSecret={hasSecret}
+          pixEnabled={pixEnabled}
+        />
+      </Suspense>
     </div>
   )
 }
