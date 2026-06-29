@@ -60,7 +60,8 @@ postgresql://user:password@ep-xxx.us-east-1.aws.neon.tech/foodsaas?sslmode=requi
 1. Acesse [mercadopago.com.br/developers](https://www.mercadopago.com.br/developers)
 2. Crie uma aplicação
 3. Copie as credenciais de **Produção**:
-   - `MERCADOPAGO_ACCESS_TOKEN` (começa com `APP_USR-...`)
+   - `MERCADOPAGO_ACCESS_TOKEN` (começa com `APP_USR-...`) — usado só para a
+     assinatura da plataforma (cobrança do plano do tenant), não para o PIX dos clientes.
    - `NEXT_PUBLIC_MP_PUBLIC_KEY`
 4. Configure o webhook:
    - URL: `https://seudominio.vercel.app/api/webhooks/mercadopago`
@@ -68,6 +69,22 @@ postgresql://user:password@ep-xxx.us-east-1.aws.neon.tech/foodsaas?sslmode=requi
    - Copie o **Webhook Secret** → `MERCADOPAGO_WEBHOOK_SECRET`
 
 > ⚠️ Para testar, use as credenciais de **Sandbox** primeiro
+
+### 4.1 Mercado Pago Connect (OAuth) — PIX/cartão dos restaurantes
+
+Para que cada restaurante receba PIX/cartão direto na própria conta MP (em vez
+de colar um Access Token manualmente), habilite o OAuth na mesma aplicação:
+
+1. No painel da aplicação → **Detalhes da aplicação** → **Editar**
+2. Habilite **PKCE** (obrigatório desde 2024 — sem isso o fluxo OAuth falha)
+3. Configure a **Redirect URI**: `https://seudominio.vercel.app/api/mercadopago/callback`
+4. Copie `Client ID` e `Client Secret` (são diferentes do Access Token) →
+   `MERCADOPAGO_CLIENT_ID` e `MERCADOPAGO_CLIENT_SECRET`
+5. Pronto — o lojista agora vê o botão "Conectar conta do Mercado Pago" em
+   `/dashboard/settings/payments` e autoriza com a própria conta dele.
+
+Tenants que já tinham configurado o Access Token manualmente continuam
+funcionando (fallback automático) até migrarem para o OAuth.
 
 ---
 

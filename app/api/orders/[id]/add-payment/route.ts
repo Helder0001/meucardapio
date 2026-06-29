@@ -8,6 +8,7 @@ import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/client'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
+import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
 import { z } from 'zod'
 
 const paymentEntrySchema = z.object({
@@ -28,12 +29,7 @@ async function createPixPayment(params: {
   orderId: string
   amount: number
 }) {
-  const tenant = await prisma.tenant.findFirst({
-    where: { id: params.tenantId },
-    select: { settings: true },
-  })
-  const settings = tenant?.settings as any
-  const accessToken = settings?.mercadoPagoAccessToken ?? process.env.MERCADOPAGO_ACCESS_TOKEN
+  const accessToken = await resolveTenantMpAccessToken(params.tenantId)
   if (!accessToken) throw new Error('Mercado Pago não configurado')
 
   const response = await fetch('https://api.mercadopago.com/v1/payments', {
