@@ -17,7 +17,9 @@ build/
 .env.production.local
 
 # Prisma
-prisma/migrations/
+# (migrations NÃO devem ser ignoradas — precisam ir para o controle de
+# versão para serem aplicadas em produção. Removida a regra antiga que
+# bloqueava prisma/migrations/ silenciosamente.)
 
 # Debug
 npm-debug.log*
