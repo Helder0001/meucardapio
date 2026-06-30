@@ -108,7 +108,7 @@ export async function proxy(request: NextRequest) {
       "style-src 'self' 'unsafe-inline' https://http2.mlstatic.com",
       "img-src 'self' blob: data: https:",
       "font-src 'self' https://http2.mlstatic.com",
-      "connect-src 'self' https://api.mercadopago.com https://api.mercadolibre.com https://www.mercadolibre.com https://http2.mlstatic.com https://*.upstash.io wss:",
+      "connect-src 'self' https://api.mercadopago.com https://api.mercadolibre.com https://www.mercadolibre.com https://www.mercadopago.com https://events.mercadopago.com https://http2.mlstatic.com https://*.upstash.io wss:",
       "frame-src https://www.mercadopago.com https://www.mercadolibre.com",
       `frame-ancestors ${isStorefront ? "'self'" : "'none'"}`,
       "base-uri 'self'",
