@@ -9,6 +9,7 @@ import {
 import { formatCurrency, formatOrderNumber } from '@/lib/utils/format'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
+import { CardPaymentForm } from './card-payment-form'
 
 const STATUS_STEPS = [
   { key: 'PENDING',          label: 'Recebido',    icon: Clock,        desc: 'Aguardando confirmação' },
@@ -30,11 +31,13 @@ const STATUS_MESSAGES: Record<string, { text: string; emoji: string }> = {
 }
 
 interface Payment {
+  method: string
   status: string
   pixQrCode: string | null
   pixQrCodeBase64: string | null
   pixExpiresAt: Date | null
   amount: number
+  cardLastDigits?: string | null
 }
 
 interface OrderTrackingProps {
@@ -62,6 +65,10 @@ interface OrderTrackingProps {
   }
   // ✅ Token HMAC gerado no servidor para autorizar o polling
   statusToken: string
+  // Public Key do Mercado Pago do tenant — necessária só se houver pagamento
+  // pendente com cartão (Checkout Transparente). Null se o tenant não tem
+  // MP conectado ou se o pagamento é PIX/dinheiro.
+  mpPublicKey?: string | null
 }
 
 // ─── Componente countdown PIX ────────────────────────────────────────────────
@@ -276,13 +283,15 @@ function PixSection({
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export function OrderTracking({ order: initialOrder, statusToken }: OrderTrackingProps) {
+export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey }: OrderTrackingProps) {
   const [order, setOrder] = useState(initialOrder)
   const [isRefreshingPix, setIsRefreshingPix] = useState(false)
 
   const color = order.tenant.primaryColor ?? '#f97316'
-  const pixPayment = order.payments[0] ?? null
-  const needsPixPayment = pixPayment && order.paymentStatus !== 'PAID'
+  const pendingPayment = order.payments[0] ?? null
+  const needsPixPayment = pendingPayment?.method === 'PIX' && order.paymentStatus !== 'PAID'
+  const needsCardPayment = pendingPayment?.method === 'CREDIT_CARD' && order.paymentStatus !== 'PAID' && !!mpPublicKey
+  const pixPayment = pendingPayment
   const isDelivery = order.type === 'DELIVERY'
   const steps = STATUS_STEPS.filter((s) => isDelivery ? true : s.key !== 'OUT_FOR_DELIVERY')
   const currentStepIndex = steps.findIndex((s) => s.key === order.status)
@@ -371,6 +380,22 @@ export function OrderTracking({ order: initialOrder, statusToken }: OrderTrackin
             color={color}
             orderId={order.id}
             onRefresh={handleRefreshPix}
+          />
+        )}
+
+        {needsCardPayment && order.status !== 'CANCELLED' && (
+          <CardPaymentForm
+            orderId={order.id}
+            amount={Number(order.total)}
+            publicKey={mpPublicKey!}
+            color={color}
+            onSuccess={() => {
+              setOrder((prev) => ({
+                ...prev,
+                paymentStatus: 'PAID',
+                status: prev.status === 'PENDING' ? 'CONFIRMED' : prev.status,
+              }))
+            }}
           />
         )}
 

@@ -19,6 +19,7 @@ export default async function OrderPage({ params }: PageProps) {
     where: { id },
     select: {
       id: true,
+      tenantId: true,
       orderNumber: true,
       status: true,
       paymentStatus: true,
@@ -48,15 +49,17 @@ export default async function OrderPage({ params }: PageProps) {
         },
       },
       payments: {
-        where: { method: 'PIX' },
+        where: { method: { in: ['PIX', 'CREDIT_CARD'] } },
         orderBy: { createdAt: 'desc' },
         take: 1,
         select: {
+          method: true,
           status: true,
           pixQrCode: true,
           pixQrCodeBase64: true,
           pixExpiresAt: true,
           amount: true,
+          cardLastDigits: true,
         },
       },
     },
@@ -69,8 +72,22 @@ export default async function OrderPage({ params }: PageProps) {
   // ✅ Gerar token HMAC no servidor para autorizar o polling de status
   const statusToken = generateStatusToken(id)
 
+  // Public Key do MP do tenant — só é buscada quando existe pagamento
+  // pendente de cartão, para não fazer essa query sem necessidade.
+  let mpPublicKey: string | null = null
+  const hasPendingCardPayment = order.payments[0]?.method === 'CREDIT_CARD' && order.paymentStatus !== 'PAID'
+  if (hasPendingCardPayment) {
+    const connection = await prisma.mercadoPagoConnection.findFirst({
+      where: { tenantId: order.tenantId, revokedAt: null },
+      select: { publicKey: true },
+    })
+    mpPublicKey = connection?.publicKey ?? process.env.NEXT_PUBLIC_MP_PUBLIC_KEY ?? null
+  }
+
+  const { tenantId, ...orderWithoutTenantId } = order
+
   const serialized = {
-    ...order,
+    ...orderWithoutTenantId,
     total:          Number(order.total),
     subtotal:       Number(order.subtotal),
     deliveryFee:    Number(order.deliveryFee),
@@ -91,5 +108,5 @@ export default async function OrderPage({ params }: PageProps) {
     })),
   }
 
-  return <OrderTracking order={serialized} statusToken={statusToken} />
+  return <OrderTracking order={serialized} statusToken={statusToken} mpPublicKey={mpPublicKey} />
 }

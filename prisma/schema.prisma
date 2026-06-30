@@ -778,14 +778,23 @@ model Payment {
   status            PaymentStatus @default(PENDING)
   amount            Decimal       @db.Decimal(10, 2)
 
-  // Mercado Pago
+  // Mercado Pago — PIX
   mercadoPagoId     String?       @unique
   mercadoPagoStatus String?
   pixQrCode         String?       // código copia-e-cola
   pixQrCodeBase64   String?       // imagem base64 do QR Code
   pixExpiresAt      DateTime?
+
+  // Mercado Pago — Checkout Pro (link de pagamento)
+  // Usado tanto para o link enviado via WhatsApp (dashboard) quanto para
+  // cartão no cardápio digital (Checkout Pro redireciona para página do MP)
+  preferenceId      String?       // ID da Preference no MP
+  checkoutUrl       String?       // link de pagamento (init_point)
+
+  // Mercado Pago — Checkout Transparente (cartão online no storefront)
   installments      Int?
   cardLastDigits    String?
+  cardBrand         String?       // visa, mastercard, etc
 
   // Dinheiro
   changeAmount      Decimal?      @db.Decimal(10, 2)
