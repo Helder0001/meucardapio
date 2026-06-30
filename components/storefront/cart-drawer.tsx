@@ -18,6 +18,7 @@ interface CartDrawerProps {
     slug: string
     primaryColor?: string | null
     settings?: any
+    pixEnabled?: boolean
     deliveryZones: Array<{
       id: string
       bairro: string | null
@@ -37,7 +38,7 @@ type PaymentMethodValue = 'PIX' | 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD'
 const STEPS: Step[] = ['cart', 'info', 'payment']
 const STEP_LABELS = { cart: 'Carrinho', info: 'Seus dados', payment: 'Pagamento' }
 
-const PAYMENT_OPTIONS: { value: PaymentMethodValue; label: string; sub: string }[] = [
+const ALL_PAYMENT_OPTIONS: { value: PaymentMethodValue; label: string; sub: string }[] = [
   { value: 'PIX',         label: '⚡ PIX',          sub: 'Confirmação automática' },
   { value: 'CASH',        label: '💵 Dinheiro',      sub: 'Pague na entrega/retirada' },
   { value: 'CREDIT_CARD', label: '💳 Crédito',       sub: 'Cartão de crédito' },
@@ -58,6 +59,39 @@ function newEntry(method: PaymentMethodValue = 'PIX'): PaymentEntry {
 export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps) {
   const router = useRouter()
   const color = tenant.primaryColor ?? '#f97316'
+  const pixEnabled = tenant.pixEnabled ?? tenant.settings?.pixEnabled ?? true
+  const PAYMENT_OPTIONS = pixEnabled ? ALL_PAYMENT_OPTIONS : ALL_PAYMENT_OPTIONS.filter(o => o.value !== 'PIX')
+
+  // Busca CEP via ViaCEP e identifica zona de entrega
+  const handleCepLookup = async (rawCep: string) => {
+    const digits = rawCep.replace(/\D/g, '')
+    setCep(rawCep)
+    if (digits.length !== 8) { setCepError(''); setCepZone(null); return }
+    setCepLoading(true); setCepError('')
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`)
+      const data = await res.json()
+      if (data.erro) { setCepError('CEP não encontrado.'); setCepZone(null); return }
+      // Preenche endereço automaticamente
+      setDeliveryAddress(`${data.logradouro || ''}, ${data.bairro || ''}, ${data.localidade || ''}`)
+      // Tenta encontrar zona de entrega pelo bairro
+      const bairroNorm = (data.bairro || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      const zone = tenant.deliveryZones.find(z => {
+        const zBairro = (z.bairro || z.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        return zBairro && bairroNorm.includes(zBairro)
+      })
+      if (zone) {
+        setCepZone(zone)
+        setDeliveryBairro(zone.bairro)
+        setCepError('')
+      } else {
+        setCepZone(null)
+        setCepError('Seu CEP está fora da área de entrega.')
+        setDeliveryBairro(null)
+      }
+    } catch { setCepError('Erro ao buscar CEP. Verifique sua conexão.') }
+    finally { setCepLoading(false) }
+  }
 
   const [step, setStep]               = useState<Step>('cart')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -69,6 +103,10 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const [couponDescription, setCouponDescription] = useState('')
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false)
   const [deliveryAddress, setDeliveryAddress] = useState('')
+  const [cep, setCep] = useState('')
+  const [cepLoading, setCepLoading] = useState(false)
+  const [cepError, setCepError] = useState('')
+  const [cepZone, setCepZone] = useState<typeof tenant.deliveryZones[0] | null>(null)
 
   // ── Cashback / fidelidade ────────────────────────────────────────────────
   const [cashbackBalance, setCashbackBalance] = useState(0)
@@ -166,7 +204,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const handleSubmitOrder = async () => {
     if (items.length === 0) return
     if (!isTableOrder && !customerPhone && !phone) { toast.error('Informe seu telefone'); return }
-    if (deliveryType === 'DELIVERY' && !deliveryBairro) { toast.error('Selecione seu bairro'); return }
+    if (deliveryType === 'DELIVERY' && !cepZone && tenant.deliveryZones.length > 0) { toast.error('Informe um CEP válido na área de entrega'); return }
 
     // CORREÇÃO: endereço de entrega obrigatório
     if (deliveryType === 'DELIVERY' && !deliveryAddress.trim()) {
@@ -433,35 +471,48 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                       </div>
                       {deliveryType === 'DELIVERY' && (
                         <div className="mt-3 space-y-2">
-                          {tenant.deliveryZones.length > 0 && (
-                            <select value={deliveryBairro ?? ''} onChange={(e) => setDeliveryBairro(e.target.value || null)}
-                              className="w-full px-3 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500">
-                              <option value="">Selecione seu bairro *</option>
-                              {tenant.deliveryZones.map((z) => (
-                                <option key={z.id} value={z.bairro ?? ''}>
-                                  {z.name ?? z.bairro} — {z.freeAbove && subtotal() >= z.freeAbove ? 'Grátis 🎉' : formatCurrency(z.fee)}
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                          {/* CORREÇÃO: endereço obrigatório com indicador visual */}
+                          {/* CEP first — busca zona automaticamente */}
                           <div className="relative">
                             <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={cep}
+                              onChange={(e) => {
+                                const v = e.target.value.replace(/\D/g, '').slice(0, 8)
+                                const fmt = v.length > 5 ? `${v.slice(0,5)}-${v.slice(5)}` : v
+                                handleCepLookup(fmt)
+                              }}
+                              placeholder="Digite seu CEP *"
+                              maxLength={9}
+                              className={cn(
+                                'w-full pl-9 pr-10 py-2.5 text-sm border rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-orange-500',
+                                cepError ? 'border-red-400 dark:border-red-600' : cepZone ? 'border-green-400 dark:border-green-600' : 'border-gray-200 dark:border-gray-700'
+                              )}
+                            />
+                            {cepLoading && (
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-gray-300 border-t-orange-500 rounded-full animate-spin" />
+                            )}
+                          </div>
+                          {cepError && <p className="text-xs text-red-500">{cepError}</p>}
+                          {cepZone && (
+                            <div className="rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-3 py-2 text-xs text-green-700 dark:text-green-400">
+                              ✓ Entrega disponível — {cepZone.name ?? cepZone.bairro} · {cepZone.freeAbove && subtotal() >= cepZone.freeAbove ? 'Frete grátis 🎉' : formatCurrency(cepZone.fee)}
+                            </div>
+                          )}
+                          {/* Endereço preenchido automaticamente ou manualmente */}
+                          <div className="relative">
                             <input
                               type="text"
                               value={deliveryAddress}
                               onChange={(e) => setDeliveryAddress(e.target.value)}
                               placeholder="Rua, número, complemento *"
-                              required
                               className={cn(
-                                'w-full pl-9 pr-3 py-2.5 text-sm border rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-orange-500',
+                                'w-full px-3 py-2.5 text-sm border rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-orange-500',
                                 !deliveryAddress.trim() ? 'border-orange-300 dark:border-orange-700' : 'border-gray-200 dark:border-gray-700'
                               )}
                             />
                           </div>
-                          <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                            <span>⚠</span> Endereço obrigatório para entrega
-                          </p>
                         </div>
                       )}
                     </div>
@@ -636,8 +687,8 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
             {step === 'cart' && (
               <button onClick={() => {
                 // Validate address before proceeding
-                if (deliveryType === 'DELIVERY' && !deliveryBairro && tenant.deliveryZones.length > 0) {
-                  toast.error('Selecione seu bairro para continuar')
+                if (deliveryType === 'DELIVERY' && !cepZone && tenant.deliveryZones.length > 0) {
+                  toast.error('Informe um CEP válido na área de entrega')
                   return
                 }
                 if (deliveryType === 'DELIVERY' && !deliveryAddress.trim()) {
