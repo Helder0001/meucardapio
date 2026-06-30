@@ -44,19 +44,34 @@ export function CardPaymentForm({ orderId, amount, publicKey, color, onSuccess }
     }, 12_000)
 
     async function init() {
+      console.log('[card-payment-form] iniciando, publicKey:', publicKey?.slice(0, 12), 'amount:', amount)
+
       // Carrega o script do MP.js se ainda não estiver no documento
       if (!window.MercadoPago) {
+        console.log('[card-payment-form] carregando SDK sdk.mercadopago.com/js/v2...')
         await new Promise<void>((resolve, reject) => {
           const script = document.createElement('script')
           script.src = 'https://sdk.mercadopago.com/js/v2'
-          script.onload = () => resolve()
-          script.onerror = () => reject(new Error('Falha ao carregar SDK do Mercado Pago'))
+          script.onload = () => {
+            console.log('[card-payment-form] SDK carregado com sucesso')
+            resolve()
+          }
+          script.onerror = (e) => {
+            console.error('[card-payment-form] falha ao carregar script do MP:', e)
+            reject(new Error('Falha ao carregar SDK do Mercado Pago'))
+          }
           document.body.appendChild(script)
         })
+      } else {
+        console.log('[card-payment-form] SDK já estava carregado')
       }
 
-      if (cancelled || !containerRef.current) return
+      if (cancelled || !containerRef.current) {
+        console.log('[card-payment-form] cancelado ou sem container, abortando')
+        return
+      }
 
+      console.log('[card-payment-form] criando instância MercadoPago e brick...')
       const mp = new window.MercadoPago(publicKey, { locale: 'pt-BR' })
       const bricksBuilder = mp.bricks()
 
@@ -126,10 +141,11 @@ export function CardPaymentForm({ orderId, amount, publicKey, color, onSuccess }
       })
 
       brickControllerRef.current = controller
+      console.log('[card-payment-form] brick controller criado:', !!controller)
     }
 
     init().catch((err) => {
-      console.error('[card-payment-form]', err)
+      console.error('[card-payment-form] erro fatal na inicialização:', err)
       if (!cancelled) {
         setState('error')
         setErrorMessage('Não foi possível carregar o pagamento com cartão.')
