@@ -36,6 +36,12 @@ export function CardPaymentForm({ orderId, amount, publicKey, color, onSuccess }
 
   useEffect(() => {
     let cancelled = false
+    const timeoutId = setTimeout(() => {
+      if (!cancelled && state === 'loading-sdk') {
+        setState('error')
+        setErrorMessage('O formulário de pagamento demorou demais para carregar. Isso geralmente significa que o Mercado Pago ainda não foi conectado por este estabelecimento. Tente outra forma de pagamento ou avise o restaurante.')
+      }
+    }, 12_000)
 
     async function init() {
       // Carrega o script do MP.js se ainda não estiver no documento
@@ -66,9 +72,11 @@ export function CardPaymentForm({ orderId, amount, publicKey, color, onSuccess }
         },
         callbacks: {
           onReady: () => {
+            clearTimeout(timeoutId)
             if (!cancelled) setState('ready')
           },
           onError: (error: any) => {
+            clearTimeout(timeoutId)
             console.error('[card-payment-brick]', error)
             if (!cancelled) {
               setState('error')
@@ -130,6 +138,7 @@ export function CardPaymentForm({ orderId, amount, publicKey, color, onSuccess }
 
     return () => {
       cancelled = true
+      clearTimeout(timeoutId)
       brickControllerRef.current?.unmount?.()
     }
   }, [publicKey, amount, orderId]) // eslint-disable-line
