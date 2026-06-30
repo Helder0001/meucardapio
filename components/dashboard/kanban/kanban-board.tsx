@@ -105,6 +105,15 @@ export function KanbanBoard({ tenantId, userRole = '', lockedFilter }: KanbanBoa
       setOrders(data.orders)
       setConnected(true)
       setLoading(false)
+      // Cancelar pedidos PIX pendentes sem confirmação há mais de 15 min
+      fetch('/api/orders/auto-cancel', { method: 'POST' })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.cancelled > 0) {
+            console.log(`[kanban] ${d.cancelled} pedido(s) PIX cancelado(s) automaticamente`)
+          }
+        })
+        .catch(() => {})
     })
 
     es.addEventListener('order_update', (e) => {
