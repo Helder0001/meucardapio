@@ -102,11 +102,13 @@ export async function proxy(request: NextRequest) {
   if (!isDev) {
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' https://sdk.mercadopago.com",
-      "style-src 'self' 'unsafe-inline'",
+      // http2.mlstatic.com é a CDN do Mercado Pago usada pelo Card Payment
+      // Brick para carregar sub-scripts (cardPayment.js) e traduções (i18n/*.json)
+      "script-src 'self' 'unsafe-inline' https://sdk.mercadopago.com https://http2.mlstatic.com",
+      "style-src 'self' 'unsafe-inline' https://http2.mlstatic.com",
       "img-src 'self' blob: data: https:",
-      "font-src 'self'",
-      "connect-src 'self' https://api.mercadopago.com https://api.mercadolibre.com https://www.mercadolibre.com https://*.upstash.io wss:",
+      "font-src 'self' https://http2.mlstatic.com",
+      "connect-src 'self' https://api.mercadopago.com https://api.mercadolibre.com https://www.mercadolibre.com https://http2.mlstatic.com https://*.upstash.io wss:",
       "frame-src https://www.mercadopago.com https://www.mercadolibre.com",
       `frame-ancestors ${isStorefront ? "'self'" : "'none'"}`,
       "base-uri 'self'",
