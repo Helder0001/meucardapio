@@ -21,7 +21,11 @@ import { publishOrderEvent } from '@/lib/cache/redis'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { applyCashback, applyLoyaltyPoints } from '@/lib/loyalty/apply-rewards'
 import { restockCancelledOrder, revalidateStorefrontForTenant } from '@/lib/utils/stock'
+import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
+import type { PrismaClient } from '@prisma/client'
 import crypto from 'crypto'
+
+type Tx = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>
 
 export const runtime = 'nodejs'
 
@@ -46,6 +50,35 @@ async function findPaymentByMpId(mercadoPagoId: string) {
   })
 }
 
+// Pagamentos originados de um link (Checkout Pro) ainda não têm
+// mercadoPagoId salvo no momento da criação — só sabemos a preference. Por
+// isso, quando o webhook chega e não acha pelo mercadoPagoId, usamos o
+// campo `user_id` do PRÓPRIO payload do webhook (o MP sempre envia esse
+// campo — é o ID da conta MP que recebeu o pagamento) para descobrir de
+// qual tenant é, sem precisar adivinhar token nenhum.
+async function findConnectionByMpUserId(mpUserId: string | undefined) {
+  if (!mpUserId) return null
+  return prisma.mercadoPagoConnection.findFirst({
+    where: { mpUserId: String(mpUserId), revokedAt: null },
+  })
+}
+
+async function findPendingPaymentForTenant(tenantId: string, orderId: string | undefined) {
+  if (!orderId) return null
+  return prisma.payment.findFirst({
+    where: { orderId, tenantId, status: { not: 'PAID' } },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      order: {
+        select: {
+          id: true, tenantId: true, orderNumber: true,
+          status: true, customerId: true, total: true,
+        },
+      },
+    },
+  })
+}
+
 export async function POST(request: Request) {
   try {
     const body      = await request.text()
@@ -59,20 +92,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
     }
 
-    // Assinatura de pagamentos PIX é gerada pela conta do ESTABELECIMENTO no
-    // Mercado Pago (arquitetura de credenciais duplas), não pela conta da
-    // plataforma. Por isso o secret usado pra validar precisa ser o do tenant
-    // (tenant.settings.mercadoPagoWebhookSecret), não o global. Eventos de
-    // assinatura (cobrança do plano) continuam usando o secret da plataforma.
+    // Assinatura de pagamentos PIX/cartão/link é gerada pela conta do
+    // ESTABELECIMENTO no Mercado Pago (arquitetura de credenciais duplas),
+    // não pela conta da plataforma. Por isso o secret usado pra validar
+    // precisa ser o do tenant, não o global. Eventos de assinatura (cobrança
+    // do plano) continuam usando o secret da plataforma.
+    //
+    // Para descobrir QUAL tenant é, usamos o campo `user_id` que o MP sempre
+    // inclui no payload do webhook (ID da conta MP que recebeu o pagamento)
+    // — não precisamos adivinhar nem consultar a API antes de validar nada.
     let webhookSecret: string | null | undefined = process.env.MERCADOPAGO_WEBHOOK_SECRET
 
-    // Buscar pagamento no banco (precisamos do tenant antes de validar a assinatura)
     let payment: Awaited<ReturnType<typeof findPaymentByMpId>> = null
+    let connectionTenantId: string | null = null
+
     if (event.type === 'payment' && event.data?.id) {
       payment = await findPaymentByMpId(String(event.data.id))
+
       if (payment) {
+        connectionTenantId = payment.order.tenantId
+      } else if (event.user_id) {
+        // Pagamento ainda não tem mercadoPagoId salvo (caso de link/Checkout
+        // Pro, onde só sabíamos o preferenceId até o cliente pagar). Acha o
+        // tenant pela conexão OAuth cujo mpUserId bate com o da notificação.
+        const connection = await findConnectionByMpUserId(String(event.user_id))
+        if (connection) connectionTenantId = connection.tenantId
+      }
+
+      if (connectionTenantId) {
         const tenant = await prisma.tenant.findFirst({
-          where: { id: payment.order.tenantId },
+          where: { id: connectionTenantId },
           select: { settings: true },
         })
         const tenantSecret = (tenant?.settings as any)?.mercadoPagoWebhookSecret
@@ -100,14 +149,41 @@ export async function POST(request: Request) {
 
     const mercadoPagoId = String(event.data.id)
 
-    if (!payment) {
+    // Caso do link de pagamento: já sabemos o tenant (via user_id), mas
+    // ainda não localizamos QUAL Payment é — consultamos a API do MP (agora
+    // sim, com a assinatura já validada e o tenant já confirmado) para obter
+    // o external_reference (= orderId) e achar o Payment pendente.
+    let mpPaymentLookup: any = null
+    if (!payment && connectionTenantId) {
+      mpPaymentLookup = await fetchPaymentFromMP(mercadoPagoId, connectionTenantId)
+      const externalOrderId = mpPaymentLookup?.external_reference
 
-      // Pode ser pagamento de assinatura — ignorar silenciosamente
+      const candidate = await findPendingPaymentForTenant(connectionTenantId, externalOrderId)
+      if (candidate) {
+        payment = await prisma.payment.update({
+          where: { id: candidate.id },
+          data: { mercadoPagoId },
+          include: {
+            order: {
+              select: {
+                id: true, tenantId: true, orderNumber: true,
+                status: true, customerId: true, total: true,
+              },
+            },
+          },
+        })
+      }
+    }
+
+    if (!payment) {
+      // Pode ser pagamento de assinatura, ou um evento que não conseguimos
+      // associar a nenhum pedido — ignorar silenciosamente.
       return NextResponse.json({ ok: true })
     }
 
-    // Verificar status atual na API do MP (não confiar apenas no payload)
-    const mpPayment = await fetchPaymentFromMP(mercadoPagoId, payment.order.tenantId)
+    // Reaproveita a consulta já feita acima (caso de link de pagamento);
+    // senão, busca agora pela primeira vez.
+    const mpPayment = mpPaymentLookup ?? await fetchPaymentFromMP(mercadoPagoId, payment.order.tenantId)
     if (!mpPayment) {
       // Falha ao consultar a API do MP. Mantemos o 500 de propósito: queremos
       // que o MP reenvie o webhook depois. Responder 200 aqui faria o
@@ -120,7 +196,13 @@ export async function POST(request: Request) {
 
     // Processar apenas transições válidas (idempotência)
     if (mpStatus === 'approved' && payment.status !== 'PAID') {
-      const processed = await prisma.$transaction(async (tx) => {
+      const paymentMethodLabel =
+        mpPayment.payment_type_id === 'credit_card' ? `cartão de crédito${mpPayment.card?.last_four_digits ? ` (final ${mpPayment.card.last_four_digits})` : ''}`
+        : mpPayment.payment_type_id === 'debit_card' ? `cartão de débito${mpPayment.card?.last_four_digits ? ` (final ${mpPayment.card.last_four_digits})` : ''}`
+        : mpPayment.payment_type_id === 'bank_transfer' ? 'PIX'
+        : mpPayment.payment_type_id ?? 'Mercado Pago'
+
+      const processed = await prisma.$transaction(async (tx: Tx) => {
         // Update atômico e condicional: garante que, mesmo se dois webhooks
         // chegarem em paralelo (ou o MP reenviar), só um consiga transicionar
         // o pagamento para PAID. O outro recebe count === 0 e sai sem
@@ -132,6 +214,9 @@ export async function POST(request: Request) {
             mercadoPagoStatus: mpStatus,
             paidAt: new Date(),
             webhookData: mpPayment as any,
+            cardLastDigits: mpPayment.card?.last_four_digits ?? undefined,
+            cardBrand: mpPayment.payment_method_id ?? undefined,
+            installments: mpPayment.installments ?? undefined,
           },
         })
 
@@ -149,7 +234,7 @@ export async function POST(request: Request) {
           data: {
             orderId: payment.order.id,
             status:  'CONFIRMED',
-            notes:   'Pagamento PIX confirmado automaticamente',
+            notes:   `Pagamento via ${paymentMethodLabel} confirmado automaticamente`,
           },
         })
 
@@ -180,7 +265,7 @@ export async function POST(request: Request) {
               action:     AuditActions.PAYMENT_RECEIVED,
               resource:   'payments',
               resourceId: payment.id,
-              newValue:   { method: 'PIX', amount: Number(payment.amount), status: 'PAID' },
+              newValue:   { method: paymentMethodLabel, amount: Number(payment.amount), status: 'PAID' },
             })
           } catch (err) {
             // Já respondemos ao MP, então só logamos — não há mais como
@@ -212,7 +297,7 @@ export async function POST(request: Request) {
       const shouldCancelOrder = payment.order.status === 'PENDING'
 
       let affectedProductIds: string[] = []
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: Tx) => {
         await tx.payment.update({
           where: { id: payment.id },
           data: { status: 'FAILED', mercadoPagoStatus: mpStatus, failedAt: new Date() },
@@ -337,12 +422,7 @@ function validateSignature(
 }
 
 async function fetchPaymentFromMP(mercadoPagoId: string, tenantId: string) {
-  const tenant = await prisma.tenant.findFirst({
-    where: { id: tenantId },
-    select: { settings: true },
-  })
-  const settings    = tenant?.settings as any
-  const accessToken = settings?.mercadoPagoAccessToken ?? process.env.MERCADOPAGO_ACCESS_TOKEN
+  const accessToken = await resolveTenantMpAccessToken(tenantId)
   if (!accessToken) return null
 
   try {

@@ -116,6 +116,10 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
   const [addPixData, setAddPixData]             = useState<{ qrCode: string; qrCodeBase64: string } | null>(null)
   const [addPixCopied, setAddPixCopied]         = useState(false)
 
+  // ── Link de pagamento (Checkout Pro) ──────────────────────────────────────
+  const [isSendingLink, setIsSendingLink]       = useState(false)
+  const [paymentLinkUrl, setPaymentLinkUrl]     = useState<string | null>(null)
+
   const totalOrder   = Number(order.total)
   const alreadyPaid  = payments.reduce((s: number, p: any) => s + Number(p.amount), 0)
   const stillOwed    = Math.max(0, Math.round((totalOrder - alreadyPaid) * 100) / 100)
@@ -165,6 +169,37 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
         toast.success('Pagamento registrado! Confirme o recebimento quando efetivado.')
       }
     })
+  }
+
+  // Gera um link de pagamento (Checkout Pro) e abre o WhatsApp com a
+  // mensagem pronta para o garçom enviar ao cliente. Funciona com qualquer
+  // método (PIX, crédito, débito) — o cliente escolhe na página do MP.
+  const handleSendPaymentLink = async () => {
+    setIsSendingLink(true)
+    try {
+      const res = await fetch(`/api/orders/${order.id}/payment-link`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data.error ?? 'Não foi possível gerar o link de pagamento')
+        return
+      }
+
+      setPaymentLinkUrl(data.checkoutUrl)
+
+      const phone = order.customer?.phone?.replace(/\D/g, '')
+      const message = `Olá! Segue o link para pagamento do seu pedido #${String(order.orderNumber).padStart(4, '0')} (${formatCurrency(stillOwed)}): ${data.checkoutUrl}`
+
+      if (phone) {
+        const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+        window.open(waUrl, '_blank')
+      } else {
+        // Sem telefone cadastrado — copia o link para a área de transferência
+        await navigator.clipboard.writeText(data.checkoutUrl)
+        toast.success('Link copiado! Cole para enviar ao cliente.')
+      }
+    } finally {
+      setIsSendingLink(false)
+    }
   }
 
   const copyAddPixCode = async () => {
@@ -431,19 +466,45 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
               <h3 className="text-xs font-semibold text-muted-foreground uppercase">
                 Pagamento{payments.length > 1 ? 's' : ''}
               </h3>
-              {/* NOVO: botão para adicionar pagamento posterior */}
-              {canAddPayment && !showAddPayment && (
-                <button
-                  onClick={() => {
-                    setAddPayments([{ method: 'CASH', amount: stillOwed }])
-                    setShowAddPayment(true)
-                  }}
-                  className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                >
-                  <Plus className="h-3 w-3" /> Registrar pagamento
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                {/* Link de pagamento via WhatsApp — qualquer método */}
+                {stillOwed > 0 && (
+                  <button
+                    onClick={handleSendPaymentLink}
+                    disabled={isSendingLink}
+                    className="flex items-center gap-1 text-xs font-medium text-primary hover:underline disabled:opacity-50"
+                  >
+                    {isSendingLink ? <Loader2 className="h-3 w-3 animate-spin" /> : <CreditCard className="h-3 w-3" />}
+                    Enviar link de pagamento
+                  </button>
+                )}
+                {/* NOVO: botão para adicionar pagamento posterior */}
+                {canAddPayment && !showAddPayment && (
+                  <button
+                    onClick={() => {
+                      setAddPayments([{ method: 'CASH', amount: stillOwed }])
+                      setShowAddPayment(true)
+                    }}
+                    className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  >
+                    <Plus className="h-3 w-3" /> Registrar pagamento
+                  </button>
+                )}
+              </div>
             </div>
+
+            {paymentLinkUrl && (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 mb-3 space-y-1.5">
+                <p className="text-xs font-semibold text-foreground">Link gerado:</p>
+                <p className="text-xs text-muted-foreground break-all font-mono">{paymentLinkUrl}</p>
+                <button
+                  onClick={() => navigator.clipboard.writeText(paymentLinkUrl).then(() => toast.success('Copiado!'))}
+                  className="text-xs font-medium text-primary hover:underline"
+                >
+                  Copiar link
+                </button>
+              </div>
+            )}
 
             {/* NOVO: Banner de pagamento pendente */}
             {stillOwed > 0 && payments.length === 0 && (
