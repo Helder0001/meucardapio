@@ -21,6 +21,7 @@ import { prisma } from '@/lib/db/client'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
+import type { PaymentStatus } from '@prisma/client'
 import { z } from 'zod'
 
 // CASHBACK é usado internamente pelo sistema de fidelidade — não é uma
@@ -144,7 +145,7 @@ export async function PATCH(
   let pixQrCode: string | undefined
   let pixQrCodeBase64: string | undefined
   let resultPaymentId = payment.id
-  let resultStatus = payment.status
+  let resultStatus: PaymentStatus = payment.status
 
   try {
     if (method === 'PIX') {
