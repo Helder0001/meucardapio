@@ -143,6 +143,7 @@ export async function PATCH(
     status,
     ...(timestampField ? { [timestampField]: new Date() } : {}),
     ...(status === 'CANCELLED' && cancelReason ? { cancelReason } : {}),
+    ...(status === 'CANCELLED' ? { paymentStatus: 'FAILED' } : {}),
     ...(role === 'STAFF' && !order.waiterId ? { waiterId: session.user.id } : {}),
   }
 
@@ -159,6 +160,16 @@ export async function PATCH(
           : `Alterado por ${session.user.name ?? session.user.email} (${ROLE_LABELS[role] ?? role})`,
       },
     })
+
+    // CORREÇÃO: sem isso, o(s) Payment ficavam presos em PENDING para sempre
+    // e a tela do pedido continuava mostrando "Aguardando confirmação" mesmo
+    // com o pedido já cancelado manualmente.
+    if (status === 'CANCELLED') {
+      await tx.payment.updateMany({
+        where: { orderId: id, status: 'PENDING' },
+        data: { status: 'FAILED', failedAt: new Date() },
+      })
+    }
 
     // CORREÇÃO: incrementar soldCount dos produtos ao entregar o pedido.
     // Feito dentro da mesma transaction para garantir consistência.

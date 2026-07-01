@@ -247,6 +247,7 @@ export function OrdersTable({ orders, total, page, pageSize, currentFilters }: O
                             const m: Record<string, string> = {
                               PIX: '⚡ PIX',
                               CREDIT_CARD: '💳 Crédito',
+                              CREDIT_CARD_MANUAL: '💳 Crédito',
                               DEBIT_CARD: '💳 Débito',
                               CASH: '💵 Dinheiro',
                             }

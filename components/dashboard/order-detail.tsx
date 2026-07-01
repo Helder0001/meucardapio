@@ -9,17 +9,18 @@ import { cn } from '@/lib/utils'
 import { Loader2, CheckCircle2, XCircle, CreditCard, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 
-type AddPaymentMethod = 'PIX' | 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'VOUCHER' | 'TRANSFER'
+type AddPaymentMethod = 'PIX' | 'CASH' | 'CREDIT_CARD' | 'CREDIT_CARD_MANUAL' | 'DEBIT_CARD' | 'VOUCHER' | 'TRANSFER'
 interface AddPaymentEntry { method: AddPaymentMethod; amount: number }
 
 const PAYMENT_METHODS: Record<string, string> = {
-  PIX:         '⚡ PIX',
-  CASH:        '💵 Dinheiro',
-  CREDIT_CARD: '💳 Cartão de Crédito',
-  DEBIT_CARD:  '💳 Cartão de Débito',
-  VOUCHER:     '🎟️ Voucher',
-  CASHBACK:    '💰 Cashback',
-  TRANSFER:    '🏦 Transferência',
+  PIX:                '⚡ PIX',
+  CASH:               '💵 Dinheiro',
+  CREDIT_CARD:        '💳 Cartão de Crédito',
+  CREDIT_CARD_MANUAL: '💳 Crédito (entrega/retirada)',
+  DEBIT_CARD:         '💳 Cartão de Débito',
+  VOUCHER:            '🎟️ Voucher',
+  CASHBACK:           '💰 Cashback',
+  TRANSFER:           '🏦 Transferência',
 }
 
 // Tradução dos status do histórico para português
@@ -33,8 +34,12 @@ const STATUS_PT: Record<string, string> = {
   CANCELLED:        'Cancelado',
 }
 
-// Métodos que podem ser confirmados manualmente (não precisam de webhook)
-const MANUAL_METHODS = ['CASH', 'CREDIT_CARD', 'DEBIT_CARD', 'VOUCHER', 'TRANSFER']
+// Métodos que podem ser confirmados manualmente (não precisam de webhook).
+// CREDIT_CARD entra aqui pois no PDV/balcão o cartão é passado na maquininha
+// na hora (sempre manual); no cardápio digital, CREDIT_CARD é cobrado online
+// e confirmado sozinho via webhook, mas mantém-se aqui como rede de segurança
+// caso o webhook atrase/falhe. CREDIT_CARD_MANUAL é sempre manual (entrega/retirada).
+const MANUAL_METHODS = ['CASH', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD', 'VOUCHER', 'TRANSFER']
 
 const STATUS_FLOW = [
   { key: 'PENDING',           label: 'Recebido' },
@@ -226,8 +231,9 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
   // - ATTENDANT e STAFF: bloqueados em pedidos DELIVERY
   // - Admin/Gerente: sempre
   const canConfirmPayment = (payment: any) => {
-    if (payment.status === 'PAID') return false
-    const isManualMethod = ['CASH', 'CREDIT_CARD', 'DEBIT_CARD'].includes(payment.method)
+    if (payment.status === 'PAID' || payment.status === 'FAILED') return false
+    if (status === 'CANCELLED') return false
+    const isManualMethod = ['CASH', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD'].includes(payment.method)
     if (!isManualMethod) return false
     if (isDeliveryPerson) {
       // Entregador só confirma pagamento de pedidos DELIVERY, e só após entregue
@@ -607,12 +613,15 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
                 {payments.map((p: any, idx: number) => {
                   const isManual  = MANUAL_METHODS.includes(p.method)
                   const isPaid    = p.status === 'PAID'
+                  const isFailed  = p.status === 'FAILED'
                   return (
                     <div key={p.id} className={cn(
                       'rounded-lg p-3 border',
                       isPaid
                         ? 'border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800'
-                        : 'border-border bg-muted/30'
+                        : isFailed
+                          ? 'border-red-200 bg-red-50/60 dark:bg-red-950/10 dark:border-red-900'
+                          : 'border-border bg-muted/30'
                     )}>
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -632,7 +641,12 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
                               ✓ Pago {formatDate(p.paidAt)}
                             </p>
                           )}
-                          {!isPaid && p.method === 'PIX' && (
+                          {isFailed && (
+                            <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
+                              Cancelado — pagamento não confirmado
+                            </p>
+                          )}
+                          {!isPaid && !isFailed && p.method === 'PIX' && (
                             p.pixExpiresAt && new Date(p.pixExpiresAt) < new Date() ? (
                               <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
                                 PIX expirado — gere um novo código
@@ -643,7 +657,7 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
                               </p>
                             )
                           )}
-                          {!isPaid && isManual && (
+                          {!isPaid && !isFailed && isManual && (
                             <p className="text-xs text-muted-foreground mt-0.5">
                               Pendente de confirmação
                             </p>

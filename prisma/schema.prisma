@@ -72,6 +72,7 @@ enum PaymentStatus {
 enum PaymentMethod {
   PIX
   CREDIT_CARD
+  CREDIT_CARD_MANUAL
   DEBIT_CARD
   CASH
   VOUCHER

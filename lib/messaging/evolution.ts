@@ -120,13 +120,14 @@ async function buildOrderReceivedMessage(orderId: string): Promise<string | null
   const paymentLabel = paymentMethods.length
     ? paymentMethods.map(method => {
         switch (method) {
-          case 'PIX':         return '⚡ PIX'
-          case 'CREDIT_CARD': return '💳 Cartão de Crédito'
-          case 'DEBIT_CARD':  return '💳 Cartão de Débito'
-          case 'CASH':        return '💵 Dinheiro'
-          case 'VOUCHER':     return '🎟️ Voucher'
-          case 'CASHBACK':    return '💰 Cashback'
-          default:            return method
+          case 'PIX':                return '⚡ PIX'
+          case 'CREDIT_CARD':        return '💳 Cartão de Crédito'
+          case 'CREDIT_CARD_MANUAL': return '💳 Crédito (entrega/retirada)'
+          case 'DEBIT_CARD':         return '💳 Cartão de Débito'
+          case 'CASH':               return '💵 Dinheiro'
+          case 'VOUCHER':            return '🎟️ Voucher'
+          case 'CASHBACK':           return '💰 Cashback'
+          default:                   return method
         }
       }).join(' + ')
     : 'Não informado'

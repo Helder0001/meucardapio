@@ -38,7 +38,7 @@ function generateOrderStatusToken(orderId: string): string {
 
 // ── Schema de pagamento individual ──────────────────────────────────────────
 const paymentEntrySchema = z.object({
-  method: z.enum(['PIX', 'CASH', 'CARD', 'CREDIT_CARD', 'DEBIT_CARD']),
+  method: z.enum(['PIX', 'CASH', 'CARD', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD']),
   amount: z.number().positive('Valor do pagamento deve ser positivo'),
   changeFor: z.number().positive().optional(),
 })
@@ -64,7 +64,7 @@ const createOrderSchema = z.object({
   payments: z.array(paymentEntrySchema).min(1).max(5).optional(),
 
   // Campos legados (retrocompatibilidade com chamadas antigas)
-  paymentMethod: z.enum(['PIX', 'CASH', 'CARD', 'CREDIT_CARD', 'DEBIT_CARD']).optional(),
+  paymentMethod: z.enum(['PIX', 'CASH', 'CARD', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD']).optional(),
   changeFor: z.number().positive().optional(),
 
   cashbackToUse:  z.number().min(0).optional(),

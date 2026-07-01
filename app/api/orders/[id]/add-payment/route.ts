@@ -12,7 +12,7 @@ import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
 import { z } from 'zod'
 
 const paymentEntrySchema = z.object({
-  method: z.enum(['PIX', 'CASH', 'CREDIT_CARD', 'DEBIT_CARD', 'VOUCHER', 'TRANSFER']),
+  method: z.enum(['PIX', 'CASH', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD', 'VOUCHER', 'TRANSFER']),
   amount: z.number().positive('Valor deve ser positivo'),
   changeFor: z.number().positive().optional(),
 })

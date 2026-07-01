@@ -20,7 +20,7 @@ export async function POST() {
   const cutoff   = new Date(Date.now() - 3 * 60 * 60 * 1000) // 3 horas atrás
 
   try {
-    const result = await prisma.order.updateMany({
+    const ordersToCancel = await prisma.order.findMany({
       where: {
         tenantId,
         paymentStatus: 'PENDING',
@@ -29,10 +29,34 @@ export async function POST() {
         },
         createdAt: { lt: cutoff },
       },
-      data: {
-        status:       'CANCELLED',
-        cancelReason: 'Pagamento não confirmado em 3 horas',
-      },
+      select: { id: true },
+    })
+
+    if (ordersToCancel.length === 0) {
+      return NextResponse.json({ cancelled: 0 })
+    }
+
+    const orderIds = ordersToCancel.map((o) => o.id)
+
+    const result = await prisma.$transaction(async (tx) => {
+      const updated = await tx.order.updateMany({
+        where: { id: { in: orderIds } },
+        data: {
+          status:        'CANCELLED',
+          paymentStatus: 'FAILED',
+          cancelReason:  'Pagamento não confirmado em 3 horas',
+        },
+      })
+
+      // CORREÇÃO: sem isso, o(s) Payment ficavam presos em PENDING para
+      // sempre e a tela do pedido continuava mostrando "Aguardando
+      // confirmação" mesmo com o pedido já cancelado.
+      await tx.payment.updateMany({
+        where: { orderId: { in: orderIds }, status: 'PENDING' },
+        data: { status: 'FAILED', failedAt: new Date() },
+      })
+
+      return updated
     })
 
     if (result.count > 0) {

@@ -135,19 +135,17 @@ export async function GET(
           where: { id, status: 'PENDING' },
           data: {
             status: 'CANCELLED',
-            paymentStatus: pixExpired ? 'FAILED' : order.paymentStatus,
+            paymentStatus: 'FAILED',
             cancelledAt: new Date(),
             cancelReason,
           },
         })
         if (updated.count === 0) return // outra rotina já tratou este pedido
 
-        if (pixExpired) {
-          await tx.payment.updateMany({
-            where: { orderId: id, method: 'PIX', status: 'PENDING' },
-            data: { status: 'FAILED', failedAt: new Date() },
-          })
-        }
+        await tx.payment.updateMany({
+          where: { orderId: id, status: 'PENDING' },
+          data: { status: 'FAILED', failedAt: new Date() },
+        })
         await tx.orderStatusHistory.create({
           data: { orderId: id, status: 'CANCELLED', notes: historyNote },
         })

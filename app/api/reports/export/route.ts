@@ -24,13 +24,14 @@ const dateParamSchema = z
 
 
 const METHOD_PT: Record<string, string> = {
-  CASH:        'Dinheiro',
-  CREDIT_CARD: 'Cartão de Crédito',
-  DEBIT_CARD:  'Cartão de Débito',
-  PIX:         'PIX',
-  VOUCHER:     'Voucher',
-  CASHBACK:    'Cashback',
-  TRANSFER:    'Transferência',
+  CASH:               'Dinheiro',
+  CREDIT_CARD:        'Cartão de Crédito',
+  CREDIT_CARD_MANUAL: 'Crédito (entrega/retirada)',
+  DEBIT_CARD:         'Cartão de Débito',
+  PIX:                'PIX',
+  VOUCHER:            'Voucher',
+  CASHBACK:           'Cashback',
+  TRANSFER:           'Transferência',
 }
 
 const STATUS_PT: Record<string, string> = {

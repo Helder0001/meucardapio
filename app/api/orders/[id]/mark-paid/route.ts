@@ -15,7 +15,7 @@ const schema = z.object({
 })
 
 // Apenas métodos manuais podem ser confirmados via esta rota
-const MANUAL_METHODS = ['CASH', 'CREDIT_CARD', 'DEBIT_CARD', 'VOUCHER', 'TRANSFER']
+const MANUAL_METHODS = ['CASH', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD', 'VOUCHER', 'TRANSFER']
 
 export async function PATCH(
   request: Request,

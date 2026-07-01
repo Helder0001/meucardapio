@@ -37,7 +37,7 @@ interface OrderItem {
   quantity: number
 }
 
-type PaymentMethodType = 'PIX' | 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD'
+type PaymentMethodType = 'PIX' | 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'LINK'
 interface PaymentEntry { method: PaymentMethodType; amount: number }
 
 interface PixData { qrCode: string; qrCodeBase64: string }
@@ -68,6 +68,9 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
   const [payNow, setPayNow] = useState(true)   // pagar agora ou deixar pendente (pagar no final)
   const [isPending, start] = useTransition()
   const [pixData, setPixData] = useState<PixData | null>(null)
+  const [linkData, setLinkData] = useState<{ url: string } | null>(null)
+  const [isSendingLink, setIsSendingLink] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
   const [copied, setCopied] = useState(false)
   const router = useRouter()
 
@@ -127,6 +130,12 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
         : `Os valores excedem o total em ${formatCurrency(-remaining)}`)
       return
     }
+
+    // NOVO: "Link de pagamento" — o pedido é criado como pendente (sem
+    // registrar pagamento) e, em seguida, geramos um link do Checkout Pro
+    // (mesma rota usada no detalhe do pedido) para enviar ao cliente.
+    const isPaymentLink = payNow && finalPayments.length === 1 && finalPayments[0].method === 'LINK'
+
     start(async () => {
       try {
         const result = await createOrderAction({
@@ -138,10 +147,34 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
           createdByUserId,
           customerPhone: customerPhone || undefined,
           customerName: customerName || undefined,
-          payments: payNow ? finalPayments : undefined,
+          // finalPayments nunca contém 'LINK' quando isPaymentLink é false (a opção só
+          // aparece com 1 forma de pagamento, e aqui já excluímos esse caso) — o filter
+          // abaixo só serve para provar isso ao TypeScript.
+          payments: payNow && !isPaymentLink
+            ? finalPayments.filter((p): p is PaymentEntry & { method: Exclude<PaymentMethodType, 'LINK'> } => p.method !== 'LINK')
+            : undefined,
           notes: notes || undefined,
         })
         if (result.error) { toast.error(result.error); return }
+
+        if (isPaymentLink && result.orderId) {
+          setIsSendingLink(true)
+          try {
+            const res = await fetch(`/api/orders/${result.orderId}/payment-link`, { method: 'POST' })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) {
+              toast.error(data.error ?? 'Pedido criado, mas não foi possível gerar o link de pagamento')
+              closeAndReset()
+              router.refresh()
+              return
+            }
+            setLinkData({ url: data.checkoutUrl })
+            router.refresh()
+          } finally {
+            setIsSendingLink(false)
+          }
+          return
+        }
 
         // Se algum dos pagamentos for PIX, mostrar QR code + copia-e-cola
         // em vez de fechar direto — o caixa precisa exibir isso pro cliente.
@@ -167,7 +200,31 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
     setPayments([{ method: 'PIX', amount: 0 }])
     setPayNow(true)
     setPixData(null); setCopied(false)
+    setLinkData(null); setLinkCopied(false)
     setSelectedTableId('')
+  }
+
+  const copyPaymentLink = async () => {
+    if (!linkData) return
+    try {
+      await navigator.clipboard.writeText(linkData.url)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    } catch {
+      toast.error('Não foi possível copiar')
+    }
+  }
+
+  const sendPaymentLinkWhatsapp = () => {
+    if (!linkData) return
+    const phone = customerPhone.replace(/\D/g, '')
+    const message = `Olá! Segue o link para pagamento do seu pedido (${formatCurrency(total)}): ${linkData.url}`
+    if (phone) {
+      window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, '_blank')
+    } else {
+      copyPaymentLink()
+      toast.success('Sem telefone informado — link copiado para enviar manualmente.')
+    }
   }
 
   const copyPixCode = async () => {
@@ -215,7 +272,34 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
               </button>
             </div>
 
-            {pixData ? (
+            {linkData ? (
+              <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center text-center gap-4">
+                <div>
+                  <h3 className="font-bold text-foreground">Link de pagamento gerado</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Envie ao cliente para ele escolher PIX, crédito ou débito. Válido por 1 hora.
+                  </p>
+                </div>
+                <div className="w-full">
+                  <div className="flex items-center gap-2">
+                    <input readOnly value={linkData.url}
+                      className="flex-1 px-3 py-2 text-xs border border-input rounded-lg bg-muted truncate" />
+                    <button onClick={copyPaymentLink}
+                      className="px-3 py-2 text-xs font-semibold bg-muted text-foreground rounded-lg hover:bg-muted/70 transition-colors flex-shrink-0">
+                      {linkCopied ? 'Copiado!' : 'Copiar'}
+                    </button>
+                  </div>
+                </div>
+                <button onClick={sendPaymentLinkWhatsapp}
+                  className="w-full px-4 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors">
+                  Enviar por WhatsApp
+                </button>
+                <button onClick={closeAndReset}
+                  className="w-full px-4 py-3 bg-muted text-foreground font-semibold rounded-lg hover:bg-muted/70 transition-colors">
+                  Concluir
+                </button>
+              </div>
+            ) : pixData ? (
               <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center text-center gap-4">
                 <div>
                   <h3 className="font-bold text-foreground">Aguardando pagamento PIX</h3>
@@ -402,7 +486,7 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-medium text-foreground">Forma de pagamento</label>
-                    {payments.length === 1 && (
+                    {payments.length === 1 && payments[0].method !== 'LINK' && (
                       <button onClick={addPaymentRow} className="text-xs font-medium text-primary hover:underline">
                         + Dividir pagamento
                       </button>
@@ -421,6 +505,7 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
                           <option value="CASH">💵 Dinheiro</option>
                           <option value="CREDIT_CARD">💳 Crédito</option>
                           <option value="DEBIT_CARD">💳 Débito</option>
+                          {payments.length === 1 && <option value="LINK">🔗 Link de pagamento</option>}
                         </select>
 
                         {payments.length > 1 && (
@@ -441,6 +526,12 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
                       </div>
                     ))}
                   </div>
+
+                  {payments.length === 1 && payments[0].method === 'LINK' && (
+                    <p className="text-xs text-muted-foreground">
+                      Gera um link do Mercado Pago (PIX, crédito ou débito — o cliente escolhe) para enviar por WhatsApp ou copiar.
+                    </p>
+                  )}
 
                   {payments.length > 1 && (
                     <div className="flex justify-between text-xs mt-2">
@@ -492,11 +583,11 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
               </p>
               <button
                 onClick={handleSubmit}
-                disabled={isPending || items.length === 0}
+                disabled={isPending || isSendingLink || items.length === 0}
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 disabled:opacity-60 transition-colors"
               >
-                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                {isPending ? 'Criando...' : `Criar pedido${total > 0 ? ` · ${formatCurrency(total)}` : ''}`}
+                {(isPending || isSendingLink) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                {isSendingLink ? 'Gerando link...' : isPending ? 'Criando...' : `Criar pedido${total > 0 ? ` · ${formatCurrency(total)}` : ''}`}
               </button>
             </div>
               </>

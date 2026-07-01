@@ -104,10 +104,11 @@ export async function generateOrderPrintContent(orderId: string): Promise<string
 
   // Pagamento
   const paymentLabel: Record<string, string> = {
-    PIX:         'PIX',
-    CASH:        `DINHEIRO${order.changeFor ? ` (troco p/ ${formatCurrency(Number(order.changeFor))})` : ''}`,
-    CREDIT_CARD: 'CARTÃO CRÉDITO',
-    DEBIT_CARD:  'CARTÃO DÉBITO',
+    PIX:                'PIX',
+    CASH:               `DINHEIRO${order.changeFor ? ` (troco p/ ${formatCurrency(Number(order.changeFor))})` : ''}`,
+    CREDIT_CARD:        'CARTÃO CRÉDITO',
+    CREDIT_CARD_MANUAL: 'CARTÃO CRÉDITO (ENTREGA)',
+    DEBIT_CARD:         'CARTÃO DÉBITO',
   }
 
   // Rodapé

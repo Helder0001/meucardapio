@@ -33,16 +33,26 @@ interface CartDrawerProps {
 
 type Step = 'cart' | 'info' | 'payment'
 // CORREÇÃO: separar crédito e débito
-type PaymentMethodValue = 'PIX' | 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD'
+// CORREÇÃO: separar crédito pago online (cobrado na hora, confirmação
+// automática) de crédito pago na entrega/retirada (manual, na maquininha)
+type PaymentMethodValue = 'PIX' | 'CASH' | 'CREDIT_CARD' | 'CREDIT_CARD_MANUAL' | 'DEBIT_CARD'
 
 const STEPS: Step[] = ['cart', 'info', 'payment']
 const STEP_LABELS = { cart: 'Carrinho', info: 'Seus dados', payment: 'Pagamento' }
 
-const ALL_PAYMENT_OPTIONS: { value: PaymentMethodValue; label: string; sub: string }[] = [
-  { value: 'PIX',         label: '⚡ PIX',          sub: 'Confirmação automática' },
-  { value: 'CASH',        label: '💵 Dinheiro',      sub: 'Pague na entrega/retirada' },
-  { value: 'CREDIT_CARD', label: '💳 Crédito',       sub: 'Cartão de crédito' },
-  { value: 'DEBIT_CARD',  label: '💳 Débito',        sub: 'Cartão de débito' },
+interface PaymentOption { value: PaymentMethodValue; label: string; sub: string }
+
+// Pago agora, direto no cardápio — confirmação automática
+const ONLINE_PAYMENT_OPTIONS: PaymentOption[] = [
+  { value: 'PIX',         label: '⚡ PIX',    sub: 'Confirmação automática' },
+  { value: 'CREDIT_CARD', label: '💳 Crédito', sub: 'Pague agora, na hora' },
+]
+
+// Pago na hora da entrega/retirada — confirmado manualmente pela loja
+const MANUAL_PAYMENT_OPTIONS: PaymentOption[] = [
+  { value: 'CASH',               label: '💵 Dinheiro', sub: 'Pague na entrega/retirada' },
+  { value: 'CREDIT_CARD_MANUAL', label: '💳 Crédito',  sub: 'Na maquininha, na entrega/retirada' },
+  { value: 'DEBIT_CARD',         label: '💳 Débito',   sub: 'Na maquininha, na entrega/retirada' },
 ]
 
 interface PaymentEntry {
@@ -60,7 +70,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const router = useRouter()
   const color = tenant.primaryColor ?? '#f97316'
   const pixEnabled = tenant.pixEnabled ?? tenant.settings?.pixEnabled ?? true
-  const PAYMENT_OPTIONS = pixEnabled ? ALL_PAYMENT_OPTIONS : ALL_PAYMENT_OPTIONS.filter(o => o.value !== 'PIX')
+  const onlineOptions = pixEnabled ? ONLINE_PAYMENT_OPTIONS : ONLINE_PAYMENT_OPTIONS.filter(o => o.value !== 'PIX')
 
   // Busca CEP via API interna (evita CORS) e identifica zona de entrega
   const handleCepLookup = async (rawCep: string) => {
@@ -163,6 +173,20 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   })()
 
   const estimatedTotal = Math.max(0, subtotal() + deliveryFee - couponDiscount - (useCashback ? cashbackToUse : 0) - pointsDiscount)
+
+  // CORREÇÃO: quando há só 1 forma de pagamento (sem split), o valor deve
+  // sempre acompanhar o total do pedido automaticamente. Antes, o campo
+  // ficava vazio até o cliente digitar manualmente e não era atualizado
+  // se ele voltasse pro carrinho pra editar/adicionar itens — o total
+  // mudava mas o valor do pagamento ficava desatualizado (dessincronizado),
+  // podendo travar o envio do pedido ou cobrar um valor errado.
+  useEffect(() => {
+    if (payments.length !== 1) return
+    const synced = estimatedTotal > 0 ? estimatedTotal.toFixed(2) : ''
+    setPayments((prev) => (prev.length === 1 && prev[0].amount !== synced)
+      ? [{ ...prev[0], amount: synced }]
+      : prev)
+  }, [estimatedTotal, payments.length])
 
   const stepIndex = STEPS.indexOf(step)
   const isTableOrder = !!(tableId || tableInfo)
@@ -591,16 +615,45 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                         )}
                       </div>
 
-                      {/* CORREÇÃO: grid 2x2 para caber crédito e débito separados */}
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {PAYMENT_OPTIONS.map((opt) => (
-                          <button key={opt.value} onClick={() => updatePayment(entry.id, 'method', opt.value)}
-                            className={cn('py-2.5 px-2 rounded-xl text-xs font-bold border-2 text-center transition-all',
-                              entry.method === opt.value ? 'text-white border-transparent' : 'border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-200')}
-                            style={entry.method === opt.value ? { background: color, borderColor: color } : {}}>
-                            {opt.label}
-                          </button>
-                        ))}
+                      {/* CORREÇÃO: separar visualmente pagamento online (cobrado
+                          agora, confirmação automática) de pagamento manual
+                          (pago na entrega/retirada, confirmado pela loja) */}
+                      <div className="space-y-2.5">
+                        <div>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1.5">
+                            Pagamento online — cobrado agora
+                          </p>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {onlineOptions.map((opt) => (
+                              <button key={opt.value} onClick={() => updatePayment(entry.id, 'method', opt.value)}
+                                title={opt.sub}
+                                className={cn('py-2.5 px-2 rounded-xl text-xs font-bold border-2 text-center transition-all',
+                                  entry.method === opt.value ? 'text-white border-transparent' : 'border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-200')}
+                                style={entry.method === opt.value ? { background: color, borderColor: color } : {}}>
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1.5">
+                            Pagamento na entrega/retirada — manual
+                          </p>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {MANUAL_PAYMENT_OPTIONS.map((opt) => (
+                              <button key={opt.value} onClick={() => updatePayment(entry.id, 'method', opt.value)}
+                                title={opt.sub}
+                                className={cn('py-2.5 px-2 rounded-xl text-xs font-bold border-2 text-center transition-all',
+                                  entry.method === opt.value ? 'text-white border-transparent' : 'border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-200')}
+                                style={entry.method === opt.value ? { background: color, borderColor: color } : {}}>
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-gray-400">
+                          {[...onlineOptions, ...MANUAL_PAYMENT_OPTIONS].find(o => o.value === entry.method)?.sub}
+                        </p>
                       </div>
 
                       {/* Valor */}

@@ -64,20 +64,22 @@ const ROLE_LABELS_SHORT: Record<string, string> = {
 }
 
 const METHOD_LABELS: Record<string, string> = {
-  PIX:         'PIX',
-  CASH:        'Dinheiro',
-  CREDIT_CARD: 'Crédito',
-  DEBIT_CARD:  'Débito',
-  VOUCHER:     'Voucher',
+  PIX:                'PIX',
+  CASH:               'Dinheiro',
+  CREDIT_CARD:        'Crédito',
+  CREDIT_CARD_MANUAL: 'Crédito (entrega)',
+  DEBIT_CARD:         'Débito',
+  VOUCHER:            'Voucher',
 }
 
 const METHOD_OPTIONS = [
-  { value: '',             label: 'Todas' },
-  { value: 'PIX',         label: '⚡ PIX' },
-  { value: 'CASH',        label: '💵 Dinheiro' },
-  { value: 'CREDIT_CARD', label: '💳 Crédito' },
-  { value: 'DEBIT_CARD',  label: '💳 Débito' },
-  { value: 'VOUCHER',     label: '🎟️ Voucher' },
+  { value: '',                    label: 'Todas' },
+  { value: 'PIX',                 label: '⚡ PIX' },
+  { value: 'CASH',                label: '💵 Dinheiro' },
+  { value: 'CREDIT_CARD',         label: '💳 Crédito' },
+  { value: 'CREDIT_CARD_MANUAL',  label: '💳 Crédito (entrega)' },
+  { value: 'DEBIT_CARD',          label: '💳 Débito' },
+  { value: 'VOUCHER',             label: '🎟️ Voucher' },
 ]
 
 const TYPE_OPTIONS = [
@@ -91,11 +93,12 @@ const TYPE_OPTIONS = [
 const normalizeMethod = (m: string) => m === 'CARD' ? 'CREDIT_CARD' : m
 
 const METHOD_COLORS: Record<string, string> = {
-  CREDIT_CARD: '#8b5cf6',
-  DEBIT_CARD:  '#3b82f6',
-  PIX:         '#10b981',
-  CASH:        '#f59e0b',
-  VOUCHER:     '#f43f5e',
+  CREDIT_CARD:        '#8b5cf6',
+  CREDIT_CARD_MANUAL: '#a78bfa',
+  DEBIT_CARD:         '#3b82f6',
+  PIX:                '#10b981',
+  CASH:               '#f59e0b',
+  VOUCHER:            '#f43f5e',
 }
 
 const TYPE_COLORS: Record<string, string> = {

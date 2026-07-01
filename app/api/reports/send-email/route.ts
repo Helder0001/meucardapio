@@ -10,7 +10,7 @@ import { Resend } from 'resend'
 const resend = new Resend(process.env.RESEND_API_KEY)
 
 const METHOD_PT: Record<string, string> = {
-  CASH: 'Dinheiro', CREDIT_CARD: 'Cartão de Crédito',
+  CASH: 'Dinheiro', CREDIT_CARD: 'Cartão de Crédito', CREDIT_CARD_MANUAL: 'Crédito (entrega/retirada)',
   DEBIT_CARD: 'Cartão de Débito', PIX: 'PIX', VOUCHER: 'Voucher',
 }
 const TYPE_PT: Record<string, string> = {
