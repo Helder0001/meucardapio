@@ -3,11 +3,42 @@
 // components/dashboard/order-detail.tsx
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { formatCurrency, formatDate, formatPhone, formatOrderNumber } from '@/lib/utils/format'
 import { OrderStatusBadge } from './order-status-badge'
 import { cn } from '@/lib/utils'
-import { Loader2, CheckCircle2, XCircle, CreditCard, Plus, X } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, CreditCard, Plus, X, Pencil, Minus, Trash2, Search } from 'lucide-react'
 import { toast } from 'sonner'
+
+interface CatalogProduct { id: string; name: string; price: number; isOutOfStock?: boolean }
+interface CatalogCategory { id: string; name: string; products: CatalogProduct[] }
+
+// Linha de edição de item — usada apenas dentro do editor de itens do pedido.
+interface EditItemRow {
+  key: string           // productId + adicionais ordenados (chave estável da linha)
+  productId: string
+  productName: string
+  unitPrice: number
+  quantity: number
+  notes?: string
+  addonIds: string[]
+  addonNames: string[]
+}
+
+function makeItemKey(productId: string, addonIds: string[]): string {
+  return `${productId}::${[...addonIds].sort().join(',')}`
+}
+
+// Formas de pagamento para as quais é possível trocar um pagamento ainda
+// não confirmado (mesma lista aceita pela rota change-payment-method).
+const CHANGE_METHOD_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'PIX',                label: '⚡ PIX' },
+  { value: 'CASH',                label: '💵 Dinheiro' },
+  { value: 'CREDIT_CARD',         label: '💳 Crédito (online)' },
+  { value: 'CREDIT_CARD_MANUAL',  label: '💳 Crédito (entrega/retirada)' },
+  { value: 'DEBIT_CARD',          label: '💳 Débito' },
+  { value: 'VOUCHER',             label: '🎟️ Voucher' },
+]
 
 type AddPaymentMethod = 'PIX' | 'CASH' | 'CREDIT_CARD' | 'CREDIT_CARD_MANUAL' | 'DEBIT_CARD' | 'VOUCHER' | 'TRANSFER'
 interface AddPaymentEntry { method: AddPaymentMethod; amount: number }
@@ -108,10 +139,28 @@ function getAllowedNextStatus(
   return { next, label }
 }
 
-export function OrderDetail({ order, userRole }: { order: any; userRole: string }) {
+export function OrderDetail({
+  order, userRole, catalog = [],
+}: { order: any; userRole: string; catalog?: CatalogCategory[] }) {
   const [status,   setStatus]   = useState(order.status)
   const [payments, setPayments] = useState<any[]>(order.payments)
   const [isPending, start]      = useTransition()
+  const router = useRouter()
+
+  // ── Itens e totais — ficam em estado local pois podem mudar ao editar o pedido ──
+  const [items,          setItems]          = useState<any[]>(order.items)
+  const [orderSubtotal,  setOrderSubtotal]  = useState<number>(Number(order.subtotal))
+  const [orderTotal,     setOrderTotal]     = useState<number>(Number(order.total))
+
+  // ── Edição de itens do pedido ──────────────────────────────────────────────
+  const [isEditingItems, setIsEditingItems] = useState(false)
+  const [editRows,       setEditRows]       = useState<EditItemRow[]>([])
+  const [isSavingItems,  startSavingItems]  = useTransition()
+  const [productQuery,   setProductQuery]   = useState('')
+
+  // ── Troca de forma de pagamento (pagamento ainda não confirmado) ──────────
+  const [changingPaymentId, setChangingPaymentId] = useState<string | null>(null)
+  const [isChangingMethod,  startChangingMethod]  = useTransition()
 
   // ── Modal de pagamento posterior ──────────────────────────────────────────
   const [showAddPayment, setShowAddPayment]     = useState(false)
@@ -125,7 +174,7 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
   const [isSendingLink, setIsSendingLink]       = useState(false)
   const [paymentLinkUrl, setPaymentLinkUrl]     = useState<string | null>(null)
 
-  const totalOrder   = Number(order.total)
+  const totalOrder   = orderTotal
   const alreadyPaid  = payments.reduce((s: number, p: any) => s + Number(p.amount), 0)
   const stillOwed    = Math.max(0, Math.round((totalOrder - alreadyPaid) * 100) / 100)
 
@@ -305,6 +354,142 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
     })
   }
 
+  // ── Editar itens do pedido ──────────────────────────────────────────────────
+  // Permitido para qualquer pedido que ainda não foi entregue/cancelado/estornado.
+  const canEditOrder =
+    !['DELIVERED', 'CANCELLED', 'REFUNDED'].includes(status) &&
+    ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'STAFF'].includes(userRole)
+
+  const openItemEditor = () => {
+    setEditRows(items.map((item: any) => ({
+      key: makeItemKey(item.productId, item.addons.map((a: any) => a.addonId)),
+      productId: item.productId,
+      productName: item.productName,
+      unitPrice: Number(item.unitPrice),
+      quantity: item.quantity,
+      notes: item.notes ?? undefined,
+      addonIds: item.addons.map((a: any) => a.addonId),
+      addonNames: item.addons.map((a: any) => a.addonName),
+    })))
+    setProductQuery('')
+    setIsEditingItems(true)
+  }
+
+  const closeItemEditor = () => {
+    setIsEditingItems(false)
+    setEditRows([])
+  }
+
+  const addProductToEdit = (product: CatalogProduct) => {
+    if (product.isOutOfStock) {
+      toast.error(`"${product.name}" está esgotado`)
+      return
+    }
+    setEditRows((prev) => {
+      const key = makeItemKey(product.id, [])
+      const existing = prev.find((r) => r.key === key)
+      if (existing) {
+        return prev.map((r) => r.key === key ? { ...r, quantity: r.quantity + 1 } : r)
+      }
+      return [...prev, {
+        key, productId: product.id, productName: product.name,
+        unitPrice: product.price, quantity: 1, addonIds: [], addonNames: [],
+      }]
+    })
+  }
+
+  const updateEditQty = (key: string, delta: number) => {
+    setEditRows((prev) => {
+      const next = prev.map((r) => r.key === key ? { ...r, quantity: r.quantity + delta } : r)
+      return next.filter((r) => r.quantity > 0)
+    })
+  }
+
+  const removeEditRow = (key: string) => {
+    setEditRows((prev) => prev.filter((r) => r.key !== key))
+  }
+
+  const editSubtotal = editRows.reduce((s, r) => s + r.unitPrice * r.quantity, 0)
+  const editTotal = Math.max(0, editSubtotal + Number(order.deliveryFee) - Number(order.discountAmount) - Number(order.cashbackUsed))
+
+  const filteredCatalogProducts = productQuery.trim().length === 0
+    ? []
+    : catalog
+        .flatMap((c) => c.products)
+        .filter((p) => p.name.toLowerCase().includes(productQuery.trim().toLowerCase()))
+        .slice(0, 8)
+
+  const saveItemEdits = () => {
+    if (editRows.length === 0) {
+      toast.error('O pedido precisa ter ao menos 1 item')
+      return
+    }
+    startSavingItems(async () => {
+      const res = await fetch(`/api/orders/${order.id}/edit-items`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: editRows.map((r) => ({
+            productId: r.productId,
+            quantity: r.quantity,
+            addonIds: r.addonIds,
+            notes: r.notes,
+          })),
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data.error ?? 'Erro ao editar pedido')
+        return
+      }
+      setItems(data.items)
+      setOrderSubtotal(data.subtotal)
+      setOrderTotal(data.total)
+      setPayments(data.payments)
+      closeItemEditor()
+      toast.success('Pedido atualizado!')
+      router.refresh()
+    })
+  }
+
+  // ── Trocar forma de pagamento (só antes da confirmação) ─────────────────────
+  const changePaymentMethod = (paymentId: string, method: string) => {
+    startChangingMethod(async () => {
+      const res = await fetch(`/api/orders/${order.id}/change-payment-method`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentId, method }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data.error ?? 'Erro ao trocar forma de pagamento')
+        return
+      }
+      setChangingPaymentId(null)
+      if (data.unchanged) return
+
+      setPayments((prev) => {
+        // PIX ⇄ manual troca o registro de pagamento (novo id) — substitui a linha antiga.
+        if (data.replacedPaymentId && data.replacedPaymentId !== data.paymentId) {
+          return prev
+            .filter((p) => p.id !== data.replacedPaymentId)
+            .concat([{
+              id: data.paymentId, method: data.method, status: data.status, amount: data.amount,
+              paidAt: null, changeAmount: null, pixExpiresAt: null,
+            }])
+        }
+        // Troca simples entre métodos manuais — só atualiza o método na mesma linha.
+        return prev.map((p) => p.id === paymentId ? { ...p, method: data.method } : p)
+      })
+
+      if (data.pixQrCode && data.pixQrCodeBase64) {
+        setAddPixData({ qrCode: data.pixQrCode, qrCodeBase64: data.pixQrCodeBase64 })
+      } else {
+        toast.success('Forma de pagamento atualizada!')
+      }
+    })
+  }
+
   const currentStep = STATUS_FLOW.findIndex((s) => s.key === status)
   const isDone      = ['DELIVERED', 'CANCELLED', 'REFUNDED'].includes(status)
 
@@ -322,7 +507,7 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
             </span>
           </div>
           <span className="text-xl font-bold text-foreground">
-            {formatCurrency(order.total)}
+            {formatCurrency(orderTotal)}
           </span>
         </div>
 
@@ -371,6 +556,17 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
                 {advanceLabel}
               </button>
             )}
+            {/* NOVO: editar itens/pagamento do pedido — cliente quer mudar algo antes de cancelar */}
+            {canEditOrder && (
+              <button
+                onClick={openItemEditor}
+                disabled={isPending}
+                className="flex items-center gap-2 px-4 py-2.5 border border-border text-foreground text-sm font-medium rounded-lg hover:bg-muted/50 disabled:opacity-60 transition-colors"
+              >
+                <Pencil className="h-4 w-4" />
+                Editar pedido
+              </button>
+            )}
             {/* Cancelar — Atendente e Entregador não podem cancelar */}
             {!isAttendant && !isDeliveryPerson && (
               <button
@@ -397,7 +593,7 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
         <div className="lg:col-span-2 bg-card border border-border rounded-xl p-5">
           <h2 className="font-semibold text-foreground mb-4">Itens do pedido</h2>
           <div className="space-y-3">
-            {order.items.map((item: any) => (
+            {items.map((item: any) => (
               <div key={item.id} className="flex justify-between gap-3 pb-3 border-b border-border last:border-0 last:pb-0">
                 <div className="flex-1">
                   <p className="text-sm font-medium text-foreground">
@@ -424,7 +620,7 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
           {/* Totais */}
           <div className="border-t border-border mt-4 pt-4 space-y-1.5">
             <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Subtotal</span><span>{formatCurrency(order.subtotal)}</span>
+              <span>Subtotal</span><span>{formatCurrency(orderSubtotal)}</span>
             </div>
             {order.deliveryFee > 0 && (
               <div className="flex justify-between text-sm text-muted-foreground">
@@ -443,7 +639,7 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
               </div>
             )}
             <div className="flex justify-between font-bold text-foreground pt-1 border-t border-border">
-              <span>Total</span><span>{formatCurrency(order.total)}</span>
+              <span>Total</span><span>{formatCurrency(orderTotal)}</span>
             </div>
           </div>
         </div>
@@ -662,6 +858,31 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
                               Pendente de confirmação
                             </p>
                           )}
+                          {/* NOVO: trocar forma de pagamento — só antes de confirmar */}
+                          {!isPaid && !isFailed && canEditOrder && (
+                            changingPaymentId === p.id ? (
+                              <select
+                                autoFocus
+                                defaultValue={p.method}
+                                disabled={isChangingMethod}
+                                onChange={(e) => changePaymentMethod(p.id, e.target.value)}
+                                onBlur={() => setChangingPaymentId(null)}
+                                className="mt-1.5 text-xs border border-input rounded-lg bg-background px-2 py-1 focus:outline-none focus:ring-2 focus:ring-ring"
+                              >
+                                {CHANGE_METHOD_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <button
+                                onClick={() => setChangingPaymentId(p.id)}
+                                disabled={isChangingMethod}
+                                className="text-xs font-medium text-primary hover:underline mt-1"
+                              >
+                                Trocar forma de pagamento
+                              </button>
+                            )
+                          )}
                         </div>
                         {/* Confirmar pagamento — controlado por canConfirmPayment() */}
                         {canConfirmPayment(p) && (
@@ -780,6 +1001,141 @@ export function OrderDetail({ order, userRole }: { order: any; userRole: string 
             >
               Fechar
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: editar itens do pedido ─────────────────────────────────── */}
+      {isEditingItems && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closeItemEditor} />
+          <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto bg-card border border-border rounded-2xl shadow-2xl p-5 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-foreground text-lg">Editar itens do pedido</h3>
+              <button onClick={closeItemEditor} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Itens atuais */}
+            <div className="space-y-2">
+              {editRows.length === 0 && (
+                <p className="text-sm text-muted-foreground">Nenhum item — adicione algo abaixo.</p>
+              )}
+              {editRows.map((r) => (
+                <div key={r.key} className="flex items-center gap-2 rounded-lg border border-border p-2.5">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{r.productName}</p>
+                    {r.addonNames.length > 0 && (
+                      <p className="text-xs text-muted-foreground truncate">+ {r.addonNames.join(', ')}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">{formatCurrency(r.unitPrice)} / un.</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => updateEditQty(r.key, -1)}
+                      className="w-7 h-7 flex items-center justify-center rounded-md bg-muted hover:bg-muted/70 text-foreground"
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                    </button>
+                    <span className="w-6 text-center text-sm font-semibold text-foreground">{r.quantity}</span>
+                    <button
+                      onClick={() => updateEditQty(r.key, 1)}
+                      className="w-7 h-7 flex items-center justify-center rounded-md bg-muted hover:bg-muted/70 text-foreground"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => removeEditRow(r.key)}
+                      title="Remover item"
+                      className="w-7 h-7 flex items-center justify-center rounded-md bg-destructive/10 hover:bg-destructive/20 text-destructive ml-1"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Adicionar item */}
+            <div className="border-t border-border pt-3 space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase">Adicionar item</p>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <input
+                  value={productQuery}
+                  onChange={(e) => setProductQuery(e.target.value)}
+                  placeholder="Buscar produto pelo nome..."
+                  className="w-full pl-8 pr-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              {filteredCatalogProducts.length > 0 && (
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {filteredCatalogProducts.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => { addProductToEdit(p); setProductQuery('') }}
+                      disabled={p.isOutOfStock}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm rounded-lg hover:bg-muted/60 disabled:opacity-50 disabled:cursor-not-allowed text-left"
+                    >
+                      <span className="text-foreground truncate">{p.name}{p.isOutOfStock ? ' (esgotado)' : ''}</span>
+                      <span className="text-muted-foreground flex-shrink-0">{formatCurrency(p.price)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {productQuery.trim().length > 0 && filteredCatalogProducts.length === 0 && (
+                <p className="text-xs text-muted-foreground">Nenhum produto encontrado.</p>
+              )}
+            </div>
+
+            {/* Totais recalculados */}
+            <div className="border-t border-border pt-3 space-y-1 text-sm">
+              <div className="flex justify-between text-muted-foreground">
+                <span>Subtotal</span><span>{formatCurrency(editSubtotal)}</span>
+              </div>
+              {Number(order.deliveryFee) > 0 && (
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Entrega</span><span>{formatCurrency(order.deliveryFee)}</span>
+                </div>
+              )}
+              {Number(order.discountAmount) > 0 && (
+                <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                  <span>Desconto</span><span>-{formatCurrency(order.discountAmount)}</span>
+                </div>
+              )}
+              {Number(order.cashbackUsed) > 0 && (
+                <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                  <span>Cashback usado</span><span>-{formatCurrency(order.cashbackUsed)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-bold text-foreground pt-1 border-t border-border">
+                <span>Novo total</span><span>{formatCurrency(editTotal)}</span>
+              </div>
+              {editTotal !== orderTotal && (
+                <p className="text-[10px] text-amber-600 dark:text-amber-500">
+                  Total anterior: {formatCurrency(orderTotal)}
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={closeItemEditor}
+                disabled={isSavingItems}
+                className="flex-1 py-2.5 border border-border text-foreground text-sm font-semibold rounded-lg hover:bg-muted/50 disabled:opacity-60 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={saveItemEdits}
+                disabled={isSavingItems || editRows.length === 0}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded-lg hover:bg-primary/90 disabled:opacity-60 transition-colors"
+              >
+                {isSavingItems ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                {isSavingItems ? 'Salvando...' : 'Salvar alterações'}
+              </button>
+            </div>
           </div>
         </div>
       )}

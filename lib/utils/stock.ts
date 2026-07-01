@@ -17,6 +17,7 @@
 //   - app/api/orders/[id]/status          → restockCancelledOrder (PIX expirado)
 //   - app/api/webhooks/mercadopago        → restockCancelledOrder (PIX cancelado no MP)
 //   - app/api/orders/[id]/update-status   → restockCancelledOrder (cancelamento manual)
+//   - app/api/orders/[id]/edit-items      → decrementStockForOrder / restockOrderItems (edição de pedido)
 //   - actions/stock/adjust-stock.ts       → adjustStockManually (ajuste do lojista)
 //   - app/(storefront)/menu/[slug]/page.tsx, kanban/page.tsx → isOutOfStock
 //     (esconder/bloquear produto esgotado no cardápio e no PDV)
@@ -216,6 +217,73 @@ export async function restockCancelledOrder(
       balanceAfterOverride: Number(updated.quantity),
     })
   }
+
+  return { affectedProductIds: [...affectedProductIds] }
+}
+
+/**
+ * Estorna PARCIALMENTE o estoque de um pedido ainda em andamento (não
+ * cancelado) — usado quando o lojista EDITA o pedido para remover um item
+ * ou reduzir a quantidade de um item já existente.
+ *
+ * Diferente de `restockCancelledOrder` (que devolve TUDO de uma vez e é
+ * bloqueada por idempotência caso já exista qualquer estorno para o
+ * pedido), esta função:
+ *   - Opera por produto e por quantidade explícita (permite múltiplas
+ *     edições sucessivas no mesmo pedido).
+ *   - Calcula quanto daquele produto ainda está "vendido e não devolvido"
+ *     por PDV (SALE − CANCEL_REFUND já registrados), e devolve no máximo
+ *     esse saldo — nunca devolve mais do que foi de fato debitado.
+ *   - Devolve ao(s) MESMO(S) PDV(s) de onde saiu, priorizando o
+ *     movimento de venda mais antigo ainda não estornado.
+ */
+export async function restockOrderItems(
+  tx: Tx,
+  params: { tenantId: string; orderId: string; productId: string; quantity: number }
+): Promise<{ affectedProductIds: string[] }> {
+  const { tenantId, orderId, productId, quantity } = params
+  if (quantity <= 0) return { affectedProductIds: [] }
+
+  const movements = await tx.stockMovement.findMany({
+    where: { tenantId, orderId, productId, type: { in: ['SALE', 'CANCEL_REFUND'] } },
+    orderBy: { createdAt: 'asc' },
+  })
+
+  // Saldo ainda vendido (não estornado) por stockId, na ordem em que as
+  // vendas ocorreram — é isso que determina de onde devolver primeiro.
+  const stockOrder: string[] = []
+  const netByStock = new Map<string, number>()
+  for (const m of movements) {
+    if (!netByStock.has(m.stockId)) stockOrder.push(m.stockId)
+    const sign = m.type === 'SALE' ? 1 : -1
+    netByStock.set(m.stockId, (netByStock.get(m.stockId) ?? 0) + sign * Number(m.quantity))
+  }
+
+  let remaining = quantity
+  const affectedProductIds = new Set<string>()
+
+  for (const stockId of stockOrder) {
+    if (remaining <= 0) break
+    const netSold = netByStock.get(stockId) ?? 0
+    if (netSold <= 0) continue
+
+    const refundQty = Math.min(remaining, netSold)
+    const updated = await tx.stock.update({
+      where: { id: stockId },
+      data: { quantity: { increment: refundQty } },
+    })
+
+    await recordMovement(tx, {
+      tenantId, stockId, productId, pdvId: updated.pdvId,
+      orderId, type: 'CANCEL_REFUND', quantity: refundQty,
+      balanceAfterOverride: Number(updated.quantity),
+    })
+
+    remaining -= refundQty
+    affectedProductIds.add(productId)
+  }
+  // Se `remaining` > 0 ao final, o produto não tinha estoque controlado
+  // (ou já não há saldo vendido rastreável) — nada a devolver, sem erro.
 
   return { affectedProductIds: [...affectedProductIds] }
 }

@@ -3,6 +3,7 @@
 import { auth } from '@/lib/auth/session'
 import { redirect, notFound } from 'next/navigation'
 import { prisma } from '@/lib/db/client'
+import { isOutOfStock } from '@/lib/utils/stock'
 import { OrderDetail } from '@/components/dashboard/order-detail'
 import { BackButton } from '@/components/shared/back-button'
 import type { Metadata } from 'next'
@@ -26,7 +27,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       coupon:    { select: { code: true, type: true, value: true } },
       items: {
         include: {
-          addons: { select: { addonName: true, addonPrice: true } },
+          addons: { select: { addonId: true, addonName: true, addonPrice: true } },
         },
       },
       payments: {
@@ -48,6 +49,30 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   })
 
   if (!order) notFound()
+
+  // Catálogo para o editor de itens do pedido (adicionar item novo)
+  const categories = await prisma.category.findMany({
+    where: { tenantId: session.user.tenantId, isActive: true },
+    select: {
+      id: true, name: true,
+      products: {
+        where: { isActive: true },
+        select: { id: true, name: true, price: true, stocks: { select: { quantity: true } } },
+        orderBy: { sortOrder: 'asc' },
+      },
+    },
+    orderBy: { sortOrder: 'asc' },
+  })
+  const catalog = categories.map((c) => ({
+    id: c.id,
+    name: c.name,
+    products: c.products.map((p) => ({
+      id: p.id,
+      name: p.name,
+      price: Number(p.price),
+      isOutOfStock: isOutOfStock(p.stocks),
+    })),
+  }))
 
   // CORREÇÃO: mesma checagem de expiração de PIX usada no polling do cliente
   // — assim a tela do dashboard também cancela sozinha, sem depender só do
@@ -110,7 +135,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       </div>
       {/* CORREÇÃO: garçons (STAFF) só podem confirmar, cancelar ou marcar
           como entregue — demais transições ficam ocultas. */}
-      <OrderDetail order={serialized} userRole={session.user.role} />
+      <OrderDetail order={serialized} userRole={session.user.role} catalog={catalog} />
     </div>
   )
 }
