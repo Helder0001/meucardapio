@@ -21,6 +21,7 @@ interface NavItem {
   badge?: number
   minPlan?: 'PRO' | 'PREMIUM'
   allowedRoles?: string[]
+  comingSoon?: boolean
 }
 
 const ADMIN_ROLES  = ['TENANT_ADMIN']
@@ -48,7 +49,7 @@ const navItems: NavItem[] = [
   { label: 'Relatórios',   href: '/dashboard/reports',            icon: BarChart3,         allowedRoles: MANAGER_UP },
   { label: 'Impressoras',  href: '/dashboard/printers',           icon: Printer,           allowedRoles: MANAGER_UP },
   { label: 'Pagamentos',   href: '/dashboard/settings/payments',  icon: QrCode,            allowedRoles: MANAGER_UP },
-  { label: 'Integrações',  href: '/dashboard/settings/integrations', icon: Plug,           minPlan: 'PRO', allowedRoles: MANAGER_UP },
+  { label: 'Integrações',  href: '/dashboard/settings/integrations', icon: Plug,           minPlan: 'PRO', allowedRoles: MANAGER_UP, comingSoon: true },
   { label: 'Configurações',href: '/dashboard/settings',           icon: Settings,          allowedRoles: ADMIN_ROLES },
 ]
 
@@ -100,6 +101,17 @@ export function Sidebar({ userRole, tenantSlug, plan }: SidebarProps) {
           (item.href !== '/dashboard' && pathname.startsWith(item.href))
         const accessible = canAccess(item)
         const Icon = item.icon
+
+        if (item.comingSoon) return (
+          <div key={item.href} title="Em breve — disponível após o lançamento"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl opacity-50 cursor-not-allowed select-none">
+            <Icon className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">{item.label}</span>
+            <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground rounded-full px-2 py-0.5 whitespace-nowrap">
+              Em breve
+            </span>
+          </div>
+        )
 
         if (!accessible) return (
           <div key={item.href} title={`Disponível no plano ${item.minPlan}`}
