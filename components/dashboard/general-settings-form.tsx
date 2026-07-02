@@ -200,6 +200,7 @@ export function GeneralSettingsForm({ tenant }: SettingsProps) {
           onChange={setLogoUrl}
           onRemove={() => setLogoUrl('')}
           type="logo"
+          recommendedSize="400x400px"
         />
 
         {/* Capa */}
@@ -208,7 +209,8 @@ export function GeneralSettingsForm({ tenant }: SettingsProps) {
           value={coverUrl || null}
           onChange={setCoverUrl}
           onRemove={() => setCoverUrl('')}
-          type="product"
+          type="cover"
+          recommendedSize="1200x400px"
         />
 
         {/* Tagline */}

@@ -7,6 +7,7 @@
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
+import { getBase64FromMediaMessage } from '@/lib/messaging/evolution'
 
 export const runtime = 'nodejs'
 
@@ -74,11 +75,47 @@ export async function POST(request: Request) {
           if (!msg) continue
 
           const fromPhone = msg.key?.remoteJid?.replace('@s.whatsapp.net', '')
+          const msgId     = msg.key?.id
+
+          // Detectar mídia (imagem, vídeo, áudio, documento, figurinha)
+          const mediaMessage =
+            msg.message?.imageMessage    ? { type: 'image',    payload: msg.message.imageMessage }    :
+            msg.message?.videoMessage    ? { type: 'video',    payload: msg.message.videoMessage }    :
+            msg.message?.audioMessage    ? { type: 'audio',    payload: msg.message.audioMessage }    :
+            msg.message?.documentMessage ? { type: 'document', payload: msg.message.documentMessage } :
+            msg.message?.stickerMessage  ? { type: 'sticker',  payload: msg.message.stickerMessage }  :
+            null
+
+          // Evolution API envia o conteúdo em base64 no campo `message.base64`
+          // quando a instância está configurada com webhook_base64 ativado.
+          // Caso contrário, buscamos via endpoint dedicado da API.
+          let base64 = msg.message?.base64 as string | undefined
+          const mediaMimeType = mediaMessage?.payload?.mimetype as string | undefined
+          const mediaFileName = mediaMessage?.payload?.fileName as string | undefined
+
+          if (mediaMessage && !base64 && msg.key) {
+            base64 = (await getBase64FromMediaMessage(config.tenantId, msg.key)) ?? undefined
+          }
+
+          const mediaUrl = mediaMessage && base64 && mediaMimeType
+            ? `data:${mediaMimeType};base64,${base64}`
+            : null
+
+          const mediaLabel = mediaMessage
+            ? {
+                image:    '📷 Foto',
+                video:    '🎥 Vídeo',
+                audio:    '🎵 Áudio',
+                document: `📄 ${mediaFileName ?? 'Documento'}`,
+                sticker:  '🎭 Figurinha',
+              }[mediaMessage.type]
+            : null
+
           const text      = msg.message?.conversation?.trim() ||
                             msg.message?.extendedTextMessage?.text?.trim() ||
-                            msg.message?.imageMessage?.caption?.trim() ||
-                            '[mídia]'
-          const msgId     = msg.key?.id
+                            mediaMessage?.payload?.caption?.trim() ||
+                            mediaLabel ||
+                            '[mensagem não suportada]'
 
           if (!fromPhone) continue
 
@@ -116,6 +153,11 @@ export async function POST(request: Request) {
               body:   text,
               fromMe: false,
               status: 'received',
+              msgId,
+              mediaUrl,
+              mediaType: mediaMessage?.type ?? null,
+              mediaMimeType: mediaMimeType ?? null,
+              mediaFileName: mediaFileName ?? null,
             },
           })
         }

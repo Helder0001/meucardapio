@@ -158,18 +158,18 @@ export default function HomePageClient() {
               </div>
             </div>
             {/* floating notifications */}
-            <div className="absolute -left-4 top-1/3 animate-float hidden sm:flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-3 py-2 shadow-lg">
-              <div className="w-7 h-7 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center text-sm">✓</div>
+            <div className="absolute -left-1 sm:-left-4 top-1/3 animate-float flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 shadow-lg">
+              <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center text-xs sm:text-sm">✓</div>
               <div>
-                <p className="text-[10px] text-gray-500 leading-none">Pagamento confirmado</p>
-                <p className="text-xs font-bold text-gray-900 dark:text-white">PIX · R$ 54,90</p>
+                <p className="text-[9px] sm:text-[10px] text-gray-500 leading-none">Pagamento confirmado</p>
+                <p className="text-[11px] sm:text-xs font-bold text-gray-900 dark:text-white">PIX · R$ 54,90</p>
               </div>
             </div>
-            <div className="absolute -right-4 bottom-1/4 animate-float-delay hidden sm:flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-3 py-2 shadow-lg">
-              <div className="w-7 h-7 rounded-xl bg-green-100 dark:bg-green-900/40 flex items-center justify-center text-sm">💬</div>
+            <div className="absolute -right-1 sm:-right-4 bottom-1/4 animate-float-delay flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 shadow-lg">
+              <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-green-100 dark:bg-green-900/40 flex items-center justify-center text-xs sm:text-sm">💬</div>
               <div>
-                <p className="text-[10px] text-gray-500 leading-none">WhatsApp enviado</p>
-                <p className="text-xs font-bold text-gray-900 dark:text-white">Pedido a caminho 🛵</p>
+                <p className="text-[9px] sm:text-[10px] text-gray-500 leading-none">WhatsApp enviado</p>
+                <p className="text-[11px] sm:text-xs font-bold text-gray-900 dark:text-white">Pedido a caminho 🛵</p>
               </div>
             </div>
           </div>

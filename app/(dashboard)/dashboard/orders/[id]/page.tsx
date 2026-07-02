@@ -35,7 +35,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         select: {
           id: true, method: true, status: true, amount: true,
           pixQrCode: true, pixQrCodeBase64: true, paidAt: true,
-          changeAmount: true, createdAt: true, pixExpiresAt: true,
+          changeAmount: true, createdAt: true, pixExpiresAt: true, setAtOrderCreation: true,
         },
       },
       statusHistory: {

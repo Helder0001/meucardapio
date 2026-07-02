@@ -682,6 +682,10 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
             <button onClick={() => setInfoModalOpen(true)} className="font-semibold text-gray-700 dark:text-gray-300 hover:underline">
               Mais informações
             </button>
+            <span>•</span>
+            <a href={`/menu/${tenant.slug}/avaliacoes`} className="flex items-center gap-1 font-semibold text-gray-700 dark:text-gray-300 hover:underline">
+              <Star className="w-3.5 h-3.5" /> Avaliações
+            </a>
           </div>
 
           <div className="mt-1.5 text-sm text-gray-600 dark:text-gray-400">
@@ -717,6 +721,10 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
               </svg>
               Pedidos
             </button>
+            <a href={`/menu/${tenant.slug}/avaliacoes`}
+              className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-all">
+              <Star className="w-3.5 h-3.5" /> Avaliações
+            </a>
             {tenant.phone && (
               <a href={`https://wa.me/${tenant.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-all">

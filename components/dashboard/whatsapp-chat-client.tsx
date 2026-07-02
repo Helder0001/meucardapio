@@ -2,7 +2,7 @@
 // components/dashboard/whatsapp-chat-client.tsx
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Search, Send, MessageCircle, RefreshCw, Phone, Clock } from 'lucide-react'
+import { Search, Send, MessageCircle, RefreshCw, Phone, Clock, Paperclip, X, FileText, Loader2 } from 'lucide-react'
 import { formatDate, formatRelative } from '@/lib/utils/format'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -23,6 +23,10 @@ interface Message {
   fromMe: boolean
   status: string
   createdAt: string
+  mediaUrl?: string | null
+  mediaType?: string | null
+  mediaMimeType?: string | null
+  mediaFileName?: string | null
   sentBy: { name: string } | null
 }
 
@@ -39,7 +43,10 @@ export function WhatsAppChatClient({ tenantId }: WhatsAppChatClientProps) {
   const [search, setSearch]             = useState('')
   const [loading, setLoading]           = useState(true)
   const [loadingMsgs, setLoadingMsgs]   = useState(false)
+  const [attachedFile, setAttachedFile] = useState<File | null>(null)
+  const [sendingFile, setSendingFile]   = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const fileInputRef   = useRef<HTMLInputElement>(null)
 
   // Buscar lista de chats
   const fetchChats = useCallback(async () => {
@@ -105,6 +112,32 @@ export function WhatsAppChatClient({ tenantId }: WhatsAppChatClientProps) {
       setInput(text)
     }
     setSending(false)
+  }
+
+  const sendFile = async () => {
+    if (!attachedFile || !selectedChat || sendingFile) return
+    setSendingFile(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', attachedFile)
+      if (input.trim()) formData.append('caption', input.trim())
+
+      const res  = await fetch(`/api/whatsapp/chats/${selectedChat.id}/send-media`, {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error ?? 'Erro ao enviar arquivo')
+        return
+      }
+      setMessages((prev) => [...prev, data.message])
+      setAttachedFile(null)
+      setInput('')
+    } catch {
+      toast.error('Erro de conexão')
+    }
+    setSendingFile(false)
   }
 
   const filteredChats = chats.filter((c) => {
@@ -280,7 +313,34 @@ export function WhatsAppChatClient({ tenantId }: WhatsAppChatClientProps) {
                     ? 'bg-emerald-500 text-white rounded-br-sm'
                     : 'bg-card text-foreground border border-border rounded-bl-sm'
                 )}>
-                  <p className="leading-relaxed">{msg.body}</p>
+                  {msg.mediaUrl && msg.mediaType === 'image' && (
+                    <img src={msg.mediaUrl} alt={msg.mediaFileName ?? 'Imagem'}
+                      className="rounded-lg max-w-full max-h-64 mb-1.5 object-cover" />
+                  )}
+                  {msg.mediaUrl && msg.mediaType === 'video' && (
+                    <video src={msg.mediaUrl} controls className="rounded-lg max-w-full max-h-64 mb-1.5" />
+                  )}
+                  {msg.mediaUrl && msg.mediaType === 'audio' && (
+                    <audio src={msg.mediaUrl} controls className="mb-1.5 max-w-full" />
+                  )}
+                  {msg.mediaUrl && (msg.mediaType === 'document' || msg.mediaType === 'sticker') && (
+                    <a href={msg.mediaUrl} download={msg.mediaFileName ?? undefined}
+                      className={cn(
+                        'flex items-center gap-2 rounded-lg px-2.5 py-2 mb-1.5 text-xs font-medium',
+                        msg.fromMe ? 'bg-white/15' : 'bg-muted'
+                      )}>
+                      <FileText className="h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">{msg.mediaFileName ?? 'Documento'}</span>
+                    </a>
+                  )}
+                  {msg.mediaType && !msg.mediaUrl && (
+                    <p className="text-xs italic opacity-70 mb-1">
+                      Mídia recebida — abra no WhatsApp para visualizar
+                    </p>
+                  )}
+                  {(!msg.mediaUrl || !['📷 Foto', '🎥 Vídeo', '🎵 Áudio'].includes(msg.body)) && (
+                    <p className="leading-relaxed">{msg.body}</p>
+                  )}
                   <div className={cn(
                     'flex items-center gap-1 mt-1',
                     msg.fromMe ? 'justify-end' : 'justify-start'
@@ -299,27 +359,55 @@ export function WhatsAppChatClient({ tenantId }: WhatsAppChatClientProps) {
 
           {/* Input */}
           <div className="p-3 border-t border-border bg-card">
+            {attachedFile && (
+              <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-xl bg-muted text-xs">
+                <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                <span className="flex-1 truncate font-medium text-foreground">{attachedFile.name}</span>
+                <button onClick={() => setAttachedFile(null)} className="p-1 rounded-md hover:bg-background text-muted-foreground">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*,audio/*,application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) setAttachedFile(f)
+                e.target.value = ''
+              }}
+            />
             <div className="flex items-end gap-2">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={sendingFile}
+                title="Anexar arquivo"
+                className="w-10 h-10 rounded-full hover:bg-muted disabled:opacity-40 flex items-center justify-center text-muted-foreground transition-colors flex-shrink-0"
+              >
+                <Paperclip className="h-4 w-4" />
+              </button>
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
-                    sendMessage()
+                    attachedFile ? sendFile() : sendMessage()
                   }
                 }}
-                placeholder="Digite uma mensagem..."
+                placeholder={attachedFile ? 'Adicionar legenda (opcional)...' : 'Digite uma mensagem...'}
                 rows={1}
                 className="flex-1 px-4 py-2.5 text-sm border border-input rounded-2xl bg-background focus:outline-none focus:ring-2 focus:ring-ring resize-none max-h-28 overflow-y-auto"
                 style={{ minHeight: '42px' }}
               />
               <button
-                onClick={sendMessage}
-                disabled={!input.trim() || sending}
+                onClick={attachedFile ? sendFile : sendMessage}
+                disabled={attachedFile ? sendingFile : (!input.trim() || sending)}
                 className="w-10 h-10 rounded-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 flex items-center justify-center text-white transition-colors flex-shrink-0"
               >
-                <Send className="h-4 w-4" />
+                {sendingFile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </button>
             </div>
             <p className="text-[10px] text-muted-foreground mt-1.5 text-center">

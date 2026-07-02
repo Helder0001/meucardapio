@@ -323,6 +323,11 @@ export async function createOrderAction(
   // 6. Criar registros de pagamento (um por forma de pagamento)
   let pixResult: { pixQrCode?: string; pixQrCodeBase64?: string } | null = null
 
+  // Pagamento definido na hora da criação (PDV/Mesa com "pagar agora"),
+  // criado pelo dashboard — usado para esconder "trocar forma de pagamento"
+  const isImmediatePdvPayment =
+    !!data.createdByUserId && (data.type === 'PDV' || data.type === 'TABLE')
+
   for (const payment of paymentsList) {
     if (payment.method === 'PIX') {
       try {
@@ -346,6 +351,7 @@ export async function createOrderAction(
           status: 'PENDING',
           amount: payment.amount,
           changeAmount: payment.changeFor,
+          setAtOrderCreation: isImmediatePdvPayment,
         },
       })
     }

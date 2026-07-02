@@ -30,6 +30,7 @@ export async function GET(
       take: 100,
       select: {
         id: true, body: true, fromMe: true, status: true, createdAt: true,
+        mediaUrl: true, mediaType: true, mediaMimeType: true, mediaFileName: true,
         sentBy: { select: { name: true } },
       },
     })

@@ -6,7 +6,22 @@ import { OrderTracking } from '@/components/storefront/order-tracking'
 import { generateStatusToken } from '@/app/api/orders/[id]/status/route'
 import type { Metadata } from 'next'
 
-export const metadata: Metadata = { title: 'Acompanhar pedido' }
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { slug } = await params
+  const tenant = await prisma.tenant.findFirst({
+    where: { OR: [{ slug }, { customDomain: slug }] },
+    select: { name: true, logo: true },
+  })
+  if (!tenant) return { title: 'Acompanhar pedido' }
+  return {
+    title: `Acompanhar pedido - ${tenant.name}`,
+    openGraph: {
+      title: `Acompanhar pedido - ${tenant.name}`,
+      siteName: tenant.name,
+      images: tenant.logo ? [tenant.logo] : undefined,
+    },
+  }
+}
 
 interface PageProps {
   params: Promise<{ slug: string; id: string }>

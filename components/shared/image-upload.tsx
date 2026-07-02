@@ -13,9 +13,10 @@ interface ImageUploadProps {
   value?: string | null       // URL atual da imagem
   onChange: (url: string) => void
   onRemove?: () => void
-  type?: 'product' | 'logo'
+  type?: 'product' | 'logo' | 'cover'
   className?: string
   label?: string
+  recommendedSize?: string    // ex: "400x400px"
 }
 
 export function ImageUpload({
@@ -25,6 +26,7 @@ export function ImageUpload({
   type = 'product',
   className,
   label = 'Imagem',
+  recommendedSize,
 }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [isDragging,  setIsDragging]  = useState(false)
@@ -76,7 +78,12 @@ export function ImageUpload({
 
   return (
     <div className={cn('space-y-2', className)}>
-      <label className="block text-sm font-medium text-foreground">{label}</label>
+      <div className="flex items-center gap-2">
+        <label className="block text-sm font-medium text-foreground">{label}</label>
+        {recommendedSize && (
+          <span className="text-xs text-muted-foreground">(tamanho recomendado: {recommendedSize})</span>
+        )}
+      </div>
 
       {value ? (
         // Preview da imagem atual

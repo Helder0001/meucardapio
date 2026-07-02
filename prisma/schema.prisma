@@ -760,6 +760,10 @@ model WhatsappMessage {
   status    String   @default("received") // received, sent, read, failed
   msgId     String?  // ID da mensagem no WhatsApp
   sentById  String?  // usuário que enviou (quando fromMe=true)
+  mediaUrl      String? // data URL (base64) ou link do arquivo de mídia
+  mediaType     String? // image, video, audio, document, sticker
+  mediaMimeType String?
+  mediaFileName String?
   createdAt DateTime @default(now())
 
   chat   WhatsappChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
@@ -799,6 +803,11 @@ model Payment {
 
   // Dinheiro
   changeAmount      Decimal?      @db.Decimal(10, 2)
+
+  // Marca pagamentos definidos no momento da criação do pedido (PDV/Mesa
+  // com "pagar agora" selecionado). Usado para esconder a opção de trocar
+  // forma de pagamento, já que o método foi escolhido e confirmado na hora.
+  setAtOrderCreation Boolean      @default(false)
 
   // Dados brutos do webhook (para auditoria)
   webhookData       Json?

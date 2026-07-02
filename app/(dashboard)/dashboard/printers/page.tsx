@@ -13,7 +13,7 @@ export default async function PrintersPage() {
   if (!session?.user?.tenantId) redirect('/login')
 
   const printers = await prisma.printer.findMany({
-    where: { tenantId: session.user.tenantId },
+    where: { tenantId: session.user.tenantId, isActive: true },
     orderBy: { createdAt: 'desc' },
     select: { id: true, name: true, token: true, sector: true, isActive: true, lastSeenAt: true, createdAt: true },
   })

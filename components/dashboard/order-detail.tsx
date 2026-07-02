@@ -670,7 +670,7 @@ export function OrderDetail({
               </h3>
               <div className="flex items-center gap-3">
                 {/* Link de pagamento via WhatsApp — qualquer método */}
-                {stillOwed > 0 && (
+                {stillOwed > 0 && status !== 'CANCELLED' && (
                   <button
                     onClick={handleSendPaymentLink}
                     disabled={isSendingLink}
@@ -709,7 +709,7 @@ export function OrderDetail({
             )}
 
             {/* NOVO: Banner de pagamento pendente */}
-            {stillOwed > 0 && payments.length === 0 && (
+            {stillOwed > 0 && payments.length === 0 && status !== 'CANCELLED' && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3 mb-3">
                 <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
                   ⏳ Pagamento pendente — {formatCurrency(stillOwed)}
@@ -720,7 +720,7 @@ export function OrderDetail({
               </div>
             )}
 
-            {stillOwed > 0 && payments.length > 0 && (
+            {stillOwed > 0 && payments.length > 0 && status !== 'CANCELLED' && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-2.5 mb-3">
                 <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
                   Saldo restante: {formatCurrency(stillOwed)}
@@ -858,8 +858,8 @@ export function OrderDetail({
                               Pendente de confirmação
                             </p>
                           )}
-                          {/* NOVO: trocar forma de pagamento — só antes de confirmar */}
-                          {!isPaid && !isFailed && canEditOrder && (
+                          {/* NOVO: trocar forma de pagamento — só antes de confirmar, e não para pagamentos já definidos no "pagar agora" do PDV/Mesa */}
+                          {!isPaid && !isFailed && canEditOrder && !p.setAtOrderCreation && (
                             changingPaymentId === p.id ? (
                               <select
                                 autoFocus

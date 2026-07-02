@@ -19,6 +19,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title:       `Cardapio - ${tenant.name}`,
     description: `Faca seu pedido online na ${tenant.name}`,
+    openGraph: {
+      title: `Cardapio - ${tenant.name}`,
+      description: `Faca seu pedido online na ${tenant.name}`,
+      siteName: tenant.name,
+      images: tenant.logo ? [tenant.logo] : undefined,
+    },
   }
 }
 

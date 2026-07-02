@@ -33,6 +33,91 @@ async function getConfig(tenantId: string) {
   }
 }
 
+// ─── Buscar base64 de uma mensagem de mídia (quando não vem no webhook) ──────
+
+export async function getBase64FromMediaMessage(tenantId: string, messageKey: any) {
+  const config = await getConfig(tenantId)
+  if (!config) return null
+
+  try {
+    const res = await fetch(
+      `${config.url}/chat/getBase64FromMediaMessage/${config.instance}`,
+      {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', apikey: config.apiKey },
+        body:    JSON.stringify({ message: { key: messageKey }, convertToMp4: false }),
+        signal:  AbortSignal.timeout(15_000),
+      }
+    )
+    if (!res.ok) return null
+    const data = await res.json()
+    return data?.base64 as string | undefined ?? null
+  } catch (err) {
+    console.error('[evolution] Erro ao buscar mídia:', err)
+    return null
+  }
+}
+
+// ─── Enviar arquivo de mídia (anexo) pelo chat do dashboard ─────────────────
+
+interface SendMediaParams {
+  tenantId: string
+  phone:    string
+  base64:   string   // apenas o conteúdo, sem o prefixo data:mime;base64,
+  mediaType: 'image' | 'video' | 'document' | 'audio'
+  mimeType: string
+  fileName?: string
+  caption?:  string
+}
+
+export async function sendWhatsAppMedia({ tenantId, phone, base64, mediaType, mimeType, fileName, caption }: SendMediaParams) {
+  const config = await getConfig(tenantId)
+  if (!config) return { error: 'WhatsApp não configurado ou desconectado' }
+
+  const digits    = phone.replace(/\D/g, '')
+  const fullPhone = digits.startsWith('55') ? digits : `55${digits}`
+
+  try {
+    if (mediaType === 'audio') {
+      const res = await fetch(
+        `${config.url}/message/sendWhatsAppAudio/${config.instance}`,
+        {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', apikey: config.apiKey },
+          body:    JSON.stringify({ number: fullPhone, audio: base64, delay: 1200 }),
+          signal:  AbortSignal.timeout(20_000),
+        }
+      )
+      if (!res.ok) return { error: 'Falha ao enviar áudio' }
+      return { ok: true }
+    }
+
+    const res = await fetch(
+      `${config.url}/message/sendMedia/${config.instance}`,
+      {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', apikey: config.apiKey },
+        body:    JSON.stringify({
+          number:    fullPhone,
+          mediatype: mediaType,
+          mimetype:  mimeType,
+          media:     base64,
+          fileName:  fileName ?? undefined,
+          caption:   caption ?? undefined,
+          delay:     1200,
+        }),
+        signal: AbortSignal.timeout(20_000),
+      }
+    )
+    if (!res.ok) return { error: 'Falha ao enviar arquivo' }
+    return { ok: true }
+  } catch (err) {
+    console.error('[evolution] Erro ao enviar mídia:', err)
+    return { error: 'Erro de conexão' }
+  }
+}
+
+
 export async function sendWhatsAppMessage({ tenantId, phone, message }: SendMessageParams) {
   const config = await getConfig(tenantId)
   if (!config) return { error: 'WhatsApp não configurado ou desconectado' }

@@ -14,7 +14,7 @@ import {
   TrendingUp, TrendingDown, Minus, FileText, FileSpreadsheet,
   Loader2, Calendar, SlidersHorizontal, ChevronDown, ChevronUp,
   ShoppingBag, DollarSign, Users, Receipt, CreditCard,
-  Flame, Clock, Pizza,
+  Flame, Clock, Pizza, HelpCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -139,6 +139,26 @@ function GrowthBadge({ value, className }: { value: number; className?: string }
   )
 }
 
+// Formata uma data ISO (YYYY-MM-DD) para dd/mm/yyyy
+function formatDateBR(iso: string) {
+  const [y, m, d] = iso.split('-')
+  return `${d}/${m}/${y}`
+}
+
+// Ícone de "?" que mostra, ao passar o mouse, qual período está sendo
+// comparado (o período imediatamente anterior, com a mesma duração do
+// período selecionado nos filtros).
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="group relative inline-flex ml-auto">
+      <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-muted-foreground cursor-help" />
+      <span className="pointer-events-none absolute right-0 top-5 z-10 w-56 rounded-lg border border-border bg-popover text-popover-foreground text-[11px] leading-snug p-2 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
+        {text}
+      </span>
+    </span>
+  )
+}
+
 const SelectFilter = ({
   label, value, onChange, options,
 }: {
@@ -218,6 +238,14 @@ export function ReportsClient({
   }
 
   const hasActiveFilters = !!(pdv || payment || product || saleType)
+
+  // Período anterior (mesma duração, imediatamente antes do período selecionado)
+  // — replica o cálculo do servidor para exibir no tooltip dos cards.
+  const periodLenMs = new Date(end).getTime() - new Date(start).getTime()
+  const prevStartDate = new Date(new Date(start).getTime() - periodLenMs)
+  const prevEndDate   = new Date(new Date(start).getTime() - 86400000)
+  const comparisonPeriodText = `Comparado com o período anterior de mesma duração: ${formatDateBR(prevStartDate.toISOString().slice(0, 10))} a ${formatDateBR(prevEndDate.toISOString().slice(0, 10))}.`
+
 
   // Merging revenueChart + prevChart pelo índice (alinha por posição)
   const mergedChart = revenueChart.map((d, i) => ({
@@ -330,6 +358,7 @@ export function ReportsClient({
               <DollarSign className="h-5 w-5 text-emerald-600" />
             </div>
             <span className="text-sm font-medium text-muted-foreground">Faturamento</span>
+            <InfoTooltip text={comparisonPeriodText} />
           </div>
           <p className="text-2xl font-bold text-foreground">{formatCurrency(summary.thisRevenue)}</p>
           <GrowthBadge value={summary.revenueGrowth} className="mt-1.5" />
@@ -342,6 +371,7 @@ export function ReportsClient({
               <ShoppingBag className="h-5 w-5 text-blue-600" />
             </div>
             <span className="text-sm font-medium text-muted-foreground">Pedidos</span>
+            <InfoTooltip text={comparisonPeriodText} />
           </div>
           <p className="text-2xl font-bold text-foreground">{summary.totalOrders}</p>
           {summary.prevOrders != null && (
@@ -361,6 +391,7 @@ export function ReportsClient({
               <Receipt className="h-5 w-5 text-purple-600" />
             </div>
             <span className="text-sm font-medium text-muted-foreground">Ticket médio</span>
+            <InfoTooltip text={comparisonPeriodText} />
           </div>
           <p className="text-2xl font-bold text-foreground">{formatCurrency(summary.avgTicket)}</p>
           {summary.prevAvgTicket != null && (
@@ -380,6 +411,7 @@ export function ReportsClient({
               <Users className="h-5 w-5 text-orange-500" />
             </div>
             <span className="text-sm font-medium text-muted-foreground">Clientes</span>
+            <InfoTooltip text="Total de clientes únicos que compraram dentro do período selecionado. O % de retorno indica quantos desses já eram clientes antes desse período." />
           </div>
           <p className="text-2xl font-bold text-foreground">{summary.totalClients ?? '—'}</p>
           {summary.returnRate != null && (
