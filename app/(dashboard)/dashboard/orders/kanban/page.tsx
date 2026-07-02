@@ -38,6 +38,13 @@ export default async function KanbanPage() {
     orderBy: { sortOrder: 'asc' },
   })
 
+  const tenantSettings = await prisma.tenant.findFirst({
+    where: { id: session.user.tenantId },
+    select: { settings: true },
+  })
+  const pixEnabled  = ((tenantSettings?.settings as any)?.pixEnabled  ?? true) === true
+  const cardEnabled = ((tenantSettings?.settings as any)?.cardEnabled ?? true) === true
+
   // Buscar mesas ativas — em try/catch para não quebrar o kanban se falhar
   let tables: Array<{ id: string; number: number; sector: string; status: string; pdv: { id: string; name: string } }> = []
   try {
@@ -82,6 +89,8 @@ export default async function KanbanPage() {
               tenantId={session.user.tenantId}
               pdvId={userPdv?.pdvId}
               createdByUserId={session.user.id}
+              pixEnabled={pixEnabled}
+              cardEnabled={cardEnabled}
               categories={categories.map(c => ({
                 ...c,
                 products: c.products.map(p => ({

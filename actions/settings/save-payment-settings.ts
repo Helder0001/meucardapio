@@ -21,6 +21,7 @@ import { z } from 'zod'
 const schema = z.object({
   mercadoPagoWebhookSecret: z.string().min(10, 'Secret inválido').or(z.literal('')),
   pixEnabled: z.enum(['true', 'false']),
+  cardEnabled: z.enum(['true', 'false']),
 })
 
 export type PaymentSettingsState = {
@@ -45,23 +46,25 @@ export async function savePaymentSettings(
   const raw = {
     mercadoPagoWebhookSecret:   formData.get('mercadoPagoWebhookSecret') || '',
     pixEnabled:                 formData.get('pixEnabled') || 'false',
+    cardEnabled:                formData.get('cardEnabled') || 'false',
   }
 
   const parsed = schema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.errors[0].message }
 
-  const { mercadoPagoWebhookSecret, pixEnabled } = parsed.data
+  const { mercadoPagoWebhookSecret, pixEnabled, cardEnabled } = parsed.data
 
   // Buscar settings atuais para fazer merge (não sobrescrever outros campos)
   const tenant = await prisma.tenant.findFirst({
     where: { id: tenantId },
-    select: { settings: true },
+    select: { settings: true, slug: true },
   })
   const currentSettings = (tenant?.settings as Record<string, any>) ?? {}
 
   const updatedSettings = {
     ...currentSettings,
     pixEnabled: pixEnabled === 'true',
+    cardEnabled: cardEnabled === 'true',
     ...(mercadoPagoWebhookSecret
       ? { mercadoPagoWebhookSecret }
       : {}),
@@ -73,6 +76,9 @@ export async function savePaymentSettings(
   })
 
   revalidatePath('/dashboard/settings/payments')
+  // A página do cardápio digital usa ISR (revalidate = 60s) — sem isso, o
+  // toggle de PIX/cartão só refletiria pro cliente depois do cache expirar.
+  if (tenant?.slug) revalidatePath(`/menu/${tenant.slug}`)
 
   return { success: true }
 }
@@ -91,7 +97,7 @@ export async function removePaymentCredentials(): Promise<PaymentSettingsState> 
 
   const tenant = await prisma.tenant.findFirst({
     where: { id: session.user.tenantId },
-    select: { settings: true },
+    select: { settings: true, slug: true },
   })
   const currentSettings = (tenant?.settings as Record<string, any>) ?? {}
 
@@ -99,9 +105,10 @@ export async function removePaymentCredentials(): Promise<PaymentSettingsState> 
 
   await prisma.tenant.update({
     where: { id: session.user.tenantId },
-    data: { settings: { ...rest, pixEnabled: false } },
+    data: { settings: { ...rest, pixEnabled: false, cardEnabled: false } },
   })
 
   revalidatePath('/dashboard/settings/payments')
+  if (tenant?.slug) revalidatePath(`/menu/${tenant.slug}`)
   return { success: true }
 }

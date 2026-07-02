@@ -39,9 +39,10 @@ interface MpStatus {
 interface PaymentSettingsFormProps {
   hasSecret: boolean
   pixEnabled: boolean
+  cardEnabled: boolean
 }
 
-export function PaymentSettingsForm({ hasSecret, pixEnabled }: PaymentSettingsFormProps) {
+export function PaymentSettingsForm({ hasSecret, pixEnabled, cardEnabled }: PaymentSettingsFormProps) {
   const [state, formAction] = useFormState(savePaymentSettings, {})
   const [showSecret, setShowSecret] = useState(false)
   const [isRemoving, setIsRemoving] = useState(false)
@@ -274,6 +275,33 @@ export function PaymentSettingsForm({ hasSecret, pixEnabled }: PaymentSettingsFo
             </div>
           </label>
           <input type="hidden" name="pixEnabled" value="false" />
+        </div>
+
+        <div className="bg-card border border-border rounded-xl p-5">
+          <label className="flex items-center justify-between cursor-pointer">
+            <div>
+              <p className="font-medium text-foreground text-sm">Habilitar cartão online</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Exibe a opção de cartão no checkout do cardápio digital e no link de pagamento do PDV
+              </p>
+            </div>
+            <div className="relative">
+              <input
+                type="checkbox"
+                name="cardEnabled"
+                value="true"
+                defaultChecked={cardEnabled}
+                className="sr-only peer"
+                onChange={(e) => {
+                  const hiddenInput = document.querySelector<HTMLInputElement>('input[name="cardEnabled"][type="hidden"]')
+                  if (hiddenInput) hiddenInput.value = e.target.checked ? 'true' : 'false'
+                }}
+              />
+              <div className="w-11 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors" />
+              <div className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5" />
+            </div>
+          </label>
+          <input type="hidden" name="cardEnabled" value="false" />
         </div>
 
         <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-4 space-y-2">

@@ -137,6 +137,7 @@ export default async function StorefrontPage({ params, searchParams }: PageProps
       })),
     })),
     pixEnabled: (tenant.settings as any)?.pixEnabled ?? true,
+    cardEnabled: (tenant.settings as any)?.cardEnabled ?? true,
     deliveryZones: tenant.deliveryZones.map((z) => ({
       ...z,
       fee:       Number(z.fee),

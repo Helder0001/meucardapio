@@ -74,6 +74,13 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     })),
   }))
 
+  const tenantSettings = await prisma.tenant.findFirst({
+    where: { id: session.user.tenantId },
+    select: { settings: true },
+  })
+  const pixEnabled  = ((tenantSettings?.settings as any)?.pixEnabled  ?? true) === true
+  const cardEnabled = ((tenantSettings?.settings as any)?.cardEnabled ?? true) === true
+
   // CORREÇÃO: mesma checagem de expiração de PIX usada no polling do cliente
   // — assim a tela do dashboard também cancela sozinha, sem depender só do
   // webhook do MP nem do cron diário.
@@ -135,7 +142,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       </div>
       {/* CORREÇÃO: garçons (STAFF) só podem confirmar, cancelar ou marcar
           como entregue — demais transições ficam ocultas. */}
-      <OrderDetail order={serialized} userRole={session.user.role} catalog={catalog} />
+      <OrderDetail order={serialized} userRole={session.user.role} catalog={catalog} pixEnabled={pixEnabled} cardEnabled={cardEnabled} />
     </div>
   )
 }

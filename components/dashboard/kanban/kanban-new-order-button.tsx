@@ -28,6 +28,8 @@ interface Props {
   createdByUserId?: string
   categories: Category[]
   tables?: TableOption[]
+  pixEnabled?: boolean
+  cardEnabled?: boolean
 }
 
 interface OrderItem {
@@ -55,15 +57,17 @@ const TABLE_STATUS_LABEL: Record<string, string> = {
   CLEANING:  'Limpeza',
 }
 
-export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categories, tables = [] }: Props) {
+export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categories, tables = [], pixEnabled = true, cardEnabled = true }: Props) {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<OrderItem[]>([])
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerName, setCustomerName] = useState('')
   // NOVO: mesa vinculada ao pedido
   const [selectedTableId, setSelectedTableId] = useState<string>('')
+  // Método padrão do formulário de pagamento — PIX só se estiver habilitado
+  const defaultPaymentMethod: PaymentMethodType = pixEnabled ? 'PIX' : 'CASH'
   // CORREÇÃO: suporta múltiplas formas de pagamento no mesmo pedido (split)
-  const [payments, setPayments] = useState<PaymentEntry[]>([{ method: 'PIX', amount: 0 }])
+  const [payments, setPayments] = useState<PaymentEntry[]>([{ method: defaultPaymentMethod, amount: 0 }])
   const [notes, setNotes] = useState('')
   const [payNow, setPayNow] = useState(true)   // pagar agora ou deixar pendente (pagar no final)
   const [isPending, start] = useTransition()
@@ -197,7 +201,7 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
   const closeAndReset = () => {
     setOpen(false)
     setItems([]); setCustomerPhone(''); setCustomerName(''); setNotes('')
-    setPayments([{ method: 'PIX', amount: 0 }])
+    setPayments([{ method: defaultPaymentMethod, amount: 0 }])
     setPayNow(true)
     setPixData(null); setCopied(false)
     setLinkData(null); setLinkCopied(false)
@@ -501,11 +505,11 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
                           onChange={(e) => updatePaymentMethod(idx, e.target.value as PaymentMethodType)}
                           className="flex-1 px-2.5 py-2 text-xs font-medium border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
                         >
-                          <option value="PIX">⚡ PIX</option>
+                          {pixEnabled && <option value="PIX">⚡ PIX</option>}
                           <option value="CASH">💵 Dinheiro</option>
                           <option value="CREDIT_CARD">💳 Crédito</option>
                           <option value="DEBIT_CARD">💳 Débito</option>
-                          {payments.length === 1 && <option value="LINK">🔗 Link de pagamento</option>}
+                          {payments.length === 1 && cardEnabled && <option value="LINK">🔗 Link de pagamento</option>}
                         </select>
 
                         {payments.length > 1 && (

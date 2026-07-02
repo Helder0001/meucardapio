@@ -19,6 +19,7 @@ interface CartDrawerProps {
     primaryColor?: string | null
     settings?: any
     pixEnabled?: boolean
+    cardEnabled?: boolean
     deliveryZones: Array<{
       id: string
       bairro: string | null
@@ -70,7 +71,12 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const router = useRouter()
   const color = tenant.primaryColor ?? '#f97316'
   const pixEnabled = tenant.pixEnabled ?? tenant.settings?.pixEnabled ?? true
-  const onlineOptions = pixEnabled ? ONLINE_PAYMENT_OPTIONS : ONLINE_PAYMENT_OPTIONS.filter(o => o.value !== 'PIX')
+  const cardEnabled = tenant.cardEnabled ?? tenant.settings?.cardEnabled ?? true
+  const onlineOptions = ONLINE_PAYMENT_OPTIONS.filter((o) => {
+    if (o.value === 'PIX') return pixEnabled
+    if (o.value === 'CREDIT_CARD') return cardEnabled
+    return true
+  })
 
   // Busca CEP via API interna (evita CORS) e identifica zona de entrega
   const handleCepLookup = async (rawCep: string) => {

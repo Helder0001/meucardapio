@@ -140,8 +140,8 @@ function getAllowedNextStatus(
 }
 
 export function OrderDetail({
-  order, userRole, catalog = [],
-}: { order: any; userRole: string; catalog?: CatalogCategory[] }) {
+  order, userRole, catalog = [], pixEnabled = true, cardEnabled = true,
+}: { order: any; userRole: string; catalog?: CatalogCategory[]; pixEnabled?: boolean; cardEnabled?: boolean }) {
   const [status,   setStatus]   = useState(order.status)
   const [payments, setPayments] = useState<any[]>(order.payments)
   const [isPending, start]      = useTransition()
@@ -751,7 +751,7 @@ export function OrderDetail({
                       <option value="CASH">💵 Dinheiro</option>
                       <option value="CREDIT_CARD">💳 Crédito</option>
                       <option value="DEBIT_CARD">💳 Débito</option>
-                      <option value="PIX">⚡ PIX</option>
+                      {pixEnabled && <option value="PIX">⚡ PIX</option>}
                       <option value="VOUCHER">🎟️ Voucher</option>
                       <option value="TRANSFER">🏦 Transferência</option>
                     </select>
@@ -869,9 +869,12 @@ export function OrderDetail({
                                 onBlur={() => setChangingPaymentId(null)}
                                 className="mt-1.5 text-xs border border-input rounded-lg bg-background px-2 py-1 focus:outline-none focus:ring-2 focus:ring-ring"
                               >
-                                {CHANGE_METHOD_OPTIONS.map((opt) => (
-                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                ))}
+                                {CHANGE_METHOD_OPTIONS
+                                  .filter((opt) => (opt.value === 'PIX' ? pixEnabled : true))
+                                  .filter((opt) => (opt.value === 'CREDIT_CARD' ? cardEnabled : true))
+                                  .map((opt) => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                  ))}
                               </select>
                             ) : (
                               <button
