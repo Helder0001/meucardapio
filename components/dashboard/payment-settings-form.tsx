@@ -5,14 +5,67 @@
 // clientes do restaurante) + webhook secret + toggle de PIX habilitado.
 
 import { useFormState, useFormStatus } from 'react-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { savePaymentSettings, removePaymentCredentials } from '@/actions/settings/save-payment-settings'
+import { savePaymentSettings, removePaymentCredentials, togglePaymentOption } from '@/actions/settings/save-payment-settings'
 import {
   Loader2, Eye, EyeOff, CheckCircle2, AlertCircle, ExternalLink,
   Trash2, ShieldCheck, QrCode, Unplug, AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+// Toggle que salva IMEDIATAMENTE ao clicar (nada de precisar apertar um
+// botão "Salvar" separado — isso confundia e fazia parecer que a troca não
+// tinha efeito). Estado otimista na hora do clique, com rollback se falhar.
+function PaymentToggle({
+  field, label, description, initialValue,
+}: { field: 'pixEnabled' | 'cardEnabled'; label: string; description: string; initialValue: boolean }) {
+  const [checked, setChecked] = useState(initialValue)
+  const [isPending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+
+  const handleToggle = () => {
+    const next = !checked
+    setChecked(next)      // otimista
+    setError(null)
+    startTransition(async () => {
+      const result = await togglePaymentOption(field, next)
+      if (result.error) {
+        setChecked(!next)   // rollback
+        setError(result.error)
+      }
+    })
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5">
+      <label className="flex items-center justify-between cursor-pointer">
+        <div>
+          <p className="font-medium text-foreground text-sm">{label}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={checked}
+            onClick={handleToggle}
+            disabled={isPending}
+            className="relative disabled:opacity-60"
+          >
+            <div className={cn('w-11 h-6 rounded-full transition-colors', checked ? 'bg-primary' : 'bg-muted')} />
+            <div className={cn(
+              'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
+              checked && 'translate-x-5'
+            )} />
+          </button>
+        </div>
+      </label>
+      {error && <p className="text-xs text-destructive mt-2">{error}</p>}
+    </div>
+  )
+}
 
 function SubmitButton() {
   const { pending } = useFormStatus()
@@ -207,7 +260,21 @@ export function PaymentSettingsForm({ hasSecret, pixEnabled, cardEnabled }: Paym
         )}
       </div>
 
-      {/* Webhook secret + toggle PIX */}
+      {/* Toggles — salvam na hora, independentes do formulário abaixo */}
+      <PaymentToggle
+        field="pixEnabled"
+        label="Habilitar pagamento via PIX"
+        description="Exibe a opção PIX no checkout para seus clientes"
+        initialValue={pixEnabled}
+      />
+      <PaymentToggle
+        field="cardEnabled"
+        label="Habilitar cartão online"
+        description="Exibe a opção de cartão no checkout do cardápio digital e no link de pagamento do PDV"
+        initialValue={cardEnabled}
+      />
+
+      {/* Webhook secret */}
       <form action={formAction} className="space-y-5">
         {state.error && (
           <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
@@ -248,60 +315,6 @@ export function PaymentSettingsForm({ hasSecret, pixEnabled, cardEnabled }: Paym
               Gerada ao cadastrar o webhook no painel do MP. Protege contra notificações falsas.
             </p>
           </div>
-        </div>
-
-        <div className="bg-card border border-border rounded-xl p-5">
-          <label className="flex items-center justify-between cursor-pointer">
-            <div>
-              <p className="font-medium text-foreground text-sm">Habilitar pagamento via PIX</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Exibe a opção PIX no checkout para seus clientes
-              </p>
-            </div>
-            <div className="relative">
-              <input
-                type="checkbox"
-                name="pixEnabled"
-                value="true"
-                defaultChecked={pixEnabled}
-                className="sr-only peer"
-                onChange={(e) => {
-                  const hiddenInput = document.querySelector<HTMLInputElement>('input[name="pixEnabled"][type="hidden"]')
-                  if (hiddenInput) hiddenInput.value = e.target.checked ? 'true' : 'false'
-                }}
-              />
-              <div className="w-11 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors" />
-              <div className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5" />
-            </div>
-          </label>
-          <input type="hidden" name="pixEnabled" value="false" />
-        </div>
-
-        <div className="bg-card border border-border rounded-xl p-5">
-          <label className="flex items-center justify-between cursor-pointer">
-            <div>
-              <p className="font-medium text-foreground text-sm">Habilitar cartão online</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Exibe a opção de cartão no checkout do cardápio digital e no link de pagamento do PDV
-              </p>
-            </div>
-            <div className="relative">
-              <input
-                type="checkbox"
-                name="cardEnabled"
-                value="true"
-                defaultChecked={cardEnabled}
-                className="sr-only peer"
-                onChange={(e) => {
-                  const hiddenInput = document.querySelector<HTMLInputElement>('input[name="cardEnabled"][type="hidden"]')
-                  if (hiddenInput) hiddenInput.value = e.target.checked ? 'true' : 'false'
-                }}
-              />
-              <div className="w-11 h-6 bg-muted peer-checked:bg-primary rounded-full transition-colors" />
-              <div className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5" />
-            </div>
-          </label>
-          <input type="hidden" name="cardEnabled" value="false" />
         </div>
 
         <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-4 space-y-2">
