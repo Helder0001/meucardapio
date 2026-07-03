@@ -190,9 +190,6 @@ export function WhatsAppSettings({ tenantId, config }: WhatsAppSettingsProps) {
             </p>
           </div>
         ))}
-        <p className="text-xs text-muted-foreground">
-          Personalização de templates disponível no plano Premium.
-        </p>
       </div>
     </div>
   )

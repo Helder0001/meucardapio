@@ -5,7 +5,6 @@
 import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/client'
 import { hashPassword } from '@/lib/auth/password'
-import { checkUserLimit } from '@/lib/db/tenant'
 import { revalidatePath } from 'next/cache'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { z } from 'zod'
@@ -30,11 +29,6 @@ export async function createUserAction(
   }
 
   const tenantId = session.user.tenantId
-  const plan     = session.user.plan ?? 'STARTER'
-
-  // Verificar limite do plano
-  const canAdd = await checkUserLimit(tenantId, plan)
-  if (!canAdd) return { error: 'Limite de usuários do plano atingido' }
 
   const parsed = createSchema.safeParse({
     name:     formData.get('name'),

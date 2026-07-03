@@ -106,8 +106,8 @@ export function DeliveryZonesManager({ zones: initial }: { zones: Zone[] }) {
           <p className="text-xs mt-1">Adicione os bairros onde você faz entrega</p>
         </div>
       ) : (
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-card border border-border rounded-xl overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30">
                 {['Bairro', 'Taxa', 'Grátis acima', 'Pedido mínimo', 'Tempo', ''].map((h) => (

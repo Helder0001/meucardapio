@@ -152,7 +152,10 @@ function InfoTooltip({ text }: { text: string }) {
   return (
     <span className="group relative inline-flex ml-auto">
       <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-muted-foreground cursor-help" />
-      <span className="pointer-events-none absolute right-0 top-5 z-10 w-56 rounded-lg border border-border bg-popover text-popover-foreground text-[11px] leading-snug p-2 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
+      {/* Centralizado sob o ícone (em vez de ancorado à direita) para não
+          estourar a tela em telas pequenas, e com largura limitada ao
+          viewport para nunca ficar cortado nas laterais. */}
+      <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-5 z-20 w-56 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-popover text-popover-foreground text-[11px] leading-snug p-2 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
         {text}
       </span>
     </span>
@@ -579,6 +582,7 @@ export function ReportsClient({
               <div className="flex items-center gap-1.5 text-emerald-600 text-xs font-medium mb-1">
                 <TrendingUp className="h-3.5 w-3.5" />
                 Faturamento cresceu
+                <InfoTooltip text={`Variação do faturamento total do período em relação ao período anterior. ${comparisonPeriodText}`} />
               </div>
               <p className="text-3xl font-bold text-foreground">{Math.abs(summary.revenueGrowth).toFixed(0)}%</p>
               <p className="text-xs text-muted-foreground mt-0.5">em relação ao período anterior</p>
@@ -588,6 +592,7 @@ export function ReportsClient({
                 <div className="flex items-center gap-1.5 text-orange-500 text-xs font-medium mb-1">
                   <Pizza className="h-3.5 w-3.5" />
                   {topProduct.name}
+                  <InfoTooltip text="Produto mais vendido do período, em % das unidades vendidas em relação ao total de itens vendidos no mesmo período." />
                 </div>
                 <p className="text-3xl font-bold text-foreground">{topProductPct}%</p>
                 <p className="text-xs text-muted-foreground mt-0.5">das vendas totais</p>
@@ -598,6 +603,7 @@ export function ReportsClient({
                 <div className="flex items-center gap-1.5 text-blue-500 text-xs font-medium mb-1">
                   <Clock className="h-3.5 w-3.5" />
                   Pico de pedidos
+                  <InfoTooltip text="Janela de 2 horas com o maior número de pedidos recebidos dentro do período selecionado." />
                 </div>
                 <p className="text-3xl font-bold text-foreground">{peakHour.hour}h às {peakHour.hour + 2}h</p>
                 <p className="text-xs text-muted-foreground mt-0.5">horário de maior movimento</p>
@@ -608,6 +614,7 @@ export function ReportsClient({
                 <div className="flex items-center gap-1.5 text-purple-500 text-xs font-medium mb-1">
                   <CreditCard className="h-3.5 w-3.5" />
                   {METHOD_LABELS[topPayment[0]] ?? topPayment[0]} representa
+                  <InfoTooltip text="Forma de pagamento mais usada no período, em % do valor total pago em relação a todos os métodos de pagamento do período." />
                 </div>
                 <p className="text-3xl font-bold text-foreground">{topPaymentPct}%</p>
                 <p className="text-xs text-muted-foreground mt-0.5">dos pagamentos</p>

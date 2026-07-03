@@ -64,11 +64,9 @@ function SubmitBtn() {
 interface UsersManagerProps {
   users: UserData[]
   currentUserId: string
-  canAddMore: boolean
-  plan: string
 }
 
-export function UsersManager({ users: initial, currentUserId, canAddMore, plan }: UsersManagerProps) {
+export function UsersManager({ users: initial, currentUserId }: UsersManagerProps) {
   const [users,     setUsers]     = useState(initial)
   const [showForm,  setShowForm]  = useState(false)
   const [isPending, start]        = useTransition()
@@ -93,18 +91,6 @@ export function UsersManager({ users: initial, currentUserId, canAddMore, plan }
 
   return (
     <div className="space-y-5">
-      {/* Aviso de limite */}
-      {!canAddMore && (
-        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-800 dark:text-amber-300">
-          <p className="font-semibold">Limite de usuários atingido</p>
-          <p className="text-xs mt-0.5">
-            Faça upgrade do plano para adicionar mais usuários.
-            {plan === 'STARTER' && ' O plano Starter suporta até 3 usuários.'}
-            {plan === 'PRO'     && ' O plano Pro suporta até 10 usuários.'}
-          </p>
-        </div>
-      )}
-
       {/* Info permissões operador */}
       <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex gap-3">
         <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
@@ -124,8 +110,7 @@ export function UsersManager({ users: initial, currentUserId, canAddMore, plan }
       <div className="flex justify-end">
         <button
           onClick={() => setShowForm(true)}
-          disabled={!canAddMore}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
         >
           <Plus className="h-4 w-4" /> Novo usuário
         </button>
@@ -203,8 +188,8 @@ export function UsersManager({ users: initial, currentUserId, canAddMore, plan }
       )}
 
       {/* Tabela de usuários */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="bg-card border border-border rounded-xl overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30">
               {['Usuário', 'Função', 'Último acesso', 'Criado em', ''].map((h) => (

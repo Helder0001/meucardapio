@@ -104,8 +104,8 @@ export function StockManager({ stocks, products, pdvs }: StockManagerProps) {
       </div>
 
       {/* Tabela */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="bg-card border border-border rounded-xl overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted-foreground">
               <th className="px-4 py-3 font-medium">Produto</th>
