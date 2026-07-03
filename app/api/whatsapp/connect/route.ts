@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/client'
+import { getEvolutionWebhookSecret } from '@/lib/messaging/evolution'
 
 const EVOLUTION_URL = process.env.EVOLUTION_API_URL!
 const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY!
@@ -88,7 +89,7 @@ export async function POST() {
         body: JSON.stringify({
           webhook: {
             enabled: true,
-            url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/evolution`,
+            url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/evolution?secret=${getEvolutionWebhookSecret()}`,
             webhookByEvents: false,
             events: ['QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT'],
           },

@@ -49,6 +49,15 @@ export const otpSendLimiter = new Ratelimit({
   prefix:  'rl:otp:send',
 })
 
+// ── Impressoras ────────────────────────────────────────────────────────────
+// 20 requests por 10s por IP — generoso pro polling normal de uma impressora
+// real, mas trava tentativas de força bruta varrendo tokens.
+export const printerLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(20, '10 s'),
+  prefix:  'rl:printer',
+})
+
 // ── API geral ──────────────────────────────────────────────────────────────
 // 60 requests por minuto por IP
 export const apiLimiter = new Ratelimit({

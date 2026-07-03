@@ -13,18 +13,52 @@ import { createCardPayment } from '@/lib/mercadopago/checkout-client'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { applyCashback, applyLoyaltyPoints } from '@/lib/loyalty/apply-rewards'
 import type { PrismaClient } from '@prisma/client'
+import crypto from 'crypto'
+import { z } from 'zod'
 
 type Tx = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>
+
+const payCardSchema = z.object({
+  token: z.string().min(10),
+  cardToken: z.string().min(5),
+  installments: z.number().int().min(1).max(12).optional().default(1),
+  paymentMethodId: z.string().min(1),
+  issuerId: z.string().optional(),
+  customerEmail: z.string().email(),
+  customerCpf: z.string().regex(/^\d{11}$/, 'CPF deve ter 11 dígitos'),
+  customerName: z.string().min(1).max(200),
+})
+
+// Mesmo mecanismo do /status e /regenerate-pix — token HMAC curto pra
+// autorizar o cliente final sem exigir login.
+function validateStatusToken(orderId: string, token: string): boolean {
+  const secret = process.env.ORDER_TOKEN_SECRET ?? process.env.AUTH_SECRET ?? ''
+  const expected = crypto.createHmac('sha256', secret).update(orderId).digest('hex')
+  if (expected.length !== token.length) return false
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(token, 'hex'))
+  } catch {
+    return false
+  }
+}
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const body = await request.json().catch(() => null)
+  const rawBody = await request.json().catch(() => null)
+  const parsed = payCardSchema.safeParse(rawBody)
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Dados de pagamento incompletos ou inválidos' }, { status: 400 })
+  }
+  const body = parsed.data
 
-  if (!body?.cardToken || !body?.paymentMethodId || !body?.customerEmail || !body?.customerCpf || !body?.customerName) {
-    return NextResponse.json({ error: 'Dados de pagamento incompletos' }, { status: 400 })
+  // VULN-CRIT-03: antes desta rota não tinha checagem nenhuma — qualquer
+  // sessão (de qualquer tenant) que soubesse o id de um pedido alheio podia
+  // tentar cobrar cartão nele e disparar cashback/pontos indevidos.
+  if (!validateStatusToken(id, body.token)) {
+    return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
   }
 
   const order = await prisma.order.findFirst({

@@ -16,10 +16,16 @@ const SESSION_MAX_AGE = 30 * 60;
 const SESSION_UPDATE_AGE = 5 * 60;
 
 export const authConfig: NextAuthConfig = {
-  // 🔧 ADICIONADO: Define explicitamente a secret que será usada para assinar tokens
-  // O NextAuth, por padrão, usa process.env.NEXTAUTH_SECRET.
-  // Agora ele vai usar exatamente a mesma variável que usaremos no proxy.ts
-  secret: process.env.NEXTAUTH_SECRET,
+  // 🔧 Secret usada para assinar/verificar os tokens de sessão.
+  // VULN-ALTA-01 CORRIGIDO: o .env.example documenta AUTH_SECRET, mas o
+  // código só lia NEXTAUTH_SECRET — se a env na Vercel se chamasse
+  // AUTH_SECRET, o NextAuth rodava sem secret fixo. Padronizado em
+  // AUTH_SECRET, com fallback pro nome antigo pra não quebrar sessões
+  // já assinadas em ambientes que ainda usam NEXTAUTH_SECRET.
+  // IMPORTANTE: proxy.ts usa exatamente a mesma expressão — os dois
+  // precisam concordar, ou o middleware não vai conseguir ler o token
+  // gerado aqui.
+  secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
 
   trustHost: true,
 

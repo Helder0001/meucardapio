@@ -1,6 +1,7 @@
 // app/layout.tsx
 
 import type { Metadata, Viewport } from 'next'
+import { headers } from 'next/headers'
 import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import { Toaster } from 'sonner'
@@ -34,7 +35,12 @@ export const viewport: Viewport = {
   initialScale: 1,
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Nonce gerado no proxy.ts (middleware) por requisição — libera no CSP só
+  // os scripts inline que a própria aplicação gerou (ex.: next-themes
+  // evitando flash de tema ao carregar), em vez de confiar em 'unsafe-inline'.
+  const nonce = (await headers()).get('x-nonce') ?? undefined
+
   return (
     <html
       lang="pt-BR"
@@ -42,7 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
     >
       <body className="min-h-screen bg-background font-sans antialiased">
-        <ThemeProvider>
+        <ThemeProvider nonce={nonce}>
           {children}
           <Toaster position="top-right" richColors closeButton duration={4000} />
           <PwaRegister />

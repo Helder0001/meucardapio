@@ -39,12 +39,16 @@ async function checkRedis(): Promise<CheckResult> {
 function checkEnvVars(): CheckResult {
   const required = [
     'DATABASE_URL',
-    'NEXTAUTH_SECRET',
     'ENCRYPTION_KEY',
     'OTP_SALT',
     'ORDER_TOKEN_SECRET',
   ]
   const missing = required.filter((k) => !process.env[k])
+  // AUTH_SECRET é o nome atual; NEXTAUTH_SECRET é aceito como fallback
+  // (ver lib/auth/config.ts e proxy.ts) — só falha se nenhum dos dois existir.
+  if (!process.env.AUTH_SECRET && !process.env.NEXTAUTH_SECRET) {
+    missing.push('AUTH_SECRET (ou NEXTAUTH_SECRET)')
+  }
   if (missing.length > 0) {
     return { ok: false, error: `missing env vars: ${missing.join(', ')}` }
   }

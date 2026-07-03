@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+import { apiLimiter } from '@/lib/security/rate-limit';
 
 const RESTRICTED_ROLES = ['STAFF', 'DELIVERY_PERSON'];
 
@@ -10,9 +11,29 @@ const ALLOWED_PREFIXES = [
   '/dashboard/orders',
 ];
 
+// crypto.timingSafeEqual (Node.js) não existe no Edge Runtime, onde este
+// middleware sempre roda — implementação manual constant-time (XOR
+// acumulado), funciona igual em qualquer ambiente JS.
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const response = NextResponse.next();
+
+  // Nonce por requisição — usado no CSP (script-src) pra permitir só os
+  // scripts inline que a própria aplicação gerou (ex.: next-themes evitando
+  // flash de tema), em vez de 'unsafe-inline' liberando QUALQUER inline.
+  const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-nonce', nonce);
+
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
 
   // =========================
   // Limite de payload
@@ -33,6 +54,32 @@ export async function proxy(request: NextRequest) {
           { status: 413 }
         );
       }
+    }
+  }
+
+  // =========================
+  // Rate limit geral da API
+  // =========================
+  // 60 req/min por IP em qualquer /api/*. Fica de fora:
+  // - /api/webhooks/*  → vêm do Mercado Pago / Evolution API, não do usuário final
+  // - /api/internal/*  → protegido por CRON_SECRET, chamado só pelo próprio cron
+  // - /api/printers/*  → impressoras físicas fazem polling frequente com token próprio
+  // Rotas mais sensíveis (login, OTP) já têm limitadores mais rígidos e
+  // específicos — este é só uma rede de segurança geral contra abuso/scraping.
+  const isRateLimitedApi =
+    pathname.startsWith('/api/') &&
+    !pathname.startsWith('/api/webhooks/') &&
+    !pathname.startsWith('/api/internal/') &&
+    !pathname.startsWith('/api/printers/');
+
+  if (isRateLimitedApi) {
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '127.0.0.1';
+    const { success } = await apiLimiter.limit(ip);
+    if (!success) {
+      return NextResponse.json(
+        { error: 'Muitas requisições. Aguarde um momento.' },
+        { status: 429 }
+      );
     }
   }
 
@@ -104,7 +151,12 @@ export async function proxy(request: NextRequest) {
       "default-src 'self'",
       // http2.mlstatic.com é a CDN do Mercado Pago usada pelo Card Payment
       // Brick para carregar sub-scripts (cardPayment.js) e traduções (i18n/*.json)
-      "script-src 'self' 'unsafe-inline' https://sdk.mercadopago.com https://http2.mlstatic.com",
+      // O nonce autoriza os scripts inline que a PRÓPRIA aplicação gerou
+      // (ex.: next-themes). 'unsafe-inline' fica como fallback: navegadores
+      // que entendem nonce o ignoram automaticamente (regra da spec CSP3),
+      // então na prática só continua liberando inline nos navegadores mais
+      // antigos que nem chegam a ler o nonce.
+      `script-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://sdk.mercadopago.com https://http2.mlstatic.com`,
       "style-src 'self' 'unsafe-inline' https://http2.mlstatic.com",
       "img-src 'self' blob: data: https:",
       "font-src 'self' https://http2.mlstatic.com",
@@ -127,7 +179,9 @@ export async function proxy(request: NextRequest) {
   // =========================
   const token = await getToken({
     req: request,
-    secret: process.env.NEXTAUTH_SECRET,
+    // Precisa ser EXATAMENTE a mesma expressão de lib/auth/config.ts,
+    // senão o middleware não lê o token que o NextAuth assinou.
+    secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
     secureCookie:
       process.env.NODE_ENV === 'production',
   });
@@ -218,13 +272,15 @@ export async function proxy(request: NextRequest) {
   // APIs internas (cron)
   // =========================
   if (pathname.startsWith('/api/internal/')) {
-    const cronSecret =
-      request.headers.get('x-cron-secret');
+    const cronSecret = request.headers.get('x-cron-secret');
+    const expected = process.env.CRON_SECRET;
 
-    if (
-      !cronSecret ||
-      cronSecret !== process.env.CRON_SECRET
-    ) {
+    const isValid =
+      !!expected &&
+      !!cronSecret &&
+      timingSafeEqual(expected, cronSecret);
+
+    if (!isValid) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -235,6 +291,20 @@ export async function proxy(request: NextRequest) {
   // =========================
   // APIs protegidas
   // =========================
+  // VULN-CRIT-04: /api/orders/[id]/status, /pay-card e /regenerate-pix são
+  // usadas pelo CLIENTE FINAL anônimo (sem login de staff) — elas mesmas
+  // validam um token HMAC próprio por pedido (ver validateStatusToken em
+  // cada rota). Bloquear aqui por falta de sessão de staff impedia essas 3
+  // rotas de funcionar pra qualquer cliente: status parava de atualizar,
+  // regenerar PIX e pagar com cartão sempre voltavam 401 antes mesmo de
+  // chegar na validação de token da própria rota.
+  const publicOrderRoutes = [
+    /^\/api\/orders\/[^/]+\/status$/,
+    /^\/api\/orders\/[^/]+\/pay-card$/,
+    /^\/api\/orders\/[^/]+\/regenerate-pix$/,
+  ];
+  const isPublicOrderRoute = publicOrderRoutes.some((re) => re.test(pathname));
+
   const protectedApiRoutes = [
     '/api/orders',
     '/api/upload',
@@ -243,6 +313,7 @@ export async function proxy(request: NextRequest) {
   ];
 
   if (
+    !isPublicOrderRoute &&
     protectedApiRoutes.some((route) =>
       pathname.startsWith(route)
     ) &&

@@ -2,12 +2,21 @@
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
+import { printerLimiter } from '@/lib/security/rate-limit'
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
+
+  // Sem isso, um token de impressora podia ser varrido por força bruta
+  // (é um valor único, mas nada impedia tentar milhares por minuto).
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '127.0.0.1'
+  const { success } = await printerLimiter.limit(ip)
+  if (!success) {
+    return NextResponse.json({ error: 'Muitas requisições' }, { status: 429 })
+  }
 
   const printer = await prisma.printer.findFirst({
     where: { token },

@@ -2,10 +2,21 @@
 
 import { prisma } from '@/lib/db/client'
 import { formatCurrency } from '@/lib/utils/format'
+import crypto from 'crypto'
 
 // ✅ Credenciais vêm das env vars — não do banco
 const EVOLUTION_URL = process.env.EVOLUTION_API_URL!
 const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY!
+
+// Token que colocamos na URL do webhook (?secret=...) pra provar que a
+// chamada em /api/webhooks/evolution realmente veio do NOSSO servidor
+// Evolution — sem isso, qualquer um que descobrisse a URL do webhook podia
+// forjar eventos e escrever mensagens/chats de qualquer tenant.
+// Derivado da própria EVOLUTION_API_KEY via HMAC — não expõe a key em si
+// na URL, e não exige configurar mais nenhuma env var nova.
+export function getEvolutionWebhookSecret(): string {
+  return crypto.createHmac('sha256', EVOLUTION_KEY || 'meucardapio-fallback').update('evolution-webhook-v1').digest('hex')
+}
 
 interface SendMessageParams {
   tenantId: string

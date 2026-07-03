@@ -322,7 +322,14 @@ export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey }:
   const handleRefreshPix = useCallback(async () => {
     setIsRefreshingPix(true)
     try {
-      const res = await fetch(`/api/orders/${order.id}/regenerate-pix`, { method: 'POST' })
+      // VULN-CRIT-02 CORRIGIDO: a rota exige { token } no corpo — antes esta
+      // chamada não enviava body nenhum, então a regeneração de PIX sempre
+      // falhava silenciosamente (req.json() vazio → token null → 404).
+      const res = await fetch(`/api/orders/${order.id}/regenerate-pix`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: statusToken }),
+      })
       if (res.ok) {
         const data = await res.json()
         setOrder((prev) => ({
@@ -335,7 +342,7 @@ export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey }:
     } finally {
       setIsRefreshingPix(false)
     }
-  }, [order.id])
+  }, [order.id, statusToken])
 
   return (
     <div className="min-h-screen bg-[#FAF7F2] dark:bg-gray-950">
@@ -389,6 +396,7 @@ export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey }:
             amount={Number(order.total)}
             publicKey={mpPublicKey!}
             color={color}
+            statusToken={statusToken}
             onSuccess={() => {
               setOrder((prev) => ({
                 ...prev,

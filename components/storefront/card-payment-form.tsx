@@ -23,12 +23,13 @@ interface CardPaymentFormProps {
   amount: number
   publicKey: string
   color: string
+  statusToken: string
   onSuccess: (result: { status: string; cardLastDigits?: string }) => void
 }
 
 type LoadState = 'loading-sdk' | 'ready' | 'submitting' | 'error'
 
-export function CardPaymentForm({ orderId, amount, publicKey, color, onSuccess }: CardPaymentFormProps) {
+export function CardPaymentForm({ orderId, amount, publicKey, color, statusToken, onSuccess }: CardPaymentFormProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const brickControllerRef = useRef<any>(null)
   const [state, setState] = useState<LoadState>('loading-sdk')
@@ -107,6 +108,7 @@ export function CardPaymentForm({ orderId, amount, publicKey, color, onSuccess }
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                  token: statusToken,
                   cardToken: cardFormData.token,
                   installments: cardFormData.installments,
                   paymentMethodId: cardFormData.paymentMethodId,

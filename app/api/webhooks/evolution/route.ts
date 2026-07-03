@@ -7,12 +7,32 @@
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
-import { getBase64FromMediaMessage } from '@/lib/messaging/evolution'
+import { getBase64FromMediaMessage, getEvolutionWebhookSecret } from '@/lib/messaging/evolution'
+import crypto from 'crypto'
 
 export const runtime = 'nodejs'
 
+function isValidWebhookSecret(provided: string | null): boolean {
+  if (!provided) return false
+  const expected = getEvolutionWebhookSecret()
+  if (expected.length !== provided.length) return false
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(provided, 'hex'))
+  } catch {
+    return false
+  }
+}
+
 export async function POST(request: Request) {
   try {
+    // VULN-CRIT-01: sem isso, qualquer um que soubesse a URL podia forjar
+    // eventos e escrever mensagens/chats de qualquer tenant. O secret é
+    // colocado na URL quando registramos o webhook (app/api/whatsapp/connect).
+    const { searchParams } = new URL(request.url)
+    if (!isValidWebhookSecret(searchParams.get('secret'))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
 
     const event    = body?.event    as string | undefined

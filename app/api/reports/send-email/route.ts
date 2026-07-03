@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/client'
 import { Resend } from 'resend'
+import { z } from 'zod'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -33,12 +34,23 @@ const fmtDate = (d: Date) =>
     year: 'numeric', hour: '2-digit', minute: '2-digit',
   })
 
+const bodySchema = z.object({
+  to: z.string().email('E-mail inválido'),
+  type: z.enum(['orders', 'products']).optional(),
+  start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inicial inválida').optional(),
+  end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data final inválida').optional(),
+})
+
 export async function POST(request: Request) {
   const session = await auth()
   if (!session?.user?.tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { to, type, start, end } = await request.json()
-  if (!to || !to.includes('@')) return NextResponse.json({ error: 'E-mail inválido' }, { status: 400 })
+  const rawBody = await request.json().catch(() => null)
+  const parsed = bodySchema.safeParse(rawBody)
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
+  }
+  const { to, type, start, end } = parsed.data
 
   const tenantId   = session.user.tenantId
   const tenant     = await prisma.tenant.findFirst({ where: { id: tenantId }, select: { name: true } })

@@ -6,6 +6,7 @@ import { hashOTP, safeCompareHash } from '@/lib/security/crypto'
 import { storeOTP, getStoredOTP, deleteOTP } from '@/lib/cache/redis'
 import { checkOtpRateLimit, otpSendLimiter } from '@/lib/security/rate-limit'
 import { prisma } from '@/lib/db/client'
+import { randomInt } from 'crypto'
 
 const OTP_TTL_SECONDS  = 300  // 5 minutos
 const MAX_ATTEMPTS     = 3
@@ -27,8 +28,9 @@ export async function generateOTP(
     return { code: '', error: 'Muitos códigos enviados. Aguarde 1 hora.' }
   }
 
-  // Gerar código de 6 dígitos
-  const code = Math.floor(100000 + Math.random() * 900000).toString()
+  // Gerar código de 6 dígitos — VULN-ALTA-02: usar CSPRNG (crypto.randomInt),
+  // não Math.random(), que não é seguro para segredos/tokens.
+  const code = randomInt(100000, 1000000).toString()
 
   // VULN-01 CORRIGIDO: salvar apenas o hash no Redis (nunca o código)
   const hashedCode = hashOTP(code)

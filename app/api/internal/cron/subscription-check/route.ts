@@ -3,10 +3,24 @@
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
+import crypto from 'crypto'
+
+function isValidCronSecret(provided: string | null): boolean {
+  const expected = process.env.CRON_SECRET
+  // Se a env não estiver configurada, nunca autoriza — evita que a ausência
+  // acidental da variável vire um "aceita qualquer coisa" (inclusive vazio).
+  if (!expected || !provided) return false
+  if (expected.length !== provided.length) return false
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(provided))
+  } catch {
+    return false
+  }
+}
 
 export async function GET(request: Request) {
   const secret = request.headers.get('x-cron-secret')
-  if (secret !== process.env.CRON_SECRET) {
+  if (!isValidCronSecret(secret)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
