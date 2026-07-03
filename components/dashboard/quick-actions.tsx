@@ -53,7 +53,7 @@ export function QuickActions({ tenantId, pendingCount }: QuickActionsProps) {
         if (action.primary) {
           cls += ' bg-primary text-white shadow-sm hover:bg-primary/90 hover:shadow-md'
         } else if (action.urgent) {
-          cls += ' bg-orange-50 border border-orange-200 text-orange-700 hover:bg-orange-100'
+          cls += ' bg-brand-50 border border-brand-200 text-brand-700 hover:bg-brand-100'
         } else {
           cls += ' bg-card border border-border text-foreground hover:bg-muted hover:border-muted-foreground/20'
         }
@@ -63,7 +63,7 @@ export function QuickActions({ tenantId, pendingCount }: QuickActionsProps) {
             <action.icon className="h-4 w-4 flex-shrink-0" />
             {action.label}
             {action.urgent && (
-              <span className="ml-1 w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+              <span className="ml-1 w-2 h-2 rounded-full bg-brand-500 animate-pulse" />
             )}
           </Link>
         )

@@ -122,7 +122,7 @@ export function ProductsList({ products, categories }: ProductsListProps) {
                   </span>
                 )}
                 {product.isBestSeller && (
-                  <span className="bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                  <span className="bg-brand-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                     🔥
                   </span>
                 )}

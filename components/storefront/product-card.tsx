@@ -63,7 +63,7 @@ export function ProductCard({ product, onSelect, disabled, primaryColor }: Produ
           {(product.isBestSeller || product.isFeatured) && (
             <div className="flex gap-1 mb-1.5 flex-wrap">
               {product.isBestSeller && (
-                <span className="inline-flex items-center gap-1 text-[9px] font-black bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 px-1.5 py-0.5 rounded-lg border border-orange-100 dark:border-orange-900/40">
+                <span className="inline-flex items-center gap-1 text-[9px] font-black bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 px-1.5 py-0.5 rounded-lg border border-brand-100 dark:border-brand-900/40">
                   <Flame className="w-2.5 h-2.5" /> Mais pedido
                 </span>
               )}

@@ -12,7 +12,7 @@ export default async function MasterLayout({ children }: { children: React.React
     <div className="flex h-screen overflow-hidden bg-background">
       <aside className="w-56 bg-gray-900 dark:bg-gray-950 flex flex-col">
         <div className="flex items-center gap-2 px-4 h-16 border-b border-gray-700">
-          <div className="w-7 h-7 bg-orange-500 rounded-md flex items-center justify-center">
+          <div className="w-7 h-7 bg-brand-500 rounded-md flex items-center justify-center">
             <span className="text-white font-bold text-xs">M</span>
           </div>
           <span className="text-white font-semibold text-sm">Master Admin</span>

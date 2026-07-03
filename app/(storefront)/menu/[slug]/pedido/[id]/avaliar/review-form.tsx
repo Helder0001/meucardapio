@@ -91,7 +91,7 @@ export function ReviewForm({ orderId, tenantId }: ReviewFormProps) {
           placeholder="Como foi a comida? O atendimento? A entrega?"
           rows={4}
           maxLength={500}
-          className="w-full px-3 py-2.5 border border-input rounded-xl bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 transition-shadow"
+          className="w-full px-3 py-2.5 border border-input rounded-xl bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand-500 transition-shadow"
         />
         <p className="text-xs text-muted-foreground text-right mt-1">
           {comment.length}/500
@@ -101,7 +101,7 @@ export function ReviewForm({ orderId, tenantId }: ReviewFormProps) {
       <button
         onClick={handleSubmit}
         disabled={isPending || rating === 0}
-        className="w-full flex items-center justify-center gap-2 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-semibold disabled:opacity-60 transition-colors"
+        className="w-full flex items-center justify-center gap-2 py-3 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-semibold disabled:opacity-60 transition-colors"
       >
         {isPending ? (
           <><Loader2 className="h-4 w-4 animate-spin" /> Enviando...</>

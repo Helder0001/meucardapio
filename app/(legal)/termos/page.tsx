@@ -13,7 +13,7 @@ export default function TermosPage() {
     <div className="min-h-screen bg-white dark:bg-gray-950">
       <div className="max-w-3xl mx-auto px-5 py-16">
         {/* Voltar */}
-        <Link href="/" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-orange-500 transition-colors mb-10">
+        <Link href="/" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-brand-500 transition-colors mb-10">
           ← Voltar para o início
         </Link>
 
@@ -143,7 +143,7 @@ export default function TermosPage() {
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-3">12. Contato</h2>
             <p>
               Para dúvidas sobre estes Termos, entre em contato pelo e-mail:{' '}
-              <a href="mailto:contato@meucardapio.app" className="text-orange-500 hover:underline">
+              <a href="mailto:contato@meucardapio.app" className="text-brand-500 hover:underline">
                 contato@meucardapio.app
               </a>
             </p>
@@ -151,9 +151,9 @@ export default function TermosPage() {
         </div>
 
         <div className="mt-12 pt-8 border-t border-gray-100 dark:border-gray-800 flex gap-4 text-sm text-gray-400">
-          <Link href="/privacidade" className="hover:text-orange-500 transition-colors">Política de Privacidade</Link>
+          <Link href="/privacidade" className="hover:text-brand-500 transition-colors">Política de Privacidade</Link>
           <span>·</span>
-          <Link href="/" className="hover:text-orange-500 transition-colors">Início</Link>
+          <Link href="/" className="hover:text-brand-500 transition-colors">Início</Link>
         </div>
       </div>
     </div>

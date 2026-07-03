@@ -205,7 +205,7 @@ export function ProductModal({ product, onClose, disabled, primaryColor }: Produ
               placeholder="Ex: sem cebola, bem passado..."
               rows={2}
               maxLength={200}
-              className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </div>
         </div>

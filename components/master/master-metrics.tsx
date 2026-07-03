@@ -43,7 +43,7 @@ export function MasterMetricsCards({ metrics }: MasterMetricsProps) {
       value: metrics.ordersToday.toLocaleString('pt-BR'),
       sub: 'toda a plataforma',
       icon: ShoppingBag,
-      color: 'text-orange-600 bg-orange-100 dark:bg-orange-900/30',
+      color: 'text-brand-600 bg-brand-100 dark:bg-brand-900/30',
     },
   ]
 

@@ -880,7 +880,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
               <section>
                 <div className="flex items-center gap-2 mb-4">
                   <h2 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center"><Flame className="w-3.5 h-3.5 text-orange-600" /></span>
+                    <span className="w-6 h-6 rounded-lg bg-brand-100 dark:bg-brand-900/40 flex items-center justify-center"><Flame className="w-3.5 h-3.5 text-brand-600" /></span>
                     Mais pedidos
                   </h2>
                 </div>
@@ -1126,7 +1126,7 @@ function FeaturedCard({
           </div>
         )}
         {product.isBestSeller && !product.isOutOfStock && (
-          <div className="absolute top-2 right-2" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}><Flame className="w-4 h-4 text-orange-500 fill-orange-500" /></div>
+          <div className="absolute top-2 right-2" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}><Flame className="w-4 h-4 text-brand-500 fill-brand-500" /></div>
         )}
         {product.isOutOfStock && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40">

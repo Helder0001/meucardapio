@@ -42,7 +42,7 @@ export type KanbanOrder = {
 const COLUMNS = [
   { key: 'PENDING',          label: 'Pendentes',     color: 'bg-yellow-500',  emoji: '⏳' },
   { key: 'CONFIRMED',        label: 'Confirmados',   color: 'bg-blue-500',    emoji: '✅' },
-  { key: 'PREPARING',        label: 'Preparando',    color: 'bg-orange-500',  emoji: '👨‍🍳' },
+  { key: 'PREPARING',        label: 'Preparando',    color: 'bg-brand-500',  emoji: '👨‍🍳' },
   { key: 'READY',            label: 'Prontos',       color: 'bg-emerald-500', emoji: '📦' },
   { key: 'OUT_FOR_DELIVERY', label: 'Saiu p/ entrega', color: 'bg-purple-500', emoji: '🛵' },
   { key: 'DELIVERED',        label: 'Entregues',     color: 'bg-green-500',   emoji: '🎉' },

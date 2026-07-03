@@ -57,8 +57,8 @@ const cards = (metrics: MetricsCardsProps['metrics']) => [
     changePct: null,
     tooltip: 'Valor médio dos pedidos feitos no mês atual (faturamento do mês dividido pelo número de pedidos).',
     icon: Clock,
-    gradient: 'from-orange-400 to-orange-600',
-    accent: 'border-l-orange-500',
+    gradient: 'from-brand-400 to-brand-600',
+    accent: 'border-l-brand-500',
   },
 ]
 

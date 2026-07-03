@@ -63,8 +63,8 @@ export function RecentOrders({ orders }: RecentOrdersProps) {
               className="flex items-center gap-4 px-5 py-3.5 hover:bg-muted/40 transition-colors group"
             >
               {/* Número do pedido */}
-              <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center flex-shrink-0">
-                <span className="text-xs font-bold text-orange-600">
+              <div className="w-10 h-10 rounded-xl bg-brand-50 border border-brand-100 flex items-center justify-center flex-shrink-0">
+                <span className="text-xs font-bold text-brand-600">
                   #{order.orderNumber}
                 </span>
               </div>

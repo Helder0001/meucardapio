@@ -12,7 +12,7 @@ export default function PrivacidadePage() {
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950">
       <div className="max-w-3xl mx-auto px-5 py-16">
-        <Link href="/" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-orange-500 transition-colors mb-10">
+        <Link href="/" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-brand-500 transition-colors mb-10">
           ← Voltar para o início
         </Link>
 
@@ -99,7 +99,7 @@ export default function PrivacidadePage() {
             </ul>
             <p className="mt-3">
               Para exercer esses direitos, entre em contato pelo e-mail{' '}
-              <a href="mailto:privacidade@meucardapio.app" className="text-orange-500 hover:underline">
+              <a href="mailto:privacidade@meucardapio.app" className="text-brand-500 hover:underline">
                 privacidade@meucardapio.app
               </a>. Responderemos em até 15 dias úteis.
             </p>
@@ -148,7 +148,7 @@ export default function PrivacidadePage() {
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-3">11. Contato e DPO</h2>
             <p>
               Para questões sobre privacidade ou para exercer seus direitos:{' '}
-              <a href="mailto:privacidade@meucardapio.app" className="text-orange-500 hover:underline">
+              <a href="mailto:privacidade@meucardapio.app" className="text-brand-500 hover:underline">
                 privacidade@meucardapio.app
               </a>
             </p>
@@ -156,9 +156,9 @@ export default function PrivacidadePage() {
         </div>
 
         <div className="mt-12 pt-8 border-t border-gray-100 dark:border-gray-800 flex gap-4 text-sm text-gray-400">
-          <Link href="/termos" className="hover:text-orange-500 transition-colors">Termos de Uso</Link>
+          <Link href="/termos" className="hover:text-brand-500 transition-colors">Termos de Uso</Link>
           <span>·</span>
-          <Link href="/" className="hover:text-orange-500 transition-colors">Início</Link>
+          <Link href="/" className="hover:text-brand-500 transition-colors">Início</Link>
         </div>
       </div>
     </div>

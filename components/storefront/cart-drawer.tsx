@@ -377,7 +377,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                   <div className="pt-2">
                     <div className="flex gap-2">
                       <input value={couponInput} onChange={(e) => setCouponInput(e.target.value.toUpperCase())} placeholder="Código do cupom"
-                        className="flex-1 px-3 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                        className="flex-1 px-3 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500" />
                       <button onClick={handleApplyCoupon} disabled={isValidatingCoupon || !couponInput.trim()}
                         className="px-3 py-2.5 rounded-xl text-white text-sm font-bold transition-colors" style={{ background: color }}>
                         {isValidatingCoupon ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin block" /> : <Tag className="h-4 w-4" />}
@@ -537,12 +537,12 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                               placeholder="Digite seu CEP *"
                               maxLength={9}
                               className={cn(
-                                'w-full pl-9 pr-10 py-2.5 text-sm border rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-orange-500',
+                                'w-full pl-9 pr-10 py-2.5 text-sm border rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500',
                                 cepError ? 'border-red-400 dark:border-red-600' : cepZone ? 'border-green-400 dark:border-green-600' : 'border-gray-200 dark:border-gray-700'
                               )}
                             />
                             {cepLoading && (
-                              <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-gray-300 border-t-orange-500 rounded-full animate-spin" />
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-gray-300 border-t-brand-500 rounded-full animate-spin" />
                             )}
                           </div>
                           {cepError && <p className="text-xs text-red-500">{cepError}</p>}
@@ -559,8 +559,8 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                               onChange={(e) => setDeliveryAddress(e.target.value)}
                               placeholder="Rua, número, complemento *"
                               className={cn(
-                                'w-full px-3 py-2.5 text-sm border rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-orange-500',
-                                !deliveryAddress.trim() ? 'border-orange-300 dark:border-orange-700' : 'border-gray-200 dark:border-gray-700'
+                                'w-full px-3 py-2.5 text-sm border rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500',
+                                !deliveryAddress.trim() ? 'border-brand-300 dark:border-brand-700' : 'border-gray-200 dark:border-gray-700'
                               )}
                             />
                           </div>
@@ -579,13 +579,13 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
               <div>
                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Telefone (WhatsApp) *</label>
                 <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(11) 99999-9999"
-                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500" />
                 <p className="text-xs text-gray-400 mt-1.5">Você receberá atualizações do pedido via WhatsApp</p>
               </div>
               <div>
                 <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Seu nome (opcional)</label>
                 <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="João Silva"
-                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500" />
               </div>
             </div>
           )}
@@ -599,7 +599,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                     Telefone (opcional, para atualizações via WhatsApp)
                   </label>
                   <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(11) 99999-9999"
-                    className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                    className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500" />
                 </div>
               )}
 
@@ -683,7 +683,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                             onChange={(e) => updatePayment(entry.id, 'amount', e.target.value)}
                             onFocus={() => distributeRemainder(entry.id)}
                             placeholder={payments.length > 1 ? 'Valor' : estimatedTotal.toFixed(2)}
-                            className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500"
                           />
                         </div>
                         {payments.length > 1 && remaining > 0.01 && !entry.amount && (
@@ -700,7 +700,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                           <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Troco para quanto?</label>
                           <input type="number" value={entry.changeFor} onChange={(e) => updatePayment(entry.id, 'changeFor', e.target.value)}
                             placeholder="Ex: 50.00"
-                            className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                            className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500" />
                         </div>
                       )}
                     </div>

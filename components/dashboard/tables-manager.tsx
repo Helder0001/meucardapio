@@ -101,7 +101,7 @@ export function TablesManager({ tables, pdvs, tenantSlug }: TablesManagerProps) 
     return (
       <div className={cn(
         'bg-card border border-border rounded-xl p-4 text-center transition-all hover:border-primary/40 hover:shadow-sm',
-        hasActiveOrders && 'border-orange-300 dark:border-orange-700',
+        hasActiveOrders && 'border-brand-300 dark:border-brand-700',
         isDeleting && 'opacity-50 pointer-events-none'
       )}>
         <div className="text-2xl font-bold text-foreground mb-1">{table.number}</div>
@@ -112,7 +112,7 @@ export function TablesManager({ tables, pdvs, tenantSlug }: TablesManagerProps) 
         <div className={cn(
           'text-[10px] font-medium px-2 py-0.5 rounded-full mb-3',
           hasActiveOrders
-            ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+            ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400'
             : statusConfig.color
         )}>
           {hasActiveOrders ? `${table._count.orders} pedido(s)` : statusConfig.label}

@@ -94,7 +94,7 @@ export function OnboardingClient({ tenantId, tenantName, progress }: Props) {
           </div>
           <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
             <div
-              className="h-full bg-orange-500 rounded-full transition-all duration-500"
+              className="h-full bg-brand-500 rounded-full transition-all duration-500"
               style={{ width: `${(completedCount / STEPS.length) * 100}%` }}
             />
           </div>
@@ -110,7 +110,7 @@ export function OnboardingClient({ tenantId, tenantName, progress }: Props) {
                 className={`bg-white rounded-xl border-2 p-5 flex items-center gap-4 transition-all ${
                   done
                     ? 'border-green-200 bg-green-50'
-                    : 'border-gray-200 hover:border-orange-300'
+                    : 'border-gray-200 hover:border-brand-300'
                 }`}
               >
                 <div className="text-3xl">{step.emoji}</div>
@@ -130,7 +130,7 @@ export function OnboardingClient({ tenantId, tenantName, progress }: Props) {
                 ) : (
                   <a
                     href={step.href}
-                    className="flex items-center gap-1 text-sm font-medium text-orange-600 hover:text-orange-700 flex-shrink-0"
+                    className="flex items-center gap-1 text-sm font-medium text-brand-600 hover:text-brand-700 flex-shrink-0"
                   >
                     Configurar <ExternalLink className="w-3.5 h-3.5" />
                   </a>
@@ -145,7 +145,7 @@ export function OnboardingClient({ tenantId, tenantName, progress }: Props) {
           <button
             onClick={handleFinish}
             disabled={completing || !allEssential}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-brand-500 text-white rounded-xl font-semibold hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {completing ? 'Finalizando...' : 'Ir para o Dashboard'}
             <ArrowRight className="w-4 h-4" />

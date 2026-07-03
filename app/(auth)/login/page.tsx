@@ -21,9 +21,9 @@ export default async function LoginPage({
   return (
     <div className="min-h-screen flex">
       {/* Lado esquerdo: visual */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-orange-500 to-orange-700 flex-col justify-between p-12">
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-brand-500 to-brand-700 flex-col justify-between p-12">
         {/* Mesh gradient sutil — antes era um gradiente liso sem profundidade */}
-        <div className="absolute -top-24 -left-16 w-96 h-96 rounded-full bg-orange-300/30 blur-3xl animate-float" />
+        <div className="absolute -top-24 -left-16 w-96 h-96 rounded-full bg-brand-300/30 blur-3xl animate-float" />
         <div className="absolute top-1/3 -right-24 w-80 h-80 rounded-full bg-red-400/20 blur-3xl animate-float-delay" />
         <div className="absolute -bottom-32 left-1/4 w-96 h-96 rounded-full bg-amber-300/20 blur-3xl animate-pulse-slow" />
 
@@ -35,13 +35,13 @@ export default async function LoginPage({
             <p className="text-2xl font-semibold leading-relaxed">
               "Aumentamos nosso faturamento em 40% em 3 meses usando o cardápio digital."
             </p>
-            <footer className="mt-4 text-orange-100">
+            <footer className="mt-4 text-brand-100">
               <strong>João Silva</strong> — Hamburgueria do João, São Paulo
             </footer>
           </blockquote>
         </div>
 
-        <div className="relative flex gap-4 text-orange-100 text-sm">
+        <div className="relative flex gap-4 text-brand-100 text-sm">
           <span className="flex items-center gap-1.5"><Lock className="h-3.5 w-3.5" /> SSL seguro</span>
           <span className="flex items-center gap-1.5"><Flag className="h-3.5 w-3.5" /> Dados no Brasil</span>
           <span className="flex items-center gap-1.5"><Zap className="h-3.5 w-3.5" /> 99.9% uptime</span>

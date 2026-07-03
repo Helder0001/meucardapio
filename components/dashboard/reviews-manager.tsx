@@ -19,7 +19,7 @@ const STAR_COLORS: Record<number, string> = {
   5: 'text-green-500',
   4: 'text-emerald-500',
   3: 'text-yellow-500',
-  2: 'text-orange-500',
+  2: 'text-brand-500',
   1: 'text-red-500',
 }
 

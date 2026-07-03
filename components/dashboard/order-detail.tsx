@@ -525,7 +525,7 @@ export function OrderDetail({
                   <div className={cn(
                     'w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-all',
                     done    ? 'bg-emerald-500 border-emerald-500 text-white' :
-                    current ? 'bg-orange-500 border-orange-500 text-white ring-4 ring-orange-500/20' :
+                    current ? 'bg-brand-500 border-brand-500 text-white ring-4 ring-brand-500/20' :
                               'bg-muted border-border text-muted-foreground'
                   )}>
                     {done ? '✓' : i + 1}

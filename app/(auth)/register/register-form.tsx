@@ -68,7 +68,7 @@ export function RegisterForm() {
   if (loggingIn) {
     return (
       <div className="text-center space-y-4 py-8">
-        <Loader2 className="w-10 h-10 animate-spin text-orange-500 mx-auto" />
+        <Loader2 className="w-10 h-10 animate-spin text-brand-500 mx-auto" />
         <p className="text-gray-600 font-medium">Entrando na sua conta...</p>
       </div>
     )
@@ -83,10 +83,10 @@ export function RegisterForm() {
       )}
 
       {/* Plano único */}
-      <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 space-y-3">
+      <div className="bg-brand-50 border border-brand-200 rounded-2xl p-4 space-y-3">
         <div className="flex items-center gap-2">
-          <Zap className="h-4 w-4 text-orange-500" />
-          <h3 className="text-sm font-bold text-orange-700 uppercase tracking-wide">Plano PRO — Acesso completo</h3>
+          <Zap className="h-4 w-4 text-brand-500" />
+          <h3 className="text-sm font-bold text-brand-700 uppercase tracking-wide">Plano PRO — Acesso completo</h3>
         </div>
         <ul className="text-xs text-gray-600 space-y-1">
           <li>✓ Cardápio digital + QR Code</li>
@@ -109,7 +109,7 @@ export function RegisterForm() {
             onClick={() => setBillingCycle('MONTHLY')}
             className={`py-3 px-4 rounded-xl border-2 text-sm font-medium transition-all text-left ${
               billingCycle === 'MONTHLY'
-                ? 'border-orange-500 bg-orange-50 text-orange-700'
+                ? 'border-brand-500 bg-brand-50 text-brand-700'
                 : 'border-gray-200 text-gray-600 hover:border-gray-300'
             }`}
           >
@@ -125,7 +125,7 @@ export function RegisterForm() {
             onClick={() => setBillingCycle('ANNUAL')}
             className={`py-3 px-4 rounded-xl border-2 text-sm font-medium transition-all text-left relative ${
               billingCycle === 'ANNUAL'
-                ? 'border-orange-500 bg-orange-50 text-orange-700'
+                ? 'border-brand-500 bg-brand-50 text-brand-700'
                 : 'border-gray-200 text-gray-600 hover:border-gray-300'
             }`}
           >
@@ -150,14 +150,14 @@ export function RegisterForm() {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Nome do restaurante *</label>
           <input name="tenantName" type="text" required placeholder="Ex: Pizzaria do João"
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">URL do cardápio *</label>
           <div className="flex items-center">
             <span className="px-3 py-2.5 bg-gray-50 border border-r-0 border-gray-200 rounded-l-xl text-sm text-gray-500">menu/</span>
             <input name="slug" type="text" required placeholder="pizzaria-joao"
-              className="flex-1 px-3 py-2.5 border border-gray-200 rounded-r-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
+              className="flex-1 px-3 py-2.5 border border-gray-200 rounded-r-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
           </div>
         </div>
       </div>
@@ -168,18 +168,18 @@ export function RegisterForm() {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Nome completo *</label>
           <input name="name" type="text" required placeholder="João Silva"
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">E-mail *</label>
           <input name="email" type="email" required placeholder="joao@email.com"
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" />
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Senha *</label>
           <div className="relative">
             <input name="password" type={showPass ? 'text' : 'password'} required minLength={8} placeholder="Mínimo 8 caracteres"
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 pr-10" />
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 pr-10" />
             <button type="button" onClick={() => setShowPass(!showPass)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
               {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -198,7 +198,7 @@ export function RegisterForm() {
       <button
         type="submit"
         disabled={isPending}
-        className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+        className="w-full py-3.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
       >
         {isPending
           ? <><Loader2 className="h-4 w-4 animate-spin" /> Criando conta...</>

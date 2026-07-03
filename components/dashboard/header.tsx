@@ -144,7 +144,7 @@ export function Header({ user }: HeaderProps) {
                     <Link
                       href="/dashboard/orders/kanban"
                       onClick={() => setNotifOpen(false)}
-                      className="flex items-center gap-3 p-2.5 bg-orange-50 dark:bg-orange-950/30 rounded-lg hover:bg-orange-100 dark:hover:bg-orange-950/50 transition-colors"
+                      className="flex items-center gap-3 p-2.5 bg-brand-50 dark:bg-brand-950/30 rounded-lg hover:bg-brand-100 dark:hover:bg-brand-950/50 transition-colors"
                     >
                       <span className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                         {pendingCount}

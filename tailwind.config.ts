@@ -30,6 +30,7 @@ const config: Config = {
           700: '#c2410c',
           800: '#9a3412',
           900: '#7c2d12',
+          950: '#431407',
         },
         // Variáveis shadcn/ui — necessárias para @apply border-border, bg-background, etc.
         background:       'hsl(var(--background))',

@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 const statusConfig: Record<string, { label: string; dot: string; className: string }> = {
   PENDING:          { label: 'Pendente',         dot: 'bg-amber-400',   className: 'bg-amber-50 text-amber-700 border border-amber-200' },
   CONFIRMED:        { label: 'Confirmado',        dot: 'bg-blue-400',    className: 'bg-blue-50 text-blue-700 border border-blue-200' },
-  PREPARING:        { label: 'Preparando',        dot: 'bg-orange-400',  className: 'bg-orange-50 text-orange-700 border border-orange-200' },
+  PREPARING:        { label: 'Preparando',        dot: 'bg-brand-400',  className: 'bg-brand-50 text-brand-700 border border-brand-200' },
   READY:            { label: 'Pronto',            dot: 'bg-emerald-400', className: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
   OUT_FOR_DELIVERY: { label: 'Saiu p/ entrega',   dot: 'bg-violet-400',  className: 'bg-violet-50 text-violet-700 border border-violet-200' },
   DELIVERED:        { label: 'Entregue',          dot: 'bg-green-400',   className: 'bg-green-50 text-green-700 border border-green-200' },

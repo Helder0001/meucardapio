@@ -22,14 +22,14 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex">
       {/* Lado esquerdo */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-orange-500 to-orange-700 flex-col justify-center p-12">
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-brand-500 to-brand-700 flex-col justify-center p-12">
         {/* CORREÇÃO: marca "Meu Cardápio" + logo enviada pelo cliente */}
         <AuthLogo variant="light" className="mb-12" />
 
         <h2 className="text-3xl font-bold text-white mb-3">
           7 dias grátis,<br />sem compromisso
         </h2>
-        <p className="text-orange-100 mb-8">
+        <p className="text-brand-100 mb-8">
           Configure seu estabelecimento em minutos e comece a receber pedidos hoje.
         </p>
 

@@ -22,7 +22,7 @@ export function AuthLogo({ variant = 'dark', className }: AuthLogoProps) {
     <div className={cn('flex items-center gap-2', className)}>
       <div className={cn(
         'w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden relative flex-shrink-0',
-        isLight ? 'bg-white' : 'bg-orange-500'
+        isLight ? 'bg-white' : 'bg-brand-500'
       )}>
         <Image
           src="/logo-icon.png"
@@ -37,7 +37,7 @@ export function AuthLogo({ variant = 'dark', className }: AuthLogoProps) {
         />
         <span className={cn(
           'hidden font-bold text-sm',
-          isLight ? 'text-orange-600' : 'text-white'
+          isLight ? 'text-brand-600' : 'text-white'
         )}>
           M
         </span>

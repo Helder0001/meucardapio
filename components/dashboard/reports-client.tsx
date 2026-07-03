@@ -410,8 +410,8 @@ export function ReportsClient({
         {/* Clientes */}
         <div className="bg-card border border-border rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-              <Users className="h-5 w-5 text-orange-500" />
+            <div className="w-9 h-9 rounded-xl bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center">
+              <Users className="h-5 w-5 text-brand-500" />
             </div>
             <span className="text-sm font-medium text-muted-foreground">Clientes</span>
             <InfoTooltip text="Total de clientes únicos que compraram dentro do período selecionado. O % de retorno indica quantos desses já eram clientes antes desse período." />
@@ -520,7 +520,7 @@ export function ReportsClient({
         </div>
         <div className="flex items-center gap-5 text-xs text-muted-foreground mb-4">
           <span className="flex items-center gap-1.5">
-            <span className="inline-block w-5 h-0.5 bg-orange-500" />
+            <span className="inline-block w-5 h-0.5 bg-brand-500" />
             Período atual
           </span>
           <span className="flex items-center gap-1.5">
@@ -589,7 +589,7 @@ export function ReportsClient({
             </div>
             {topProduct && (
               <div className="rounded-xl border border-border p-4">
-                <div className="flex items-center gap-1.5 text-orange-500 text-xs font-medium mb-1">
+                <div className="flex items-center gap-1.5 text-brand-500 text-xs font-medium mb-1">
                   <Pizza className="h-3.5 w-3.5" />
                   {topProduct.name}
                   <InfoTooltip text="Produto mais vendido do período, em % das unidades vendidas em relação ao total de itens vendidos no mesmo período." />
@@ -653,7 +653,7 @@ export function ReportsClient({
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                         <div
-                          className="h-full rounded-full bg-orange-500 transition-all duration-500"
+                          className="h-full rounded-full bg-brand-500 transition-all duration-500"
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -767,7 +767,7 @@ export function ReportsClient({
               </ResponsiveContainer>
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
                 <div className="flex items-center gap-1.5">
-                  <Flame className="h-4 w-4 text-orange-500" />
+                  <Flame className="h-4 w-4 text-brand-500" />
                   <div>
                     <p className="text-xs text-muted-foreground">Horário mais movimentado</p>
                     <p className="text-sm font-bold text-foreground">
@@ -796,8 +796,8 @@ export function ReportsClient({
           <div className="grid grid-cols-3 gap-4">
             <div className="rounded-xl border border-border p-4 text-center">
               <div className="flex justify-center mb-2">
-                <div className="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                  <Users className="h-4 w-4 text-orange-500" />
+                <div className="w-8 h-8 rounded-lg bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center">
+                  <Users className="h-4 w-4 text-brand-500" />
                 </div>
               </div>
               <p className="text-2xl font-bold text-foreground">{summary.newClients ?? 0}</p>
@@ -847,7 +847,7 @@ export function ReportsClient({
             { type: 'orders',   format: 'xlsx', label: 'Pedidos Excel',   sub: 'Arquivo .xlsx', icon: FileSpreadsheet, color: 'text-emerald-600', bg: 'bg-emerald-100 dark:bg-emerald-900/30' },
             { type: 'orders',   format: 'pdf',  label: 'Pedidos PDF',     sub: 'Arquivo .pdf',  icon: FileText,        color: 'text-red-500',     bg: 'bg-red-100 dark:bg-red-900/30'         },
             { type: 'products', format: 'xlsx', label: 'Produtos Excel',  sub: 'Arquivo .xlsx', icon: FileSpreadsheet, color: 'text-teal-600',    bg: 'bg-teal-100 dark:bg-teal-900/30'       },
-            { type: 'products', format: 'pdf',  label: 'Produtos PDF',    sub: 'Arquivo .pdf',  icon: FileText,        color: 'text-orange-500',  bg: 'bg-orange-100 dark:bg-orange-900/30'   },
+            { type: 'products', format: 'pdf',  label: 'Produtos PDF',    sub: 'Arquivo .pdf',  icon: FileText,        color: 'text-brand-500',  bg: 'bg-brand-100 dark:bg-brand-900/30'   },
           ] as const).map((exp) => {
             const key = `${exp.type}-${exp.format}`
             const isLoading = exporting === key
