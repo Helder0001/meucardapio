@@ -19,7 +19,14 @@ interface PageProps {
     paymentStatus?: string
     payment?: string
     q?: string
+    sort?: string
+    dir?: string
   }>
+}
+
+const SORTABLE_FIELDS: Record<string, string> = {
+  total: 'total',
+  date: 'createdAt',
 }
 
 export default async function OrdersPage({ searchParams }: PageProps) {
@@ -77,10 +84,13 @@ export default async function OrdersPage({ searchParams }: PageProps) {
       : {}),
   }
 
+  const sortField = SORTABLE_FIELDS[params.sort ?? ''] ?? 'createdAt'
+  const sortDir = params.dir === 'asc' ? 'asc' : 'desc'
+
   const [orders, total] = await Promise.all([
     prisma.order.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { [sortField]: sortDir },
       skip,
       take: pageSize,
       select: {

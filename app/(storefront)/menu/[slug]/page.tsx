@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/db/client'
 import { StorefrontClient } from '@/components/storefront/storefront-client'
 import { isOutOfStock } from '@/lib/utils/stock'
+import { UtensilsCrossed } from 'lucide-react'
 import type { Metadata } from 'next'
 
 export const revalidate = 60
@@ -97,9 +98,11 @@ function UnavailablePage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-4">
       <div className="text-center max-w-sm">
-        <div className="text-5xl mb-4">dish</div>
-        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Cardapio nao disponivel</h1>
-        <p className="text-gray-500 dark:text-gray-400 text-sm">Este cardapio nao esta disponivel no momento.</p>
+        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
+          <UtensilsCrossed className="w-7 h-7 text-gray-400" />
+        </div>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Cardápio não disponível</h1>
+        <p className="text-gray-500 dark:text-gray-400 text-sm">Este cardápio não está disponível no momento.</p>
       </div>
     </div>
   )

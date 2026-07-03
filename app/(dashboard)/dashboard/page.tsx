@@ -36,6 +36,11 @@ export default async function DashboardPage() {
   const weekStart = startOfWeek(now, { weekStartsOn: 1 })
   const monthStart = startOfMonth(now)
 
+  // Períodos anteriores, pra calcular a variação percentual (↑/↓) nos cards
+  const yesterdayStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000)
+  const prevWeekStart  = new Date(weekStart.getTime() - 7 * 24 * 60 * 60 * 1000)
+  const prevMonthStart = startOfMonth(new Date(monthStart.getTime() - 1))
+
   // CORREÇÃO: remover filtro paymentStatus: 'PAID' da semana/mês
   // Cartão e dinheiro não passam por webhook de pagamento — o status fica PENDING
   // mas o pedido já foi entregue/confirmado. Contabilizamos por status do pedido.
@@ -45,6 +50,9 @@ export default async function DashboardPage() {
     monthRevenue,
     pendingOrders,
     recentOrders,
+    yesterdayOrders,
+    prevWeekRevenue,
+    prevMonthRevenue,
   ] = await Promise.all([
     // Pedidos hoje (excluindo cancelados)
     prisma.order.aggregate({
@@ -104,19 +112,69 @@ export default async function DashboardPage() {
         },
       },
     }),
+
+    // Ontem (mesmo horário até agora), pra comparar com hoje
+    prisma.order.aggregate({
+      where: {
+        tenantId,
+        createdAt: { gte: yesterdayStart, lt: todayStart },
+        status: { not: 'CANCELLED' },
+      },
+      _sum: { total: true },
+    }),
+
+    // Semana anterior, pra comparar com a semana atual
+    prisma.order.aggregate({
+      where: {
+        tenantId,
+        createdAt: { gte: prevWeekStart, lt: weekStart },
+        status: { notIn: ['CANCELLED', 'REFUNDED'] },
+      },
+      _sum: { total: true },
+    }),
+
+    // Mês anterior, pra comparar com o mês atual
+    prisma.order.aggregate({
+      where: {
+        tenantId,
+        createdAt: { gte: prevMonthStart, lt: monthStart },
+        status: { notIn: ['CANCELLED', 'REFUNDED'] },
+      },
+      _sum: { total: true },
+    }),
   ])
+
+  // Variação percentual vs período anterior — null quando não dá pra comparar
+  // (período anterior sem nenhum pedido ainda, ex.: loja muito nova)
+  const pctChange = (current: number, previous: number): number | null => {
+    if (previous <= 0) return null
+    return ((current - previous) / previous) * 100
+  }
+
+  const todayRevenue = Number(todayOrders._sum.total ?? 0)
+  const weekRevenueTotal = Number(weekRevenue._sum.total ?? 0)
+  const monthRevenueTotal = Number(monthRevenue._sum.total ?? 0)
+  const yesterdayRevenue = Number(yesterdayOrders._sum.total ?? 0)
+  const prevWeekTotal = Number(prevWeekRevenue._sum.total ?? 0)
+  const prevMonthTotal = Number(prevMonthRevenue._sum.total ?? 0)
 
   const metrics = {
     todayOrdersCount: todayOrders._count.id,
-    todayRevenue: Number(todayOrders._sum.total ?? 0),
-    weekRevenue: Number(weekRevenue._sum.total ?? 0),
-    monthRevenue: Number(monthRevenue._sum.total ?? 0),
+    todayRevenue,
+    weekRevenue: weekRevenueTotal,
+    monthRevenue: monthRevenueTotal,
     monthOrdersCount: monthRevenue._count.id,
     avgTicket:
       monthRevenue._count.id > 0
-        ? Number(monthRevenue._sum.total ?? 0) / monthRevenue._count.id
+        ? monthRevenueTotal / monthRevenue._count.id
         : 0,
     pendingOrders,
+    // Comparação com o período anterior — "hoje" é aproximado (compara com
+    // o dia inteiro de ontem, não o mesmo horário), suficiente pra dar a
+    // direção da tendência sem precisar de uma janela exata.
+    todayChangePct: pctChange(todayRevenue, yesterdayRevenue),
+    weekChangePct: pctChange(weekRevenueTotal, prevWeekTotal),
+    monthChangePct: pctChange(monthRevenueTotal, prevMonthTotal),
   }
 
   return (

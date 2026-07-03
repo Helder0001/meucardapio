@@ -50,9 +50,13 @@
     --warning-foreground: 26 83% 14%;
 
     /* ── Sombras ─────────────────────────────────── */
+    /* Escala com mais profundidade — antes só existiam card/card-hover/dropdown */
+    --shadow-xs:          0 1px 2px 0 rgb(0 0 0 / .04);
     --shadow-card:        0 1px 3px 0 rgb(0 0 0 / .06), 0 1px 2px -1px rgb(0 0 0 / .04);
     --shadow-card-hover:  0 4px 12px 0 rgb(0 0 0 / .08), 0 2px 4px -2px rgb(0 0 0 / .04);
+    --shadow-md:          0 6px 16px -4px rgb(0 0 0 / .08), 0 3px 6px -3px rgb(0 0 0 / .05);
     --shadow-dropdown:    0 8px 24px -4px rgb(0 0 0 / .12), 0 4px 8px -4px rgb(0 0 0 / .06);
+    --shadow-modal:       0 20px 48px -8px rgb(0 0 0 / .18), 0 8px 16px -8px rgb(0 0 0 / .08);
   }
 
   /* Dark mode — mantido para compatibilidade, mas o design principal é light */

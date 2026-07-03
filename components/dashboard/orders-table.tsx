@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { formatCurrency, formatDate, formatOrderNumber } from '@/lib/utils/format'
 import { OrderStatusBadge } from './order-status-badge'
 import { cn } from '@/lib/utils'
-import { Search, LayoutGrid, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, LayoutGrid, ChevronLeft, ChevronRight, ChevronDown, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react'
 import { useCallback, useState } from 'react'
 
 interface Order {
@@ -77,6 +77,27 @@ interface OrdersTableProps {
   currentFilters: Record<string, string | undefined>
 }
 
+// Select nativo por baixo (mantém acessibilidade/semântica de <select>),
+// só com um wrapper visual + chevron próprio no lugar da seta cinza do navegador.
+function StyledSelect({
+  value, onChange, options,
+}: { value: string; onChange: (v: string) => void; options: Array<{ value: string; label: string }> }) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="appearance-none pl-3 pr-8 py-2 text-sm border border-input rounded-lg bg-background hover:bg-muted/50 focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer transition-colors"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+    </div>
+  )
+}
+
 export function OrdersTable({ orders, total, page, pageSize, currentFilters }: OrdersTableProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -100,6 +121,37 @@ export function OrdersTable({ orders, total, page, pageSize, currentFilters }: O
     updateFilter('q', search)
   }
 
+  const currentSort = currentFilters.sort ?? ''
+  const currentDir = currentFilters.dir === 'asc' ? 'asc' : 'desc'
+
+  const toggleSort = (field: string) => {
+    const params = new URLSearchParams()
+    Object.entries(currentFilters).forEach(([k, v]) => {
+      if (v && k !== 'page' && k !== 'sort' && k !== 'dir') params.set(k, v)
+    })
+    params.set('sort', field)
+    params.set('dir', currentSort === field && currentDir === 'desc' ? 'asc' : 'desc')
+    router.push(`${pathname}?${params.toString()}`)
+  }
+
+  function SortableHeader({ field, label, align = 'left' }: { field: string; label: string; align?: 'left' | 'right' }) {
+    const isActive = currentSort === field
+    const Icon = !isActive ? ArrowUpDown : currentDir === 'asc' ? ArrowUp : ArrowDown
+    return (
+      <button
+        onClick={() => toggleSort(field)}
+        className={cn(
+          'flex items-center gap-1 font-medium hover:text-foreground transition-colors',
+          align === 'right' && 'ml-auto',
+          isActive ? 'text-foreground' : 'text-muted-foreground'
+        )}
+      >
+        {label}
+        <Icon className={cn('h-3 w-3', isActive && 'text-primary')} />
+      </button>
+    )
+  }
+
   return (
     <div className="space-y-4">
       {/* Filtros */}
@@ -121,50 +173,38 @@ export function OrdersTable({ orders, total, page, pageSize, currentFilters }: O
         </form>
 
         {/* Filtro de status do pedido */}
-        <select
+        <StyledSelect
           value={currentFilters.status ?? ''}
-          onChange={(e) => updateFilter('status', e.target.value)}
-          className="px-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          {STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
+          onChange={(v) => updateFilter('status', v)}
+          options={STATUS_OPTIONS}
+        />
 
         {/* Filtro de tipo */}
-        <select
+        <StyledSelect
           value={currentFilters.type ?? ''}
-          onChange={(e) => updateFilter('type', e.target.value)}
-          className="px-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          {TYPE_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
+          onChange={(v) => updateFilter('type', v)}
+          options={TYPE_OPTIONS}
+        />
 
         {/* Filtro de status de pagamento */}
-        <select
+        <StyledSelect
           value={currentFilters.paymentStatus ?? ''}
-          onChange={(e) => updateFilter('paymentStatus', e.target.value)}
-          className="px-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          {PAYMENT_STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
+          onChange={(v) => updateFilter('paymentStatus', v)}
+          options={PAYMENT_STATUS_OPTIONS}
+        />
 
         {/* Filtro de forma de pagamento */}
-        <select
+        <StyledSelect
           value={currentFilters.payment ?? ''}
-          onChange={(e) => updateFilter('payment', e.target.value)}
-          className="px-3 py-2 text-sm border border-input rounded-lg bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          <option value="">Todas as formas</option>
-          <option value="PIX">⚡ PIX</option>
-          <option value="CREDIT_CARD">💳 Crédito</option>
-          <option value="DEBIT_CARD">💳 Débito</option>
-          <option value="CASH">💵 Dinheiro</option>
-        </select>
+          onChange={(v) => updateFilter('payment', v)}
+          options={[
+            { value: '', label: 'Todas as formas' },
+            { value: 'PIX', label: '⚡ PIX' },
+            { value: 'CREDIT_CARD', label: '💳 Crédito' },
+            { value: 'DEBIT_CARD', label: '💳 Débito' },
+            { value: 'CASH', label: '💵 Dinheiro' },
+          ]}
+        />
 
         {/* Link para kanban */}
         <Link
@@ -188,8 +228,12 @@ export function OrdersTable({ orders, total, page, pageSize, currentFilters }: O
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Pgto.</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Forma</th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground">Total</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Data</th>
+                <th className="text-right px-4 py-3">
+                  <SortableHeader field="total" label="Total" align="right" />
+                </th>
+                <th className="text-left px-4 py-3">
+                  <SortableHeader field="date" label="Data" />
+                </th>
               </tr>
             </thead>
             <tbody>

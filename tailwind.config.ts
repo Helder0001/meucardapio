@@ -10,6 +10,14 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      boxShadow: {
+        xs:       'var(--shadow-xs)',
+        card:     'var(--shadow-card)',
+        'card-hover': 'var(--shadow-card-hover)',
+        DEFAULT:  'var(--shadow-md)',
+        dropdown: 'var(--shadow-dropdown)',
+        modal:    'var(--shadow-modal)',
+      },
       colors: {
         brand: {
           50:  '#fff7ed',
@@ -65,15 +73,30 @@ const config: Config = {
           DEFAULT:        'hsl(var(--warning))',
           foreground:     'hsl(var(--warning-foreground))',
         },
+        sidebar: {
+          DEFAULT:      'hsl(var(--sidebar-bg))',
+          foreground:   'hsl(var(--sidebar-fg))',
+          'active-bg':  'hsl(var(--sidebar-active-bg))',
+          'active-fg':  'hsl(var(--sidebar-active-fg))',
+          'hover-bg':   'hsl(var(--sidebar-hover-bg))',
+          border:       'hsl(var(--sidebar-border))',
+        },
       },
       fontFamily: {
         sans: ['var(--font-geist-sans)', 'system-ui', 'sans-serif'],
         mono: ['var(--font-geist-mono)', 'monospace'],
       },
       borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        // Escala única, toda derivada de --radius — antes só sm/md/lg
+        // vinham daqui; xl/2xl/3xl caíam no valor solto do Tailwind,
+        // por isso dashboard (lg/xl) e storefront (2xl/3xl) pareciam
+        // duas linguagens visuais diferentes.
+        sm:  'calc(var(--radius) - 4px)',
+        md:  'calc(var(--radius) - 2px)',
+        lg:  'var(--radius)',
+        xl:  'calc(var(--radius) + 4px)',
+        '2xl': 'calc(var(--radius) + 8px)',
+        '3xl': 'calc(var(--radius) + 12px)',
       },
     },
   },

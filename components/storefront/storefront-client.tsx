@@ -14,6 +14,7 @@ import {
   ChevronDown, MessageCircle, Flame, Sparkles,
   Info, Instagram, Home as HomeIcon, Clock3, CreditCard,
   ChevronRight, ArrowLeft, User, LogOut, Settings, Moon, Sun,
+  Tag, PiggyBank, UtensilsCrossed, ClipboardList,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils/format'
 import Image from 'next/image'
@@ -413,12 +414,14 @@ function CustomerOrdersSection({
         {customer && (
           <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 grid grid-cols-2 gap-2">
             <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-center">
-              <p className="text-lg font-black text-amber-600">⭐ {customer.loyaltyPoints}</p>
+              <p className="text-lg font-black text-amber-600 flex items-center justify-center gap-1">
+                <Star className="w-4 h-4 fill-amber-500 text-amber-500" /> {customer.loyaltyPoints}
+              </p>
               <p className="text-xs text-amber-600/80 font-medium">pontos</p>
             </div>
             <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-center">
-              <p className="text-lg font-black text-emerald-600">
-                💰 R$ {customer.cashbackBalance.toFixed(2).replace('.', ',')}
+              <p className="text-lg font-black text-emerald-600 flex items-center justify-center gap-1">
+                <PiggyBank className="w-4 h-4" /> R$ {customer.cashbackBalance.toFixed(2).replace('.', ',')}
               </p>
               <p className="text-xs text-emerald-600/80 font-medium">cashback</p>
             </div>
@@ -439,7 +442,13 @@ function CustomerOrdersSection({
       )}
 
       {!loading && customer && customer.orders.length === 0 && (
-        <div className="text-center py-8 text-gray-400 text-sm">Nenhum pedido ainda.</div>
+        <div className="text-center py-10 text-gray-400">
+          <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-3">
+            <ClipboardList className="w-6 h-6 text-gray-400" />
+          </div>
+          <p className="font-semibold text-gray-500 text-sm">Nenhum pedido ainda</p>
+          <p className="text-xs mt-1 text-gray-400">Seus pedidos aparecem aqui depois que você fizer o primeiro</p>
+        </div>
       )}
 
       {!loading && customer?.orders.map((order: any) => (
@@ -800,7 +809,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
         {activeNav === 'offers' && (
           <section>
             <h2 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2 mb-4">
-              <span className="w-6 h-6 rounded-lg bg-red-100 dark:bg-red-900/40 flex items-center justify-center text-sm">🏷️</span>
+              <span className="w-6 h-6 rounded-lg bg-red-100 dark:bg-red-900/40 flex items-center justify-center"><Tag className="w-3.5 h-3.5 text-red-600" /></span>
               Ofertas
             </h2>
             {offerProducts.length > 0 ? (
@@ -817,7 +826,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
               </div>
             ) : (
               <div className="text-center py-16 text-gray-400">
-                <div className="w-16 h-16 rounded-3xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4 text-2xl">🏷️</div>
+                <div className="w-16 h-16 rounded-3xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4"><Tag className="w-7 h-7 text-gray-400" /></div>
                 <p className="font-semibold text-gray-500">Nenhuma oferta no momento</p>
               </div>
             )}
@@ -871,7 +880,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
               <section>
                 <div className="flex items-center gap-2 mb-4">
                   <h2 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center text-sm">🔥</span>
+                    <span className="w-6 h-6 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center"><Flame className="w-3.5 h-3.5 text-orange-600" /></span>
                     Mais pedidos
                   </h2>
                 </div>
@@ -924,7 +933,9 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
             {/* Sem resultados */}
             {searchQuery && filteredCategories.length === 0 && (
               <div className="text-center py-16 text-gray-400">
-                <div className="w-16 h-16 rounded-3xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4 text-2xl">🔍</div>
+                <div className="w-16 h-16 rounded-3xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4">
+                  <Search className="w-7 h-7 text-gray-400" />
+                </div>
                 <p className="font-semibold text-gray-500">Nenhum produto para "{searchQuery}"</p>
                 <button onClick={() => setSearchQuery('')}
                   className="mt-3 text-sm font-semibold" style={{ color }}>
@@ -1107,7 +1118,7 @@ function FeaturedCard({
             className={`object-cover group-hover:scale-105 transition-transform duration-500 ${product.isOutOfStock ? 'grayscale opacity-60' : ''}`}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-4xl bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700">🍽️</div>
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700"><UtensilsCrossed className="w-8 h-8 text-gray-300 dark:text-gray-600" /></div>
         )}
         {hasDiscount && !product.isOutOfStock && (
           <div className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-lg">
@@ -1115,7 +1126,7 @@ function FeaturedCard({
           </div>
         )}
         {product.isBestSeller && !product.isOutOfStock && (
-          <div className="absolute top-2 right-2 text-xs" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}>🔥</div>
+          <div className="absolute top-2 right-2" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}><Flame className="w-4 h-4 text-orange-500 fill-orange-500" /></div>
         )}
         {product.isOutOfStock && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40">
