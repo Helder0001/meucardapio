@@ -15,6 +15,9 @@ export async function POST() {
   if (!session?.user?.tenantId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) {
+    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+  }
 
   if (!EVOLUTION_URL || !EVOLUTION_KEY) {
     console.error('[whatsapp/connect] EVOLUTION_API_URL ou EVOLUTION_API_KEY não configurados')

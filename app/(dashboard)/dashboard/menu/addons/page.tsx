@@ -11,6 +11,7 @@ export const metadata: Metadata = { title: 'Adicionais' }
 export default async function AddonsPage() {
   const session = await auth()
   if (!session?.user?.tenantId) redirect('/login')
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) redirect('/dashboard')
 
   const groups = await prisma.addonGroup.findMany({
     where:   { tenantId: session.user.tenantId },

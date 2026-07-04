@@ -13,6 +13,7 @@ export const metadata: Metadata = { title: 'Produtos' }
 export default async function ProductsPage() {
   const session = await auth()
   if (!session?.user?.tenantId) redirect('/login')
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) redirect('/dashboard')
 
   const tenantId = session.user.tenantId
 

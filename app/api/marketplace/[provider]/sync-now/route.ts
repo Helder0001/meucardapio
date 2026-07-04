@@ -17,6 +17,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
   if (!session?.user?.tenantId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) {
+    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+  }
 
   const { provider: providerParam } = await params
   const provider = parseProviderParam(providerParam)

@@ -11,6 +11,7 @@ export const metadata: Metadata = { title: 'Impressoras' }
 export default async function PrintersPage() {
   const session = await auth()
   if (!session?.user?.tenantId) redirect('/login')
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) redirect('/dashboard')
 
   const printers = await prisma.printer.findMany({
     where: { tenantId: session.user.tenantId, isActive: true },

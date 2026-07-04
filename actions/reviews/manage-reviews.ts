@@ -9,6 +9,7 @@ import { z } from 'zod'
 export async function approveReviewAction(reviewId: string, approve: boolean) {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) return { error: 'Sem permissão' }
 
   const review = await prisma.review.findFirst({
     where: { id: reviewId, tenantId: session.user.tenantId },
@@ -30,6 +31,7 @@ export async function approveReviewAction(reviewId: string, approve: boolean) {
 export async function replyReviewAction(reviewId: string, reply: string) {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) return { error: 'Sem permissão' }
 
   const parsed = z.string().min(1).max(500).safeParse(reply)
   if (!parsed.success) return { error: 'Resposta inválida' }
@@ -51,6 +53,7 @@ export async function replyReviewAction(reviewId: string, reply: string) {
 export async function deleteReviewAction(reviewId: string) {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) return { error: 'Sem permissão' }
 
   const review = await prisma.review.findFirst({
     where: { id: reviewId, tenantId: session.user.tenantId },

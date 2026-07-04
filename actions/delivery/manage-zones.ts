@@ -20,6 +20,7 @@ const zoneSchema = z.object({
 export async function createDeliveryZoneAction(formData: FormData) {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) return { error: 'Sem permissão' }
 
   const parsed = zoneSchema.safeParse({
     bairro:    formData.get('bairro'),
@@ -44,6 +45,7 @@ export async function createDeliveryZoneAction(formData: FormData) {
 export async function deleteDeliveryZoneAction(zoneId: string) {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) return { error: 'Sem permissão' }
 
   const zone = await prisma.deliveryZone.findFirst({
     where: { id: zoneId, tenantId: session.user.tenantId },

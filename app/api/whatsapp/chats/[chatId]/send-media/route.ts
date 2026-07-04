@@ -23,6 +23,7 @@ export async function POST(
 ) {
   const session = await auth()
   if (!session?.user?.tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
 
   const { chatId } = await params
 

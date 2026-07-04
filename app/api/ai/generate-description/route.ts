@@ -19,6 +19,9 @@ export async function POST(req: Request) {
         { status: 401 }
       )
     }
+    if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) {
+      return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+    }
 
     const body = await req.json()
 

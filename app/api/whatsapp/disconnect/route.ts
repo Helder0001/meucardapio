@@ -13,6 +13,9 @@ export async function POST() {
   if (!session?.user?.tenantId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) {
+    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+  }
 
   const config = await prisma.whatsappConfig.findFirst({
     where:  { tenantId: session.user.tenantId },

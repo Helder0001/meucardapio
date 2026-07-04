@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db/client'
 import { hashPassword } from '@/lib/auth/password'
 import { nanoid } from 'nanoid'
+import { getInternalApiSecret } from '@/lib/security/internal-secret'
 
 const registerSchema = z.object({
   tenantName:   z.string().min(2).max(100),
@@ -158,7 +159,10 @@ async function createMpSubscription(params: {
 
     const res = await fetch(`${appUrl}/api/mp/preapproval`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': getInternalApiSecret(),
+      },
       body: JSON.stringify({
         reason:        `Meu Cardápio — Plano PRO ${params.billingCycle === 'ANNUAL' ? 'Anual' : 'Mensal'} — ${params.tenantName}`,
         payer_email:   params.email,

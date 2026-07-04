@@ -17,6 +17,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!session?.user?.tenantId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  if (!['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'STAFF'].includes(session.user.role)) {
+    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+  }
 
   const { id } = await params
   const pendingOrder = await prisma.marketplaceOrder.findFirst({

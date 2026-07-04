@@ -25,6 +25,9 @@ export async function createCouponAction(
 ): Promise<CouponFormState> {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) {
+    return { error: 'Sem permissão' }
+  }
 
   const tenantId = session.user.tenantId
 
@@ -68,6 +71,9 @@ export async function createCouponAction(
 export async function toggleCouponAction(couponId: string, active: boolean) {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) {
+    return { error: 'Sem permissão' }
+  }
 
   const coupon = await prisma.coupon.findFirst({
     where: { id: couponId, tenantId: session.user.tenantId },

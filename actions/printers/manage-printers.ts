@@ -16,6 +16,7 @@ const schema = z.object({
 export async function createPrinterAction(formData: FormData) {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) return { error: 'Sem permissão' }
 
   const parsed = schema.safeParse({
     name:   formData.get('name'),
@@ -41,6 +42,7 @@ export async function createPrinterAction(formData: FormData) {
 export async function deletePrinterAction(printerId: string) {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) return { error: 'Sem permissão' }
 
   const printer = await prisma.printer.findFirst({
     where: { id: printerId, tenantId: session.user.tenantId },

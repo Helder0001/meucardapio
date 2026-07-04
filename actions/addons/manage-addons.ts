@@ -24,6 +24,7 @@ const addonSchema = z.object({
 export async function createAddonGroupAction(formData: FormData) {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) return { error: 'Sem permissão' }
 
   const parsed = groupSchema.safeParse({
     name:       formData.get('name'),
@@ -45,6 +46,7 @@ export async function createAddonGroupAction(formData: FormData) {
 export async function updateAddonGroupAction(formData: FormData) {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) return { error: 'Sem permissão' }
 
   const groupId = formData.get('groupId') as string
   if (!groupId) return { error: 'ID inválido' }
@@ -72,6 +74,7 @@ export async function updateAddonGroupAction(formData: FormData) {
 export async function deleteAddonGroupAction(groupId: string) {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) return { error: 'Sem permissão' }
 
   const group = await prisma.addonGroup.findFirst({
     where:  { id: groupId, tenantId: session.user.tenantId },
@@ -96,6 +99,7 @@ export async function deleteAddonGroupAction(groupId: string) {
 export async function createAddonAction(formData: FormData) {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) return { error: 'Sem permissão' }
 
   const groupId = formData.get('groupId') as string
 
@@ -134,6 +138,7 @@ export async function updateAddonAction(
 ) {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) return { error: 'Sem permissão' }
 
   const addon = await prisma.addon.findFirst({
     where: { id: addonId, tenantId: session.user.tenantId },
@@ -155,6 +160,7 @@ export async function updateAddonAction(
 export async function deleteAddonAction(addonId: string) {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) return { error: 'Sem permissão' }
 
   const addon = await prisma.addon.findFirst({
     where: { id: addonId, tenantId: session.user.tenantId },

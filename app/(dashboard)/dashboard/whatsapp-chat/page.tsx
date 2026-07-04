@@ -9,6 +9,7 @@ export const metadata: Metadata = { title: 'WhatsApp Chat' }
 export default async function WhatsAppChatPage() {
   const session = await auth()
   if (!session?.user?.tenantId) redirect('/login')
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) redirect('/dashboard')
 
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col">

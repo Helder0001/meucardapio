@@ -21,6 +21,7 @@ export async function createCategoryAction(
 ): Promise<CategoryState> {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) return { error: 'Sem permissão' }
 
   const parsed = categorySchema.safeParse({
     name:        formData.get('name'),
@@ -60,6 +61,7 @@ export async function createCategoryAction(
 export async function updateCategoryAction(formData: FormData) {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) return { error: 'Sem permissão' }
 
   const categoryId = formData.get('categoryId') as string
   if (!categoryId) return { error: 'ID inválido' }
@@ -99,6 +101,7 @@ export async function updateCategoryAction(formData: FormData) {
 export async function deleteCategoryAction(categoryId: string) {
   const session = await auth()
   if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) return { error: 'Sem permissão' }
 
   // Verificar propriedade
   const category = await prisma.category.findFirst({

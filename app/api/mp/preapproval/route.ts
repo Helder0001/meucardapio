@@ -1,12 +1,27 @@
 // app/api/mp/preapproval/route.ts
 import { NextRequest, NextResponse } from 'next/server'
+import { isValidInternalSecret } from '@/lib/security/internal-secret'
 
 export const maxDuration = 60
 
 const PLAN_PRICE_MONTHLY = 1.00
 const PLAN_PRICE_ANNUAL  = parseFloat((PLAN_PRICE_MONTHLY * 12 * 0.9).toFixed(2))
 
+// VULN-CRIT-05: esta rota chama a API do Mercado Pago com um card_token_id
+// fornecido no corpo da requisição — sem nenhuma autenticação, era um
+// endpoint aberto na internet que autoriza (ou rejeita) cobranças reais
+// contra a conta MP da própria plataforma. Isso é exatamente o padrão de
+// "card testing": um golpista usa um endpoint de pagamento de terceiros
+// pra descobrir se um cartão roubado ainda é válido, sem gastar nada além
+// da tentativa. Essa rota só é chamada pelo PRÓPRIO servidor (dentro de
+// actions/auth/register.ts, via fetch interno) — nunca pelo navegador do
+// usuário — então exigir um secret conhecido só por quem chama
+// internamente fecha o acesso externo sem quebrar o fluxo de cadastro.
 export async function POST(req: NextRequest) {
+  if (!isValidInternalSecret(req.headers.get('x-internal-secret'))) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN
   if (!accessToken) {
     console.error('[mp/preapproval] MERCADOPAGO_ACCESS_TOKEN não configurado')

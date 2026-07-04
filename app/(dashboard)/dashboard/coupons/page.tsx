@@ -11,6 +11,7 @@ export const metadata: Metadata = { title: 'Cupons' }
 export default async function CouponsPage() {
   const session = await auth()
   if (!session?.user?.tenantId) redirect('/login')
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) redirect('/dashboard')
 
   const coupons = await prisma.coupon.findMany({
     where: { tenantId: session.user.tenantId },

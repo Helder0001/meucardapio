@@ -12,6 +12,7 @@ export const metadata: Metadata = { title: 'Categorias' }
 export default async function CategoriesPage() {
   const session = await auth()
   if (!session?.user?.tenantId) redirect('/login')
+  if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) redirect('/dashboard')
 
   const categories = await prisma.category.findMany({
     where:   { tenantId: session.user.tenantId },
