@@ -151,12 +151,16 @@ export async function proxy(request: NextRequest) {
       "default-src 'self'",
       // http2.mlstatic.com é a CDN do Mercado Pago usada pelo Card Payment
       // Brick para carregar sub-scripts (cardPayment.js) e traduções (i18n/*.json)
-      // O nonce autoriza os scripts inline que a PRÓPRIA aplicação gerou
-      // (ex.: next-themes). 'unsafe-inline' fica como fallback: navegadores
-      // que entendem nonce o ignoram automaticamente (regra da spec CSP3),
-      // então na prática só continua liberando inline nos navegadores mais
-      // antigos que nem chegam a ler o nonce.
-      `script-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://sdk.mercadopago.com https://http2.mlstatic.com`,
+      // IMPORTANTE: NÃO usar nonce aqui. Testamos um nonce por requisição
+      // (defesa extra contra XSS via inline script), mas a CSP nível 3 diz
+      // que, quando existe nonce/hash no script-src, o navegador IGNORA
+      // 'unsafe-inline' por completo — inclusive pros scripts inline que o
+      // PRÓPRIO SDK do Mercado Pago injeta dinamicamente ao montar o Card
+      // Payment Brick (sem nonce nenhum, porque o script deles não tem
+      // como saber o nosso). Resultado: o Brick quebrava silenciosamente
+      // ("Erro ao carregar o formulário de cartão"). Sem nonce, 'unsafe-inline'
+      // funciona normalmente pros dois lados.
+      `script-src 'self' 'unsafe-inline' https://sdk.mercadopago.com https://http2.mlstatic.com`,
       "style-src 'self' 'unsafe-inline' https://http2.mlstatic.com",
       "img-src 'self' blob: data: https:",
       "font-src 'self' https://http2.mlstatic.com",
