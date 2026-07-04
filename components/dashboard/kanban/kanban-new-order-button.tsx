@@ -3,8 +3,8 @@
 // Botão "Novo Pedido" com modal para criar pedido manual no balcão/PDV
 // NOVO: suporte a vínculo de mesa + tipo TABLE ao criar pedido no balcão
 
-import { useState, useTransition } from 'react'
-import { Plus, X, Loader2, Minus, ShoppingBag, Table2 } from 'lucide-react'
+import { useState, useTransition, useEffect } from 'react'
+import { Plus, X, Loader2, Minus, ShoppingBag, Table2, CheckCircle2 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils/format'
 import { createOrderAction } from '@/actions/orders/create-order'
 import { toast } from 'sonner'
@@ -72,7 +72,8 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
   const [payNow, setPayNow] = useState(true)   // pagar agora ou deixar pendente (pagar no final)
   const [isPending, start] = useTransition()
   const [pixData, setPixData] = useState<PixData | null>(null)
-  const [linkData, setLinkData] = useState<{ url: string } | null>(null)
+  const [linkData, setLinkData] = useState<{ url: string; orderId: string } | null>(null)
+  const [linkPaymentConfirmed, setLinkPaymentConfirmed] = useState(false)
   const [isSendingLink, setIsSendingLink] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -172,7 +173,7 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
               router.refresh()
               return
             }
-            setLinkData({ url: data.checkoutUrl })
+            setLinkData({ url: data.checkoutUrl, orderId: result.orderId })
             router.refresh()
           } finally {
             setIsSendingLink(false)
@@ -204,9 +205,31 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
     setPayments([{ method: defaultPaymentMethod, amount: 0 }])
     setPayNow(true)
     setPixData(null); setCopied(false)
-    setLinkData(null); setLinkCopied(false)
+    setLinkData(null); setLinkCopied(false); setLinkPaymentConfirmed(false)
     setSelectedTableId('')
   }
+
+  // BUG: a tela do link de pagamento só refletia o pagamento se o caixa
+  // fechasse o modal e fosse conferir o pedido separadamente. Agora, com o
+  // modal aberto, verifica a cada 4s se o cliente já pagou (via status —
+  // o caixa já tem sessão, não precisa de token).
+  useEffect(() => {
+    if (!linkData || linkPaymentConfirmed) return
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/orders/${linkData.orderId}/status`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (data.paymentStatus === 'PAID') {
+          setLinkPaymentConfirmed(true)
+          router.refresh()
+        }
+      } catch {
+        // silencioso — tenta de novo no próximo intervalo
+      }
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [linkData, linkPaymentConfirmed])
 
   const copyPaymentLink = async () => {
     if (!linkData) return
@@ -278,30 +301,53 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
 
             {linkData ? (
               <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center text-center gap-4">
-                <div>
-                  <h3 className="font-bold text-foreground">Link de pagamento gerado</h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Envie ao cliente para ele escolher PIX, crédito ou débito. Válido por 1 hora.
-                  </p>
-                </div>
-                <div className="w-full">
-                  <div className="flex items-center gap-2">
-                    <input readOnly value={linkData.url}
-                      className="flex-1 px-3 py-2 text-xs border border-input rounded-lg bg-muted truncate" />
-                    <button onClick={copyPaymentLink}
-                      className="px-3 py-2 text-xs font-semibold bg-muted text-foreground rounded-lg hover:bg-muted/70 transition-colors flex-shrink-0">
-                      {linkCopied ? 'Copiado!' : 'Copiar'}
+                {linkPaymentConfirmed ? (
+                  <>
+                    <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center">
+                      <CheckCircle2 className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-foreground">Pagamento confirmado!</h3>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        O cliente já pagou — o pedido foi atualizado automaticamente.
+                      </p>
+                    </div>
+                    <button onClick={closeAndReset}
+                      className="w-full px-4 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors">
+                      Concluir
                     </button>
-                  </div>
-                </div>
-                <button onClick={sendPaymentLinkWhatsapp}
-                  className="w-full px-4 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors">
-                  Enviar por WhatsApp
-                </button>
-                <button onClick={closeAndReset}
-                  className="w-full px-4 py-3 bg-muted text-foreground font-semibold rounded-lg hover:bg-muted/70 transition-colors">
-                  Concluir
-                </button>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <h3 className="font-bold text-foreground">Link de pagamento gerado</h3>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Envie ao cliente para ele escolher PIX, crédito ou débito. Válido por 1 hora.
+                      </p>
+                    </div>
+                    <div className="w-full">
+                      <div className="flex items-center gap-2">
+                        <input readOnly value={linkData.url}
+                          className="flex-1 px-3 py-2 text-xs border border-input rounded-lg bg-muted truncate" />
+                        <button onClick={copyPaymentLink}
+                          className="px-3 py-2 text-xs font-semibold bg-muted text-foreground rounded-lg hover:bg-muted/70 transition-colors flex-shrink-0">
+                          {linkCopied ? 'Copiado!' : 'Copiar'}
+                        </button>
+                      </div>
+                    </div>
+                    <button onClick={sendPaymentLinkWhatsapp}
+                      className="w-full px-4 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors">
+                      Enviar por WhatsApp
+                    </button>
+                    <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Aguardando o cliente pagar...
+                    </p>
+                    <button onClick={closeAndReset}
+                      className="w-full px-4 py-3 bg-muted text-foreground font-semibold rounded-lg hover:bg-muted/70 transition-colors">
+                      Concluir
+                    </button>
+                  </>
+                )}
               </div>
             ) : pixData ? (
               <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center text-center gap-4">

@@ -38,3 +38,28 @@ export async function resolveTenantMpAccessToken(tenantId: string): Promise<stri
 
   return process.env.MERCADOPAGO_ACCESS_TOKEN ?? null
 }
+
+// BUG: a public key (usada no BROWSER pra tokenizar o cartão) e o access
+// token (usado no SERVIDOR pra cobrar) precisam vir da MESMA conta/aplicação
+// do Mercado Pago — senão o cartão é tokenizado sob uma aplicação e a
+// cobrança tentada sob outra, e o Card Payment Brick falha ("Erro ao
+// carregar o formulário" / "Ocorreu um erro"). O código que resolvia a
+// public key pulava o nível 2 (token legado colado manualmente) e ia direto
+// pro fallback da plataforma — só a resolveTenantMpAccessToken() tinha a
+// cascata completa. Agora as duas seguem exatamente a mesma ordem.
+export async function resolveTenantMpPublicKey(tenantId: string): Promise<string | null> {
+  const connection = await prisma.mercadoPagoConnection.findFirst({
+    where: { tenantId, revokedAt: null },
+    select: { publicKey: true },
+  })
+  if (connection?.publicKey) return connection.publicKey
+
+  const tenant = await prisma.tenant.findFirst({
+    where: { id: tenantId },
+    select: { settings: true },
+  })
+  const legacyPublicKey = (tenant?.settings as any)?.mercadoPagoPublicKey
+  if (legacyPublicKey) return legacyPublicKey
+
+  return process.env.NEXT_PUBLIC_MP_PUBLIC_KEY ?? null
+}

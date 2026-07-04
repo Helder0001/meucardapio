@@ -439,8 +439,15 @@ async function createPixPayment(params: {
       transaction_amount: params.amount,
       payment_method_id: 'pix',
       payer: {
-        email: 'onboarding@resend.dev',
-        identification: { type: 'CPF', number: '00000000000' },
+        // BUG: usava 'onboarding@resend.dev' (email de teste de OUTRO
+        // serviço, o Resend, usado só pra envio de email) e CPF '00000000000'
+        // (todos zeros, invalido pelo digito verificador) como dados do
+        // pagador do PIX -- isso pode disparar rejeicao no antifraude do MP
+        // ('Pagamento rejeitado pelo PSP do recebedor'). Como não coletamos
+        // o CPF/email real do cliente no PIX (ele só escaneia o QR code no
+        // banco dele), usamos um CPF de teste com dígito verificador válido.
+        email: 'cliente@meucardapio.app',
+        identification: { type: 'CPF', number: '11144477735' },
       },
       description: `Pedido #${params.orderId.slice(-8).toUpperCase()}`,
       external_reference: params.orderId,

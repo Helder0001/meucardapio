@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/db/client'
 import { OrderTracking } from '@/components/storefront/order-tracking'
 import { generateStatusToken } from '@/app/api/orders/[id]/status/route'
+import { resolveTenantMpPublicKey } from '@/lib/mercadopago/resolve-token'
 import type { Metadata } from 'next'
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -92,11 +93,7 @@ export default async function OrderPage({ params }: PageProps) {
   let mpPublicKey: string | null = null
   const hasPendingCardPayment = order.payments[0]?.method === 'CREDIT_CARD' && order.paymentStatus !== 'PAID'
   if (hasPendingCardPayment) {
-    const connection = await prisma.mercadoPagoConnection.findFirst({
-      where: { tenantId: order.tenantId, revokedAt: null },
-      select: { publicKey: true },
-    })
-    mpPublicKey = connection?.publicKey ?? process.env.NEXT_PUBLIC_MP_PUBLIC_KEY ?? null
+    mpPublicKey = await resolveTenantMpPublicKey(order.tenantId)
   }
 
   const { tenantId, ...orderWithoutTenantId } = order

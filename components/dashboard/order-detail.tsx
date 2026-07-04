@@ -175,7 +175,11 @@ export function OrderDetail({
   const [paymentLinkUrl, setPaymentLinkUrl]     = useState<string | null>(null)
 
   const totalOrder   = orderTotal
-  const alreadyPaid  = payments.reduce((s: number, p: any) => s + Number(p.amount), 0)
+  // CORREÇÃO: só pagamento com status PAID conta como "já pago" — um
+  // pagamento PENDING (ex.: link de pagamento ainda não confirmado) estava
+  // sendo somado aqui, zerando o "falta pagar" e escondendo o botão de
+  // reenviar o link antes mesmo do cliente pagar.
+  const alreadyPaid  = payments.filter((p: any) => p.status === 'PAID').reduce((s: number, p: any) => s + Number(p.amount), 0)
   const stillOwed    = Math.max(0, Math.round((totalOrder - alreadyPaid) * 100) / 100)
 
   const addPaymentsSum      = addPayments.reduce((s, p) => s + (p.amount || 0), 0)

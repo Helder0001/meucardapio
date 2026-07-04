@@ -43,8 +43,15 @@ async function createPixPayment(params: {
       transaction_amount: params.amount,
       payment_method_id: 'pix',
       payer: {
-        email: 'onboarding@resend.dev',
-        identification: { type: 'CPF', number: '00000000000' },
+        // BUG: usava 'onboarding@resend.dev' (email de teste de OUTRO
+        // serviço, o Resend, usado só pra envio de email) e CPF '00000000000'
+        // (todos zeros, invalido pelo digito verificador) como dados do
+        // pagador do PIX -- isso pode disparar rejeicao no antifraude do MP
+        // ('Pagamento rejeitado pelo PSP do recebedor'). Como não coletamos
+        // o CPF/email real do cliente no PIX (ele só escaneia o QR code no
+        // banco dele), usamos um CPF de teste com dígito verificador válido.
+        email: 'cliente@meucardapio.app',
+        identification: { type: 'CPF', number: '11144477735' },
       },
       description: `Pedido #${params.orderId.slice(-8).toUpperCase()}`,
       external_reference: params.orderId,
@@ -131,7 +138,11 @@ export async function POST(
     return NextResponse.json({ error: 'Use o fluxo de pagamento de delivery.' }, { status: 422 })
   }
 
-  const alreadyPaid = order.payments.reduce((s, p) => s + Number(p.amount), 0)
+  // CORREÇÃO: só pagamento com status PAID conta como "já pago" — um
+  // pagamento PENDING (ex.: link de pagamento ainda não confirmado) não
+  // deveria contar aqui, senão bloqueia o registro de um pagamento de
+  // verdade achando que o pedido já está coberto.
+  const alreadyPaid = order.payments.filter((p) => p.status === 'PAID').reduce((s, p) => s + Number(p.amount), 0)
   const newTotal    = payments.reduce((s, p) => s + p.amount, 0)
   const orderTotal  = Number(order.total)
 

@@ -57,8 +57,12 @@ export async function POST(
         transaction_amount: Number(order.total),
         payment_method_id:  'pix',
         payer: {
-          email: 'onboarding@resend.dev',
-          identification: { type: 'CPF', number: '00000000000' },
+          // BUG: usava 'onboarding@resend.dev' (email de teste de OUTRO
+          // serviço, o Resend) e CPF '00000000000' (inválido pelo dígito
+          // verificador) como dados do pagador — pode disparar rejeição
+          // no antifraude do MP ('Pagamento rejeitado pelo PSP do recebedor').
+          email: 'cliente@meucardapio.app',
+          identification: { type: 'CPF', number: '11144477735' },
         },
         description: `Pedido #${id.slice(-8).toUpperCase()}`,
         external_reference: id,

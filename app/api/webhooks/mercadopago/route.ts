@@ -202,6 +202,19 @@ export async function POST(request: Request) {
         : mpPayment.payment_type_id === 'bank_transfer' ? 'PIX'
         : mpPayment.payment_type_id ?? 'Mercado Pago'
 
+      // VULN/BUG: o link de pagamento (Checkout Pro) aceita qualquer método
+      // (PIX, crédito, débito), mas o registro no banco era criado com
+      // method: 'CREDIT_CARD' fixo (só por não sabermos ainda o que o
+      // cliente ia escolher) — e nunca era corrigido depois. Resultado: um
+      // pedido pago via PIX pelo link ficava salvo como "Cartão de Crédito"
+      // pra sempre. Agora, ao confirmar, sobrescrevemos com o método real
+      // que o Mercado Pago informou.
+      const realMethod: string | undefined =
+        mpPayment.payment_type_id === 'credit_card' ? 'CREDIT_CARD'
+        : mpPayment.payment_type_id === 'debit_card' ? 'DEBIT_CARD'
+        : mpPayment.payment_type_id === 'bank_transfer' ? 'PIX'
+        : undefined // método desconhecido — preserva o que já estava salvo
+
       const processed = await prisma.$transaction(async (tx: Tx) => {
         // Update atômico e condicional: garante que, mesmo se dois webhooks
         // chegarem em paralelo (ou o MP reenviar), só um consiga transicionar
@@ -217,6 +230,7 @@ export async function POST(request: Request) {
             cardLastDigits: mpPayment.card?.last_four_digits ?? undefined,
             cardBrand: mpPayment.payment_method_id ?? undefined,
             installments: mpPayment.installments ?? undefined,
+            ...(realMethod ? { method: realMethod as any } : {}),
           },
         })
 
