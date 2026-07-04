@@ -119,14 +119,30 @@ export async function POST(request: Request) {
         if (connection) connectionTenantId = connection.tenantId
       }
 
+      let tenantSecretFound = false
       if (connectionTenantId) {
         const tenant = await prisma.tenant.findFirst({
           where: { id: connectionTenantId },
           select: { settings: true },
         })
         const tenantSecret = (tenant?.settings as any)?.mercadoPagoWebhookSecret
-        if (tenantSecret) webhookSecret = tenantSecret
+        if (tenantSecret) {
+          webhookSecret = tenantSecret
+          tenantSecretFound = true
+        }
       }
+
+      // LOG TEMPORÁRIO DE DIAGNÓSTICO — remover depois de identificar a causa
+      // dos 401 recorrentes. Não loga o secret em si, só o "caminho" percorrido.
+      console.log('[webhook/mp][debug]', {
+        eventUserId: event.user_id ?? null,
+        paymentFoundByMpId: !!payment,
+        connectionTenantId,
+        tenantSecretFound,
+        usingSecret: connectionTenantId
+          ? (tenantSecretFound ? 'tenant' : 'platform-fallback')
+          : 'platform-default',
+      })
     }
 
     // VULN-03 CORRIGIDO: sem bypass — SEMPRE valida a assinatura
