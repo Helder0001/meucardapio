@@ -85,6 +85,7 @@ interface MpStatus {
   connected: boolean
   mpUserId: string | null
   liveMode: boolean | null
+  isTestKey: boolean | null
   connectedAt: string | null
   hasLegacyToken: boolean
 }
@@ -204,7 +205,7 @@ export function PaymentSettingsForm({ hasSecret, pixEnabled, cardEnabled }: Paym
           <div className="space-y-3 pt-1">
             <p className="text-sm text-muted-foreground">
               Pagamentos dos seus clientes vão direto para a sua conta do Mercado Pago.
-              {mpStatus.liveMode === false && (
+              {(mpStatus.liveMode === false || mpStatus.isTestKey === true) && (
                 <span className="block mt-1 text-amber-600 font-medium">
                   ⚠️ Conectado em modo de teste (sandbox) — pagamentos não são reais.
                 </span>

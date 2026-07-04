@@ -17,6 +17,7 @@ export async function GET() {
     select: {
       mpUserId: true,
       liveMode: true,
+      publicKey: true,
       connectedAt: true,
       lastRefreshedAt: true,
       revokedAt: true,
@@ -32,10 +33,17 @@ export async function GET() {
 
   const isConnected = !!connection && !connection.revokedAt
 
+  // Diagnóstico mais confiável que liveMode: a convenção do Mercado Pago é
+  // que toda public key/access token começa com "TEST-" (sandbox) ou
+  // "APP_USR-" (produção) — isso nunca falha, diferente do campo live_mode
+  // que depende de termos capturado certo na hora de conectar.
+  const isTestKey = connection?.publicKey?.startsWith('TEST-') ?? null
+
   return NextResponse.json({
     connected: isConnected,
     mpUserId: connection?.mpUserId ?? null,
     liveMode: connection?.liveMode ?? null,
+    isTestKey,
     connectedAt: connection?.connectedAt ?? null,
     hasLegacyToken,
   })
