@@ -86,6 +86,7 @@ interface MpStatus {
   mpUserId: string | null
   liveMode: boolean | null
   isTestKey: boolean | null
+  publicKeyPreview: string | null
   connectedAt: string | null
   hasLegacyToken: boolean
 }
@@ -205,12 +206,22 @@ export function PaymentSettingsForm({ hasSecret, pixEnabled, cardEnabled }: Paym
           <div className="space-y-3 pt-1">
             <p className="text-sm text-muted-foreground">
               Pagamentos dos seus clientes vão direto para a sua conta do Mercado Pago.
-              {(mpStatus.liveMode === false || mpStatus.isTestKey === true) && (
-                <span className="block mt-1 text-amber-600 font-medium">
-                  ⚠️ Conectado em modo de teste (sandbox) — pagamentos não são reais.
-                </span>
-              )}
             </p>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground">Modo:</span>
+              {mpStatus.liveMode === false || mpStatus.isTestKey === true ? (
+                <span className="font-semibold text-amber-600">⚠️ Teste (sandbox) — pagamentos não são reais</span>
+              ) : mpStatus.liveMode === true || mpStatus.isTestKey === false ? (
+                <span className="font-semibold text-emerald-600">✅ Produção — pagamentos reais</span>
+              ) : (
+                <span className="font-semibold text-muted-foreground">Não foi possível determinar</span>
+              )}
+            </div>
+            {mpStatus.publicKeyPreview && (
+              <p className="text-[11px] text-muted-foreground font-mono">
+                Chave: {mpStatus.publicKeyPreview}
+              </p>
+            )}
             <div className="flex items-center justify-between pt-3 border-t border-border text-xs text-muted-foreground">
               <span>
                 Conectado {mpStatus.connectedAt ? `em ${new Date(mpStatus.connectedAt).toLocaleDateString('pt-BR')}` : ''}

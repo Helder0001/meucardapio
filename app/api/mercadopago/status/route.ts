@@ -39,11 +39,18 @@ export async function GET() {
   // que depende de termos capturado certo na hora de conectar.
   const isTestKey = connection?.publicKey?.startsWith('TEST-') ?? null
 
+  // Só o suficiente pra você confirmar visualmente qual conta está
+  // conectada, sem expor a chave inteira (ela é pública, mas ainda assim).
+  const publicKeyPreview = connection?.publicKey
+    ? `${connection.publicKey.slice(0, 12)}...${connection.publicKey.slice(-6)}`
+    : null
+
   return NextResponse.json({
     connected: isConnected,
     mpUserId: connection?.mpUserId ?? null,
     liveMode: connection?.liveMode ?? null,
     isTestKey,
+    publicKeyPreview,
     connectedAt: connection?.connectedAt ?? null,
     hasLegacyToken,
   })
