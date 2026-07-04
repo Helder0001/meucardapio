@@ -132,21 +132,35 @@ export async function POST(request: Request) {
         }
       }
 
-      // LOG TEMPORÁRIO DE DIAGNÓSTICO — remover depois de identificar a causa
-      // dos 401 recorrentes. Não loga o secret em si, só o "caminho" percorrido.
-      console.log('[webhook/mp][debug]', {
-        eventUserId: event.user_id ?? null,
-        paymentFoundByMpId: !!payment,
-        connectionTenantId,
-        tenantSecretFound,
-        usingSecret: connectionTenantId
-          ? (tenantSecretFound ? 'tenant' : 'platform-fallback')
-          : 'platform-default',
-      })
+      // Guarda pra logar fora do if abaixo (fora do escopo de bloco)
+      ;(event as any).__debugConnectionTenantId = connectionTenantId
+      ;(event as any).__debugTenantSecretFound = tenantSecretFound
     }
 
+    // LOG TEMPORÁRIO DE DIAGNÓSTICO — agora roda SEMPRE, pra qualquer
+    // event.type, não só 'payment'. Não loga o secret em si — só um
+    // "fingerprint" (tamanho + primeiro/último caractere) pra dá pra
+    // conferir se o valor batendo é mesmo o que foi colado no dashboard,
+    // sem expor o segredo nos logs. Remover depois de identificar a causa.
+    const secretFingerprint = webhookSecret
+      ? `len=${webhookSecret.length} starts=${webhookSecret[0]} ends=${webhookSecret[webhookSecret.length - 1]}`
+      : 'none'
+    const signatureValid = validateSignature(body, signature, requestId, webhookSecret)
+    console.log('[webhook/mp][debug]', {
+      eventType: event.type ?? null,
+      eventUserId: event.user_id ?? null,
+      dataId: event.data?.id ?? null,
+      connectionTenantId: (event as any).__debugConnectionTenantId ?? null,
+      tenantSecretFound: (event as any).__debugTenantSecretFound ?? false,
+      usingSecret: (event as any).__debugConnectionTenantId
+        ? ((event as any).__debugTenantSecretFound ? 'tenant' : 'platform-fallback')
+        : 'platform-default',
+      secretFingerprint,
+      signatureValid,
+    })
+
     // VULN-03 CORRIGIDO: sem bypass — SEMPRE valida a assinatura
-    if (!validateSignature(body, signature, requestId, webhookSecret)) {
+    if (!signatureValid) {
       console.warn('[webhook/mp] Assinatura inválida rejeitada')
       // Retornar 401 sem revelar detalhes do erro
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
