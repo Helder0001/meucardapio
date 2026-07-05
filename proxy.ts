@@ -160,7 +160,13 @@ export async function proxy(request: NextRequest) {
       // como saber o nosso). Resultado: o Brick quebrava silenciosamente
       // ("Erro ao carregar o formulário de cartão"). Sem nonce, 'unsafe-inline'
       // funciona normalmente pros dois lados.
-      `script-src 'self' 'unsafe-inline' https://sdk.mercadopago.com https://http2.mlstatic.com`,
+      // www.mercadopago.com foi adicionado para permitir o script de Device
+      // ID (security.js), carregado no layout do storefront/dashboard para
+      // reduzir recusas de antifraude nos pagamentos PIX via API direta
+      // (ver commit "Device ID do Mercado Pago"). Sem esse domínio aqui, o
+      // navegador bloqueia o script pelo CSP e a feature fica inerte —
+      // sem erro visível, o Device ID simplesmente nunca é gerado.
+      `script-src 'self' 'unsafe-inline' https://sdk.mercadopago.com https://http2.mlstatic.com https://www.mercadopago.com`,
       "style-src 'self' 'unsafe-inline' https://http2.mlstatic.com",
       "img-src 'self' blob: data: https:",
       "font-src 'self' https://http2.mlstatic.com",
