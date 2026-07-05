@@ -8,6 +8,7 @@ import { Plus, X, Loader2, Minus, ShoppingBag, Table2, CheckCircle2 } from 'luci
 import { formatCurrency } from '@/lib/utils/format'
 import { createOrderAction } from '@/actions/orders/create-order'
 import { toast } from 'sonner'
+import { formatCpf, isValidCpf } from '@/lib/utils/cpf'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
@@ -62,6 +63,7 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
   const [items, setItems] = useState<OrderItem[]>([])
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerName, setCustomerName] = useState('')
+  const [customerCpf, setCustomerCpf] = useState('')
   // NOVO: mesa vinculada ao pedido
   const [selectedTableId, setSelectedTableId] = useState<string>('')
   // Método padrão do formulário de pagamento — PIX só se estiver habilitado
@@ -141,6 +143,11 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
     // (mesma rota usada no detalhe do pedido) para enviar ao cliente.
     const isPaymentLink = payNow && finalPayments.length === 1 && finalPayments[0].method === 'LINK'
 
+    if (payNow && !isPaymentLink && finalPayments.some((p) => p.method === 'PIX') && !isValidCpf(customerCpf)) {
+      toast.error('Informe um CPF válido para pagar com PIX')
+      return
+    }
+
     start(async () => {
       try {
         // Device ID gerado pelo script de segurança do Mercado Pago
@@ -164,6 +171,7 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
             : undefined,
           notes: notes || undefined,
           deviceId,
+          customerCpf: finalPayments.some((p) => p.method === 'PIX') ? customerCpf : undefined,
         })
         if (result.error) { toast.error(result.error); return }
 
@@ -206,7 +214,7 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
 
   const closeAndReset = () => {
     setOpen(false)
-    setItems([]); setCustomerPhone(''); setCustomerName(''); setNotes('')
+    setItems([]); setCustomerPhone(''); setCustomerName(''); setCustomerCpf(''); setNotes('')
     setPayments([{ method: defaultPaymentMethod, amount: 0 }])
     setPayNow(true)
     setPixData(null); setCopied(false)
@@ -519,6 +527,17 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
                     className="w-full px-3 py-2 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
                 </div>
               </div>
+
+              {/* CPF do pagador — obrigatório pra PIX. Sem o CPF real de quem
+                  paga, o Mercado Pago rejeita do lado do recebedor mesmo com
+                  o cliente pagando certinho pelo banco dele. */}
+              {payNow && payments.some((p) => p.method === 'PIX') && (
+                <div>
+                  <label className="block text-xs font-medium text-foreground mb-1">CPF de quem vai pagar (obrigatório p/ PIX)</label>
+                  <input value={formatCpf(customerCpf)} onChange={(e) => setCustomerCpf(e.target.value)} placeholder="000.000.000-00" maxLength={14}
+                    className="w-full px-3 py-2 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                </div>
+              )}
 
               {/* Quando pagar — pagar agora ou deixar para o final */}
               <div className="flex items-center justify-between rounded-xl border border-border p-3 bg-muted/30">

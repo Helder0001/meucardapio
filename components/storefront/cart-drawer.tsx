@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { X, Trash2, Plus, Minus, Tag, Loader2, ArrowRight, ShoppingBag, Truck, Store, MapPin, PlusCircle, MinusCircle } from 'lucide-react'
 import { useCartStore } from '@/lib/store/cart'
 import { formatCurrency } from '@/lib/utils/format'
+import { formatCpf, isValidCpf } from '@/lib/utils/cpf'
 import { cn } from '@/lib/utils'
 import { createOrderAction } from '@/actions/orders/create-order'
 import { toast } from 'sonner'
@@ -125,6 +126,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [phone, setPhone]             = useState('')
   const [name, setName]               = useState('')
+  const [cpf, setCpf]                 = useState('')
   const [payments, setPayments]       = useState<PaymentEntry[]>([newEntry('PIX')])
   const [couponInput, setCouponInput] = useState('')
   const [couponDiscount, setCouponDiscount] = useState(0)
@@ -258,6 +260,10 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
       toast.error('Informe o valor de cada forma de pagamento')
       return
     }
+    if (payments.some((p) => p.method === 'PIX') && !isValidCpf(cpf)) {
+      toast.error('Informe um CPF válido para pagar com PIX')
+      return
+    }
     if (!isFullyAllocated) {
       const diff = estimatedTotal - totalAllocated
       if (diff > 0.01) {
@@ -294,6 +300,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
         paymentMethod: payments[0].method,
         changeFor: payments[0].method === 'CASH' && payments[0].changeFor ? Number(payments[0].changeFor) : undefined,
         deviceId,
+        customerCpf: payments.some((p) => p.method === 'PIX') ? cpf : undefined,
       })
 
       if (result.error) { toast.error(result.error); return }
@@ -713,6 +720,26 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                     </div>
                   ))}
                 </div>
+
+                {/* CPF do pagador — obrigatório pra PIX. O Mercado Pago (e o
+                    compliance de Pix do Bacen por trás) rejeita o pagamento
+                    do lado do recebedor quando o CPF declarado na cobrança
+                    não é o de quem realmente paga. */}
+                {payments.some((p) => p.method === 'PIX') && (
+                  <div className="mt-3">
+                    <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">CPF (para pagar com PIX) *</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={formatCpf(cpf)}
+                      onChange={(e) => setCpf(e.target.value)}
+                      placeholder="000.000.000-00"
+                      maxLength={14}
+                      className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    />
+                    <p className="text-xs text-gray-400 mt-1.5">Precisa ser o CPF de quem vai pagar o PIX</p>
+                  </div>
+                )}
 
                 {payments.length > 1 && (
                   <div className="mt-3 space-y-1.5">

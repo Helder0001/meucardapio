@@ -16,6 +16,7 @@
 // 9. Retornar orderId para redirecionar
 
 import { z } from 'zod'
+import { isValidCpf, onlyDigits } from '@/lib/utils/cpf'
 import crypto from 'crypto'
 import { checkAndPublishStockAlerts } from '@/lib/utils/stock-alerts'
 import { decrementStockForOrder, revalidateStorefrontForTenant } from '@/lib/utils/stock'
@@ -78,6 +79,14 @@ const createOrderSchema = z.object({
   // criados via API direta (sem isso, o MP não tem nenhum sinal de
   // dispositivo, o que é tratado como suspeito).
   deviceId: z.string().optional(),
+
+  // CPF real de quem vai pagar — obrigatório quando o pedido inclui PIX
+  // pago na hora (não no link/Checkout Pro, onde o próprio MP coleta os
+  // dados do pagador). Sem o CPF verdadeiro do pagador, o compliance de
+  // Pix do Bacen rejeita o pagamento do lado do recebedor mesmo que o
+  // cliente pague certinho pelo banco dele — daí o "Pagamento rejeitado
+  // pelo PSP do recebedor" mesmo em pagamentos legítimos.
+  customerCpf: z.string().optional(),
 })
   // CORREÇÃO: endereço de entrega agora é obrigatório no servidor para
   // pedidos do tipo DELIVERY — validação no cart-drawer (cliente) pode ser
@@ -85,6 +94,10 @@ const createOrderSchema = z.object({
   .refine(
     (data) => data.type !== 'DELIVERY' || (data.deliveryAddress && data.deliveryAddress.trim().length >= 5),
     { message: 'Endereço de entrega é obrigatório para pedidos com entrega', path: ['deliveryAddress'] }
+  )
+  .refine(
+    (data) => !data.payments?.some((p) => p.method === 'PIX') || isValidCpf(data.customerCpf ?? ''),
+    { message: 'CPF inválido — obrigatório para pagamento via PIX', path: ['customerCpf'] }
   )
 
 type CreateOrderInput = z.infer<typeof createOrderSchema>
@@ -153,17 +166,25 @@ export async function createOrderAction(
           tenantId: data.tenantId,
           phone: fullPhone,
           name: data.customerName,
+          cpf: data.customerCpf ? onlyDigits(data.customerCpf) : undefined,
           lgpdConsent: true,
           lgpdConsentAt: new Date(),
         },
       })
-    } else if (data.customerName && !customer.name) {
+    } else if ((data.customerName && !customer.name) || (data.customerCpf && !customer.cpf)) {
       customer = await prisma.customer.update({
         where: { id: customer.id },
-        data: { name: data.customerName },
+        data: {
+          ...(data.customerName && !customer.name ? { name: data.customerName } : {}),
+          ...(data.customerCpf && !customer.cpf ? { cpf: onlyDigits(data.customerCpf) } : {}),
+        },
       })
     }
   }
+
+  // Fallback: cliente recorrente que já tem CPF salvo de uma compra
+  // anterior, mas o formulário desta compra não reenviou o campo.
+  const effectiveCpf = data.customerCpf ?? customer?.cpf ?? undefined
 
   // 4. ⚠️  RECALCULAR TUDO NO SERVIDOR ⚠️
   const calculation = await calculateOrder({
@@ -344,6 +365,7 @@ export async function createOrderAction(
           amount: payment.amount,
           customerPhone: data.customerPhone,
           customerName: data.customerName,
+          customerCpf: effectiveCpf,
           deviceId: data.deviceId,
         })
       } catch (err) {
@@ -429,6 +451,7 @@ async function createPixPayment(params: {
   amount: number
   customerPhone?: string
   customerName?: string
+  customerCpf?: string
   deviceId?: string
 }) {
   const accessToken = await resolveTenantMpAccessToken(params.tenantId)
@@ -455,15 +478,16 @@ async function createPixPayment(params: {
       transaction_amount: params.amount,
       payment_method_id: 'pix',
       payer: {
-        // BUG: usava 'onboarding@resend.dev' (email de teste de OUTRO
-        // serviço, o Resend, usado só pra envio de email) e CPF '00000000000'
-        // (todos zeros, invalido pelo digito verificador) como dados do
-        // pagador do PIX -- isso pode disparar rejeicao no antifraude do MP
-        // ('Pagamento rejeitado pelo PSP do recebedor'). Como não coletamos
-        // o CPF/email real do cliente no PIX (ele só escaneia o QR code no
-        // banco dele), usamos um CPF de teste com dígito verificador válido.
+        // CORREÇÃO: usava CPF de teste fixo (11144477735) pra QUALQUER
+        // pagador — passava no dígito verificador, mas não era o CPF de
+        // quem realmente ia pagar. O compliance de Pix do Bacen valida
+        // isso do lado do recebedor: CPF declarado ≠ CPF de quem pagou de
+        // fato = rejeição ("Pagamento rejeitado pelo PSP do recebedor"),
+        // mesmo com o cliente pagando certinho pelo banco dele. Agora
+        // exigimos o CPF real (validado em createOrderSchema) sempre que
+        // o pedido inclui PIX pago na hora.
         email: 'cliente@meucardapio.app',
-        identification: { type: 'CPF', number: '11144477735' },
+        identification: { type: 'CPF', number: onlyDigits(params.customerCpf ?? '') },
       },
       description: `Pedido #${params.orderId.slice(-8).toUpperCase()}`,
       external_reference: params.orderId,

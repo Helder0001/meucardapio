@@ -9,6 +9,7 @@ import { OrderStatusBadge } from './order-status-badge'
 import { cn } from '@/lib/utils'
 import { Loader2, CheckCircle2, XCircle, CreditCard, Plus, X, Pencil, Minus, Trash2, Search } from 'lucide-react'
 import { toast } from 'sonner'
+import { formatCpf, isValidCpf } from '@/lib/utils/cpf'
 
 interface CatalogProduct { id: string; name: string; price: number; isOutOfStock?: boolean }
 interface CatalogCategory { id: string; name: string; products: CatalogProduct[] }
@@ -167,6 +168,7 @@ export function OrderDetail({
   // ── Modal de pagamento posterior ──────────────────────────────────────────
   const [showAddPayment, setShowAddPayment]     = useState(false)
   const [addPayments, setAddPayments]           = useState<AddPaymentEntry[]>([{ method: 'CASH', amount: Number(order.total) }])
+  const [addPaymentCpf, setAddPaymentCpf]       = useState('')
   const [isAddingPayment, startAddPayment]      = useTransition()
   // QR Code PIX após registrar pagamento posterior
   const [addPixData, setAddPixData]             = useState<{ qrCode: string; qrCodeBase64: string } | null>(null)
@@ -211,6 +213,10 @@ export function OrderDetail({
       toast.error(`Valor insuficiente. Ainda faltam ${formatCurrency(stillOwed - addPaymentsSum)}.`)
       return
     }
+    if (addPayments.some((p) => p.method === 'PIX') && !isValidCpf(addPaymentCpf)) {
+      toast.error('Informe um CPF válido para pagar com PIX')
+      return
+    }
     startAddPayment(async () => {
       // Device ID gerado pelo script de segurança do Mercado Pago
       // (window.MP_DEVICE_SESSION_ID), carregado no layout do dashboard.
@@ -219,7 +225,11 @@ export function OrderDetail({
       const res = await fetch(`/api/orders/${order.id}/add-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payments: addPayments, deviceId }),
+        body: JSON.stringify({
+          payments: addPayments,
+          deviceId,
+          customerCpf: addPayments.some((p) => p.method === 'PIX') ? addPaymentCpf : undefined,
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(data.error ?? 'Erro ao registrar pagamento'); return }
@@ -581,17 +591,6 @@ export function OrderDetail({
                 {advanceLabel}
               </button>
             )}
-            {/* NOVO: editar itens/pagamento do pedido — cliente quer mudar algo antes de cancelar */}
-            {canEditOrder && (
-              <button
-                onClick={openItemEditor}
-                disabled={isPending}
-                className="flex items-center gap-2 px-4 py-2.5 border border-border text-foreground text-sm font-medium rounded-lg hover:bg-muted/50 disabled:opacity-60 transition-colors"
-              >
-                <Pencil className="h-4 w-4" />
-                {status === 'DELIVERED' ? 'Adicionar itens' : 'Editar pedido'}
-              </button>
-            )}
             {/* Cancelar — Atendente e Entregador não podem cancelar */}
             {!isAttendant && !isDeliveryPerson && (
               <button
@@ -603,6 +602,22 @@ export function OrderDetail({
                 Cancelar
               </button>
             )}
+          </div>
+        )}
+
+        {/* NOVO: editar itens/pagamento do pedido — fora do bloco !isDone
+            porque também precisa aparecer com o pedido ENTREGUE (balcão/mesa
+            reabrindo pra adicionar item) — canEditOrder já cobre essa regra. */}
+        {canEditOrder && (
+          <div className="flex gap-3 mt-2">
+            <button
+              onClick={openItemEditor}
+              disabled={isPending}
+              className="flex items-center gap-2 px-4 py-2.5 border border-border text-foreground text-sm font-medium rounded-lg hover:bg-muted/50 disabled:opacity-60 transition-colors"
+            >
+              <Pencil className="h-4 w-4" />
+              {status === 'DELIVERED' ? 'Adicionar itens' : 'Editar pedido'}
+            </button>
           </div>
         )}
         {/* CORREÇÃO: operador sem ação de avanço disponível neste status */}
@@ -797,6 +812,19 @@ export function OrderDetail({
                     )}
                   </div>
                 ))}
+
+                {addPayments.some((p) => p.method === 'PIX') && (
+                  <div>
+                    <label className="block text-[10px] font-medium text-muted-foreground mb-1">CPF de quem vai pagar (obrigatório p/ PIX)</label>
+                    <input
+                      value={formatCpf(addPaymentCpf)}
+                      onChange={(e) => setAddPaymentCpf(e.target.value)}
+                      placeholder="000.000.000-00"
+                      maxLength={14}
+                      className="w-full px-2 py-1.5 text-xs border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between">
                   <button

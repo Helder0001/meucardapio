@@ -10,6 +10,7 @@ import { publishOrderEvent } from '@/lib/cache/redis'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
 import { z } from 'zod'
+import { isValidCpf, onlyDigits } from '@/lib/utils/cpf'
 
 const paymentEntrySchema = z.object({
   method: z.enum(['PIX', 'CASH', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD', 'VOUCHER', 'TRANSFER']),
@@ -22,7 +23,13 @@ const bodySchema = z.object({
   // Device ID do Mercado Pago (security.js), enviado como X-Meli-Session-Id
   // na criação do PIX pra reduzir recusas de antifraude.
   deviceId: z.string().optional(),
-})
+  // CPF real de quem vai pagar — obrigatório quando há PIX entre os
+  // pagamentos (ver mesma correção em actions/orders/create-order.ts).
+  customerCpf: z.string().optional(),
+}).refine(
+  (data) => !data.payments.some((p) => p.method === 'PIX') || isValidCpf(data.customerCpf ?? ''),
+  { message: 'CPF inválido — obrigatório para pagamento via PIX', path: ['customerCpf'] }
+)
 
 const ALLOWED_ROLES = ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'STAFF']
 
@@ -32,6 +39,7 @@ async function createPixPayment(params: {
   orderId: string
   amount: number
   deviceId?: string
+  customerCpf?: string
 }) {
   const accessToken = await resolveTenantMpAccessToken(params.tenantId)
   if (!accessToken) throw new Error('Mercado Pago não configurado')
@@ -51,15 +59,11 @@ async function createPixPayment(params: {
       transaction_amount: params.amount,
       payment_method_id: 'pix',
       payer: {
-        // BUG: usava 'onboarding@resend.dev' (email de teste de OUTRO
-        // serviço, o Resend, usado só pra envio de email) e CPF '00000000000'
-        // (todos zeros, invalido pelo digito verificador) como dados do
-        // pagador do PIX -- isso pode disparar rejeicao no antifraude do MP
-        // ('Pagamento rejeitado pelo PSP do recebedor'). Como não coletamos
-        // o CPF/email real do cliente no PIX (ele só escaneia o QR code no
-        // banco dele), usamos um CPF de teste com dígito verificador válido.
+        // CORREÇÃO: usava CPF de teste fixo (11144477735) pra qualquer
+        // pagador — agora usa o CPF real coletado na tela (ver comentário
+        // equivalente em actions/orders/create-order.ts).
         email: 'cliente@meucardapio.app',
-        identification: { type: 'CPF', number: '11144477735' },
+        identification: { type: 'CPF', number: onlyDigits(params.customerCpf ?? '') },
       },
       description: `Pedido #${params.orderId.slice(-8).toUpperCase()}`,
       external_reference: params.orderId,
@@ -123,7 +127,7 @@ export async function POST(
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
   }
-  const { payments, deviceId } = parsed.data
+  const { payments, deviceId, customerCpf } = parsed.data
 
   // ── Buscar pedido ─────────────────────────────────────────────────────────
   const order = await prisma.order.findFirst({
@@ -131,6 +135,7 @@ export async function POST(
     select: {
       id: true, orderNumber: true, status: true,
       paymentStatus: true, type: true, total: true, customerId: true,
+      customer: { select: { cpf: true } },
       payments: { select: { id: true, method: true, status: true, amount: true, checkoutUrl: true } },
     },
   })
@@ -174,6 +179,8 @@ export async function POST(
     }, { status: 422 })
   }
 
+  const effectiveCpf = customerCpf ?? order.customer?.cpf ?? undefined
+
   // ── Criar pagamentos ──────────────────────────────────────────────────────
   const createdPayments: Array<{ id: string; method: string; status: string; amount: number }> = []
   let pixQrCode: string | undefined
@@ -183,7 +190,7 @@ export async function POST(
     if (p.method === 'PIX') {
       // PIX: gera QR Code no Mercado Pago (fora da transaction para evitar timeout)
       try {
-        const pixResult = await createPixPayment({ tenantId, orderId, amount: p.amount, deviceId })
+        const pixResult = await createPixPayment({ tenantId, orderId, amount: p.amount, deviceId, customerCpf: effectiveCpf })
         createdPayments.push({
           id: pixResult.created.id,
           method: 'PIX',

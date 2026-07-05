@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
 import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
+import { onlyDigits } from '@/lib/utils/cpf'
 import crypto from 'crypto'
 
 function validateStatusToken(orderId: string, token: string): boolean {
@@ -34,10 +35,18 @@ export async function POST(
       id: true,
       tenantId: true,
       total: true,
-      customer: { select: { phone: true, name: true } },
+      customer: { select: { phone: true, name: true, cpf: true } },
     },
   })
   if (!order) return NextResponse.json({ error: 'Pedido não encontrado' }, { status: 404 })
+
+  // CPF do cliente coletado no checkout (obrigatório pra pedidos com PIX
+  // desde a correção de "Pagamento rejeitado pelo PSP do recebedor" — ver
+  // createPixPayment em actions/orders/create-order.ts). Pedidos antigos,
+  // criados antes dessa correção, podem não ter — nesse caso o MP provavelmente
+  // vai recusar de novo, mas não travamos aqui pra não quebrar o regenerate
+  // por completo; o erro do MP chega normalmente pro cliente tentar de novo.
+  const customerCpf = order.customer?.cpf ? onlyDigits(order.customer.cpf) : ''
 
   const accessToken = await resolveTenantMpAccessToken(order.tenantId)
 
@@ -57,12 +66,11 @@ export async function POST(
         transaction_amount: Number(order.total),
         payment_method_id:  'pix',
         payer: {
-          // BUG: usava 'onboarding@resend.dev' (email de teste de OUTRO
-          // serviço, o Resend) e CPF '00000000000' (inválido pelo dígito
-          // verificador) como dados do pagador — pode disparar rejeição
-          // no antifraude do MP ('Pagamento rejeitado pelo PSP do recebedor').
+          // CORREÇÃO: usava CPF de teste fixo (11144477735) pra qualquer
+          // pagador. Agora usa o CPF real coletado no checkout — ver
+          // comentário acima sobre pedidos antigos sem CPF salvo.
           email: 'cliente@meucardapio.app',
-          identification: { type: 'CPF', number: '11144477735' },
+          identification: { type: 'CPF', number: customerCpf },
         },
         description: `Pedido #${id.slice(-8).toUpperCase()}`,
         external_reference: id,
