@@ -105,37 +105,43 @@ export async function POST(request: Request) {
 
     let payment: Awaited<ReturnType<typeof findPaymentByMpId>> = null
     let connectionTenantId: string | null = null
+    let tenantSecretFound = false
 
+    // BUG: só resolvíamos o secret do tenant quando event.type === 'payment'.
+    // O Mercado Pago também manda notificações do tipo 'merchant_order'
+    // (e possivelmente outras) pro MESMO webhook, assinadas pela MESMA conta
+    // do tenant — só que esse formato usa 'resource'/'topic' em vez de
+    // 'data.id', então a condição antiga nunca resolvia o secret certo pra
+    // elas, caindo no secret da plataforma e sempre retornando 401 (o MP
+    // ficava reenviando essas notificações sem parar). Agora a resolução
+    // do tenant via user_id roda pra QUALQUER tipo de evento que tenha
+    // esse campo — só a busca do Payment em si continua específica de
+    // 'payment' mais abaixo.
     if (event.type === 'payment' && event.data?.id) {
       payment = await findPaymentByMpId(String(event.data.id))
-
-      if (payment) {
-        connectionTenantId = payment.order.tenantId
-      } else if (event.user_id) {
-        // Pagamento ainda não tem mercadoPagoId salvo (caso de link/Checkout
-        // Pro, onde só sabíamos o preferenceId até o cliente pagar). Acha o
-        // tenant pela conexão OAuth cujo mpUserId bate com o da notificação.
-        const connection = await findConnectionByMpUserId(String(event.user_id))
-        if (connection) connectionTenantId = connection.tenantId
-      }
-
-      let tenantSecretFound = false
-      if (connectionTenantId) {
-        const tenant = await prisma.tenant.findFirst({
-          where: { id: connectionTenantId },
-          select: { settings: true },
-        })
-        const tenantSecret = (tenant?.settings as any)?.mercadoPagoWebhookSecret
-        if (tenantSecret) {
-          webhookSecret = tenantSecret
-          tenantSecretFound = true
-        }
-      }
-
-      // Guarda pra logar fora do if abaixo (fora do escopo de bloco)
-      ;(event as any).__debugConnectionTenantId = connectionTenantId
-      ;(event as any).__debugTenantSecretFound = tenantSecretFound
+      if (payment) connectionTenantId = payment.order.tenantId
     }
+
+    if (!connectionTenantId && event.user_id) {
+      const connection = await findConnectionByMpUserId(String(event.user_id))
+      if (connection) connectionTenantId = connection.tenantId
+    }
+
+    if (connectionTenantId) {
+      const tenant = await prisma.tenant.findFirst({
+        where: { id: connectionTenantId },
+        select: { settings: true },
+      })
+      const tenantSecret = (tenant?.settings as any)?.mercadoPagoWebhookSecret
+      if (tenantSecret) {
+        webhookSecret = tenantSecret
+        tenantSecretFound = true
+      }
+    }
+
+    // Guarda pra logar fora do if acima (fora do escopo de bloco)
+    ;(event as any).__debugConnectionTenantId = connectionTenantId
+    ;(event as any).__debugTenantSecretFound = tenantSecretFound
 
     // LOG TEMPORÁRIO DE DIAGNÓSTICO — agora roda SEMPRE, pra qualquer
     // event.type, não só 'payment'. Não loga o secret em si — só um
