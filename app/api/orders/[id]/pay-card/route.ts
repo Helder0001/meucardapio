@@ -25,7 +25,14 @@ const payCardSchema = z.object({
   paymentMethodId: z.string().min(1),
   issuerId: z.string().optional(),
   customerEmail: z.string().email(),
-  customerCpf: z.string().regex(/^\d{11}$/, 'CPF deve ter 11 dígitos'),
+  // CORREÇÃO: aceitava só CPF (11 dígitos) sem remover formatação — o Brick
+  // pode devolver o documento com pontuação, e o cliente pode ter CNPJ (14
+  // dígitos) selecionado no formulário, não só CPF. Removemos não-dígitos
+  // antes de validar e aceitamos os dois tamanhos.
+  customerCpf: z
+    .string()
+    .transform((v) => v.replace(/\D/g, ''))
+    .refine((v) => v.length === 11 || v.length === 14, 'Documento deve ter 11 (CPF) ou 14 (CNPJ) dígitos'),
   customerName: z.string().min(1).max(200),
 })
 
@@ -50,6 +57,17 @@ export async function POST(
   const rawBody = await request.json().catch(() => null)
   const parsed = payCardSchema.safeParse(rawBody)
   if (!parsed.success) {
+    // LOG TEMPORÁRIO DE DIAGNÓSTICO — mostra só quais campos vieram
+    // ausentes/inválidos e o tipo de erro, sem logar os valores em si
+    // (evita expor CPF/e-mail em texto puro nos logs). Remover depois de
+    // identificar a causa do "Dados de pagamento incompletos ou inválidos".
+    console.warn('[pay-card][debug] validação falhou', {
+      camposRecebidos: rawBody && typeof rawBody === 'object' ? Object.keys(rawBody) : null,
+      identificationPresente: rawBody?.customerCpf !== undefined,
+      identificationTamanho: typeof rawBody?.customerCpf === 'string' ? rawBody.customerCpf.length : null,
+      emailPresente: rawBody?.customerEmail !== undefined,
+      issues: parsed.error.issues.map((i) => ({ path: i.path.join('.'), code: i.code, message: i.message })),
+    })
     return NextResponse.json({ error: 'Dados de pagamento incompletos ou inválidos' }, { status: 400 })
   }
   const body = parsed.data
@@ -91,6 +109,10 @@ export async function POST(
       issuerId: body.issuerId,
       customerEmail: body.customerEmail,
       customerCpf: body.customerCpf,
+      // CORREÇÃO: identification.type era sempre 'CPF' fixo no
+      // checkout-client.ts, mesmo quando o documento tinha 14 dígitos
+      // (CNPJ) — o MP rejeita/valida errado nesse caso.
+      customerDocumentType: body.customerCpf.length === 14 ? 'CNPJ' : 'CPF',
       customerName: body.customerName,
     })
 

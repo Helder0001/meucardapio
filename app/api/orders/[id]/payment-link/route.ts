@@ -1,32 +1,53 @@
 // app/api/orders/[id]/payment-link/route.ts
 //
 // Gera um link de pagamento (Checkout Pro) para um pedido existente.
-// Usado pelo garçom no dashboard para enviar o link via WhatsApp ao cliente.
+// Usado pelo garçom no dashboard (balcão) para enviar o link via WhatsApp
+// ao cliente, e também pelo próprio cliente no cardápio, quando escolhe
+// "Link de pagamento" como forma de pagamento no checkout.
 //
 // O link aceita qualquer método: PIX, crédito, débito — o cliente escolhe
 // no celular dele na página segura do Mercado Pago.
+//
+// Autenticação: aceita sessão de staff (dashboard/balcão) OU um statusToken
+// válido (mesmo mecanismo HMAC do /status — usado pelo cardápio, sem exigir
+// login do cliente final).
 
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/client'
 import { createPaymentPreference } from '@/lib/mercadopago/checkout-client'
+import crypto from 'crypto'
+
+function validateStatusToken(orderId: string, token: string): boolean {
+  const secret = process.env.ORDER_TOKEN_SECRET ?? process.env.AUTH_SECRET ?? ''
+  const expected = crypto.createHmac('sha256', secret).update(orderId).digest('hex')
+  if (expected.length !== token.length) return false
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(token, 'hex'))
+  } catch { return false }
+}
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth()
-  if (!session?.user?.tenantId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  if (!['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'STAFF'].includes(session.user.role)) {
-    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
-  }
-
   const { id } = await params
+  const session = await auth()
+
+  const isStaff = !!session?.user?.tenantId && ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'STAFF'].includes(session.user.role)
+
+  let customerAuthorized = false
+  if (!isStaff) {
+    // Requisição do cardápio (sem sessão) — exige statusToken válido no corpo.
+    const { token } = await request.json().catch(() => ({ token: null }))
+    customerAuthorized = !!token && validateStatusToken(id, token)
+    if (!customerAuthorized) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+  }
 
   const order = await prisma.order.findFirst({
-    where: { id, tenantId: session.user.tenantId },
+    where: isStaff ? { id, tenantId: session!.user.tenantId } : { id },
     select: {
       id: true,
       tenantId: true,

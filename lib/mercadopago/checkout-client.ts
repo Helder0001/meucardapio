@@ -138,7 +138,8 @@ export interface CreateCardPaymentParams {
   paymentMethodId: string    // ex: 'visa', 'mastercard', 'elo'
   issuerId?: string          // emissor do cartão (se disponível pelo MP.js)
   customerEmail: string
-  customerCpf: string        // obrigatório pelo MP para cartão
+  customerCpf: string        // obrigatório pelo MP para cartão — CPF ou CNPJ
+  customerDocumentType?: 'CPF' | 'CNPJ'  // CORREÇÃO: era sempre CPF, ignorando CNPJ
   customerName: string
   description?: string
 }
@@ -171,7 +172,7 @@ export async function createCardPayment(
     payer: {
       email: params.customerEmail,
       identification: {
-        type: 'CPF',
+        type: params.customerDocumentType ?? 'CPF',
         number: params.customerCpf.replace(/\D/g, ''),
       },
     },

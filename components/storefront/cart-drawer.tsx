@@ -37,7 +37,7 @@ type Step = 'cart' | 'info' | 'payment'
 // CORREÇÃO: separar crédito e débito
 // CORREÇÃO: separar crédito pago online (cobrado na hora, confirmação
 // automática) de crédito pago na entrega/retirada (manual, na maquininha)
-type PaymentMethodValue = 'PIX' | 'CASH' | 'CREDIT_CARD' | 'CREDIT_CARD_MANUAL' | 'DEBIT_CARD'
+type PaymentMethodValue = 'PIX' | 'CASH' | 'CREDIT_CARD' | 'CREDIT_CARD_MANUAL' | 'DEBIT_CARD' | 'LINK'
 
 const STEPS: Step[] = ['cart', 'info', 'payment']
 const STEP_LABELS = { cart: 'Carrinho', info: 'Seus dados', payment: 'Pagamento' }
@@ -48,6 +48,11 @@ interface PaymentOption { value: PaymentMethodValue; label: string; sub: string 
 const ONLINE_PAYMENT_OPTIONS: PaymentOption[] = [
   { value: 'PIX',         label: '⚡ PIX',    sub: 'Confirmação automática' },
   { value: 'CREDIT_CARD', label: '💳 Crédito', sub: 'Pague agora, na hora' },
+  // Alternativa que redireciona para a página de pagamento do Mercado
+  // Pago — o cliente escolhe lá entre Pix, crédito, débito etc. Útil como
+  // opção de reserva quando o pagamento direto (PIX/cartão no próprio
+  // cardápio) falhar por qualquer motivo.
+  { value: 'LINK',        label: '🔗 Link de pagamento', sub: 'Escolha Pix ou cartão na página do Mercado Pago' },
 ]
 
 // Pago na hora da entrega/retirada — confirmado manualmente pela loja
@@ -76,6 +81,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const onlineOptions = ONLINE_PAYMENT_OPTIONS.filter((o) => {
     if (o.value === 'PIX') return pixEnabled
     if (o.value === 'CREDIT_CARD') return cardEnabled
+    if (o.value === 'LINK') return pixEnabled || cardEnabled
     return true
   })
 
@@ -260,6 +266,10 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
       toast.error('Informe o valor de cada forma de pagamento')
       return
     }
+    if (payments.some((p) => p.method === 'LINK') && payments.length > 1) {
+      toast.error('"Link de pagamento" não pode ser combinado com outra forma de pagamento')
+      return
+    }
     if (payments.some((p) => p.method === 'PIX') && !isValidCpf(cpf)) {
       toast.error('Informe um CPF válido para pagar com PIX')
       return
@@ -274,11 +284,16 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
 
     setIsSubmitting(true)
     try {
+      const isPaymentLink = payments.length === 1 && payments[0].method === 'LINK'
+
       // Device ID gerado pelo script de segurança do Mercado Pago
       // (window.MP_DEVICE_SESSION_ID), carregado no layout do storefront.
       // Se o script ainda não rodou (ex.: bloqueado por ad-blocker), segue
-      // sem ele — não bloqueia o pedido.
-      const deviceId = typeof window !== 'undefined' ? (window as any).MP_DEVICE_SESSION_ID : undefined
+      // sem ele — não bloqueia o pedido. Não é necessário pro fluxo de LINK
+      // (o Checkout Pro coleta isso sozinho).
+      const deviceId = isPaymentLink
+        ? undefined
+        : (typeof window !== 'undefined' ? (window as any).MP_DEVICE_SESSION_ID : undefined)
 
       const result = await createOrderAction({
         tenantId: tenant.id,
@@ -292,18 +307,43 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
         deliveryAddress: deliveryAddress || undefined,
         customerPhone: isTableOrder ? (customerPhone || phone || undefined) : (customerPhone || phone),
         customerName: name || undefined,
-        payments: payments.map((p) => ({
+        // 'LINK' não é um método aceito na criação do pedido (só existe pro
+        // cardápio/balcão escolherem) — pra esse caso o pedido é criado sem
+        // pagamento embutido, e o link é gerado depois, à parte.
+        payments: isPaymentLink ? undefined : payments.map((p) => ({
           method: p.method,
           amount: parseFloat(p.amount),
           changeFor: p.method === 'CASH' && p.changeFor ? Number(p.changeFor) : undefined,
         })),
-        paymentMethod: payments[0].method,
-        changeFor: payments[0].method === 'CASH' && payments[0].changeFor ? Number(payments[0].changeFor) : undefined,
+        paymentMethod: isPaymentLink ? undefined : payments[0].method,
+        changeFor: !isPaymentLink && payments[0].method === 'CASH' && payments[0].changeFor ? Number(payments[0].changeFor) : undefined,
         deviceId,
         customerCpf: payments.some((p) => p.method === 'PIX') ? cpf : undefined,
+        deferPaymentLink: isPaymentLink,
       })
 
       if (result.error) { toast.error(result.error); return }
+
+      if (isPaymentLink && result.orderId) {
+        const res = await fetch(`/api/orders/${result.orderId}/payment-link`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: result.statusToken }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok || !data.checkoutUrl) {
+          toast.error(data.error ?? 'Pedido criado, mas não foi possível gerar o link de pagamento. Acompanhe seu pedido para tentar de novo.')
+          clearCart(); onClose()
+          router.push(`/menu/${tenant.slug}/pedido/${result.orderId}`)
+          return
+        }
+        clearCart(); onClose()
+        // Redireciona o próprio cliente pra página do Mercado Pago — ele volta
+        // automaticamente pra tela de acompanhamento do pedido (back_urls já
+        // configuradas em checkout-client.ts).
+        window.location.href = data.checkoutUrl
+        return
+      }
       clearCart(); onClose()
       toast.success('Pedido realizado! 🎉')
       router.push(`/menu/${tenant.slug}/pedido/${result.orderId}`)

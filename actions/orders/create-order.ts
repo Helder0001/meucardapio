@@ -87,6 +87,14 @@ const createOrderSchema = z.object({
   // cliente pague certinho pelo banco dele — daí o "Pagamento rejeitado
   // pelo PSP do recebedor" mesmo em pagamentos legítimos.
   customerCpf: z.string().optional(),
+
+  // Pedido criado sem pagamento embutido porque o cliente escolheu "Link
+  // de pagamento" no cardápio — o link (Checkout Pro) é gerado à parte,
+  // logo depois, via /api/orders/[id]/payment-link. Sem essa flag, pedidos
+  // de DELIVERY/PICKUP sem `payments`/`paymentMethod` seriam rejeitados
+  // pela validação abaixo (só PDV/TABLE têm essa isenção por padrão, para
+  // o fluxo de "cobrar no final").
+  deferPaymentLink: z.boolean().optional(),
 })
   // CORREÇÃO: endereço de entrega agora é obrigatório no servidor para
   // pedidos do tipo DELIVERY — validação no cart-drawer (cliente) pode ser
@@ -135,10 +143,11 @@ export async function createOrderAction(
         ? [{ method: data.paymentMethod, amount: 0 /* será preenchido com o total calculado */, changeFor: data.changeFor }]
         : []
 
-  if (paymentsList.length === 0 && data.type !== 'PDV' && data.type !== 'TABLE') {
+  if (paymentsList.length === 0 && data.type !== 'PDV' && data.type !== 'TABLE' && !data.deferPaymentLink) {
     return { error: 'Informe pelo menos uma forma de pagamento' }
   }
   // PDV e TABLE sem pagamento = "cobrar no final" — pedido criado sem pagamento registrado
+  // DELIVERY/PICKUP com deferPaymentLink = cliente escolheu "Link de pagamento" no cardápio
 
   // 2. Verificar se tenant existe e está ativo
   const tenant = await prisma.tenant.findFirst({
