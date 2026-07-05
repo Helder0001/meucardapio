@@ -86,7 +86,6 @@ interface MpStatus {
   mpUserId: string | null
   liveMode: boolean | null
   isTestKey: boolean | null
-  publicKeyPreview: string | null
   connectedAt: string | null
   hasLegacyToken: boolean
 }
@@ -217,11 +216,6 @@ export function PaymentSettingsForm({ hasSecret, pixEnabled, cardEnabled }: Paym
                 <span className="font-semibold text-muted-foreground">Não foi possível determinar</span>
               )}
             </div>
-            {mpStatus.publicKeyPreview && (
-              <p className="text-[11px] text-muted-foreground font-mono">
-                Chave: {mpStatus.publicKeyPreview}
-              </p>
-            )}
             <div className="flex items-center justify-between pt-3 border-t border-border text-xs text-muted-foreground">
               <span>
                 Conectado {mpStatus.connectedAt ? `em ${new Date(mpStatus.connectedAt).toLocaleDateString('pt-BR')}` : ''}
