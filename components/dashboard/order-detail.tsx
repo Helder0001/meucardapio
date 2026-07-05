@@ -359,9 +359,13 @@ export function OrderDetail({
   }
 
   // ── Editar itens do pedido ──────────────────────────────────────────────────
-  // Permitido para qualquer pedido que ainda não foi entregue/cancelado/estornado.
+  // Permitido para qualquer pedido que ainda não foi cancelado/estornado.
+  // Pedidos de balcão/mesa (PDV/TABLE) também podem ser editados mesmo já
+  // ENTREGUES — nesse caso o pedido reabre no Kanban como PENDING (o backend
+  // cuida disso em /api/orders/[id]/edit-items).
   const canEditOrder =
-    !['DELIVERED', 'CANCELLED', 'REFUNDED'].includes(status) &&
+    (!['DELIVERED', 'CANCELLED', 'REFUNDED'].includes(status) ||
+      (status === 'DELIVERED' && ['PDV', 'TABLE'].includes(order.type))) &&
     ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'STAFF'].includes(userRole)
 
   const openItemEditor = () => {
@@ -568,7 +572,7 @@ export function OrderDetail({
                 className="flex items-center gap-2 px-4 py-2.5 border border-border text-foreground text-sm font-medium rounded-lg hover:bg-muted/50 disabled:opacity-60 transition-colors"
               >
                 <Pencil className="h-4 w-4" />
-                Editar pedido
+                {status === 'DELIVERED' ? 'Adicionar itens' : 'Editar pedido'}
               </button>
             )}
             {/* Cancelar — Atendente e Entregador não podem cancelar */}

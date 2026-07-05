@@ -81,6 +81,7 @@ export async function PATCH(
     select: {
       id: true, orderNumber: true, status: true, type: true,
       subtotal: true, deliveryFee: true, discountAmount: true, cashbackUsed: true, total: true,
+      kitchenRound: true,
       items: { select: { id: true, productId: true, quantity: true, addons: { select: { addonId: true } } } },
       payments: { select: { id: true, method: true, status: true, amount: true } },
     },
@@ -88,9 +89,18 @@ export async function PATCH(
   if (!order) {
     return NextResponse.json({ error: 'Pedido não encontrado' }, { status: 404 })
   }
-  if (LOCKED_STATUSES.includes(order.status)) {
+
+  // Pedidos de balcão/mesa ENTREGUES podem ser reabertos para adicionar
+  // itens (ex.: cliente pede mais alguma coisa depois de já ter sido
+  // servido). Nesse caso o pedido volta para PENDING no Kanban numa nova
+  // "rodada de preparo" — ver comentário em Order.kitchenRound no schema.
+  const isReopeningDeliveredPdv =
+    order.status === 'DELIVERED' && (order.type === 'PDV' || order.type === 'TABLE')
+
+  if (LOCKED_STATUSES.includes(order.status) && !isReopeningDeliveredPdv) {
     return NextResponse.json({ error: 'Este pedido não pode mais ser editado.' }, { status: 422 })
   }
+  const newRound = isReopeningDeliveredPdv ? order.kitchenRound + 1 : order.kitchenRound
 
   const newItemsInput = parsed.data.items
 
@@ -219,6 +229,7 @@ export async function PATCH(
             unitPrice: newItem.unitPrice,
             totalPrice: newItem.totalPrice,
             notes: newItem.notes,
+            kitchenRound: newRound,
             addons: { create: newItem.addons },
           },
         })
@@ -231,12 +242,41 @@ export async function PATCH(
 
       if (old.quantity === newItem.quantity) continue
 
+      const delta = newItem.quantity - old.quantity
+
+      // Reabrindo um pedido ENTREGUE e pedindo mais unidades de um item que
+      // já existia: em vez de só incrementar a linha antiga (que já saiu pra
+      // cozinha na rodada anterior), cria uma linha nova só com a diferença,
+      // marcada com a rodada atual — assim o card do Kanban mostra apenas o
+      // que falta preparar, sem duplicar o que já foi entregue.
+      if (isReopeningDeliveredPdv && delta > 0) {
+        const unitTotal = newItem.totalPrice / newItem.quantity
+        await tx.orderItem.create({
+          data: {
+            orderId,
+            productId: newItem.productId,
+            productName: newItem.productName,
+            productPrice: newItem.productPrice,
+            quantity: delta,
+            unitPrice: newItem.unitPrice,
+            totalPrice: unitTotal * delta,
+            notes: newItem.notes,
+            kitchenRound: newRound,
+            addons: { create: newItem.addons },
+          },
+        })
+        const r = await decrementStockForOrder(tx, {
+          tenantId, orderId, items: [{ productId: newItem.productId, quantity: delta }],
+        })
+        r.affectedProductIds.forEach((id) => affectedProductIds.add(id))
+        continue
+      }
+
       await tx.orderItem.update({
         where: { id: old.id },
         data: { quantity: newItem.quantity, totalPrice: newItem.totalPrice, notes: newItem.notes },
       })
 
-      const delta = newItem.quantity - old.quantity
       if (delta > 0) {
         const r = await decrementStockForOrder(tx, {
           tenantId, orderId, items: [{ productId: newItem.productId, quantity: delta }],
@@ -250,11 +290,29 @@ export async function PATCH(
       }
     }
 
-    // 3. Atualizar totais do pedido
+    // 3. Atualizar totais do pedido — e, se estava ENTREGUE, reabrir para
+    // PENDING numa nova rodada de preparo (kitchenRound).
     await tx.order.update({
       where: { id: orderId },
-      data: { subtotal: newSubtotal, total: newTotal },
+      data: {
+        subtotal: newSubtotal,
+        total: newTotal,
+        ...(isReopeningDeliveredPdv
+          ? { status: 'PENDING', kitchenRound: newRound, deliveredAt: null }
+          : {}),
+      },
     })
+
+    if (isReopeningDeliveredPdv) {
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId,
+          status: 'PENDING',
+          userId: session.user.id,
+          notes: `Pedido reaberto por ${session.user.name ?? session.user.email} para adicionar itens após entrega`,
+        },
+      })
+    }
 
     // 4. Ajustar o único pagamento pendente (caso simples — ver comentário no topo do arquivo)
     if (shouldAdjustSinglePendingPayment) {
@@ -267,7 +325,7 @@ export async function PATCH(
     await tx.orderStatusHistory.create({
       data: {
         orderId,
-        status: order.status as any,
+        status: (isReopeningDeliveredPdv ? 'PENDING' : order.status) as any,
         userId: session.user.id,
         notes: `Pedido editado por ${session.user.name ?? session.user.email}: total de R$${Number(order.total).toFixed(2)} para R$${newTotal.toFixed(2)}`,
       },
@@ -288,7 +346,14 @@ export async function PATCH(
     newValue: { total: newTotal, items: finalItems.map((i) => ({ productId: i.productId, quantity: i.quantity })) },
   })
 
-  try { await publishOrderEvent(tenantId, { type: 'ORDER_UPDATED', orderId, orderNumber: order.orderNumber, status: order.status }) } catch {}
+  try {
+    await publishOrderEvent(tenantId, {
+      type: 'ORDER_UPDATED',
+      orderId,
+      orderNumber: order.orderNumber,
+      status: isReopeningDeliveredPdv ? 'PENDING' : order.status,
+    })
+  } catch {}
 
   const updated = await prisma.order.findUnique({
     where: { id: orderId },

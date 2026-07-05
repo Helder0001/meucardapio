@@ -84,6 +84,13 @@ export async function GET(request: Request) {
   const endDate   = endParsed.data   ?? null
   const tenantId  = session.user.tenantId
 
+  // Filtros normais + avançados — mesmos usados na tela de relatórios
+  const filterPdv      = searchParams.get('pdv')      ?? ''
+  const filterPayment  = searchParams.get('payment')  ?? ''
+  const filterProduct  = searchParams.get('product')  ?? ''
+  const filterSaleType = searchParams.get('saleType') ?? ''
+  const filterUser     = searchParams.get('user')     ?? ''
+
   // Converter datas para fuso de São Paulo (UTC-3)
   // "2026-06-27" no fuso SP = "2026-06-27T03:00:00Z" (início) e "2026-06-28T02:59:59Z" (fim)
   const toSpStart = (d: string) => new Date(d + 'T00:00:00-03:00')
@@ -116,7 +123,11 @@ export async function GET(request: Request) {
       filename  = `pedidos-${todayStr()}.xlsx`
       sheetName = 'Pedidos'
       const orders = await prisma.order.findMany({
-        where: { tenantId, ...(hasKeys(dateFilter) ? { createdAt: dateFilter } : {}) },
+        where: {
+          tenantId,
+          ...(hasKeys(dateFilter) ? { createdAt: dateFilter } : {}),
+          ...buildOrderExtraFilters({ filterPdv, filterSaleType, filterPayment, filterProduct, filterUser }),
+        },
         orderBy: { createdAt: 'desc' },
         take: 5000,
         select: {
@@ -158,6 +169,7 @@ export async function GET(request: Request) {
           tenantId,
           status: { notIn: ['CANCELLED', 'REFUNDED'] },
           ...(hasKeys(dateFilter) ? { createdAt: dateFilter } : {}),
+          ...buildOrderExtraFilters({ filterPdv, filterSaleType, filterPayment, filterProduct, filterUser }),
         },
         select: { total: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
@@ -187,7 +199,12 @@ export async function GET(request: Request) {
       const items = await prisma.orderItem.groupBy({
         by: ['productId', 'productName'],
         where: {
-          order: { tenantId, status: { notIn: ['CANCELLED', 'REFUNDED'] }, ...(hasKeys(dateFilter) ? { createdAt: dateFilter } : {}) },
+          order: {
+            tenantId, status: { notIn: ['CANCELLED', 'REFUNDED'] },
+            ...(hasKeys(dateFilter) ? { createdAt: dateFilter } : {}),
+            ...buildOrderExtraFiltersForItems({ filterPdv, filterSaleType, filterPayment, filterUser }),
+          },
+          ...(filterProduct ? { productId: filterProduct } : {}),
         },
         _sum:   { quantity: true, totalPrice: true },
         _count: { id: true },
@@ -219,7 +236,11 @@ export async function GET(request: Request) {
   if (format === 'pdf') {
     if (type === 'orders') {
       const orders = await prisma.order.findMany({
-        where: { tenantId, ...(hasKeys(dateFilter) ? { createdAt: dateFilter } : {}) },
+        where: {
+          tenantId,
+          ...(hasKeys(dateFilter) ? { createdAt: dateFilter } : {}),
+          ...buildOrderExtraFilters({ filterPdv, filterSaleType, filterPayment, filterProduct, filterUser }),
+        },
         orderBy: { createdAt: 'desc' },
         take: 1000,
         select: {
@@ -244,6 +265,7 @@ export async function GET(request: Request) {
           tenantId,
           status: { notIn: ['CANCELLED', 'REFUNDED'] },
           ...(hasKeys(dateFilter) ? { createdAt: dateFilter } : {}),
+          ...buildOrderExtraFilters({ filterPdv, filterSaleType, filterPayment, filterProduct, filterUser }),
         },
         select: { total: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
@@ -271,7 +293,14 @@ export async function GET(request: Request) {
     if (type === 'products') {
       const items = await prisma.orderItem.groupBy({
         by: ['productId', 'productName'],
-        where: { order: { tenantId, status: { notIn: ['CANCELLED', 'REFUNDED'] }, ...(hasKeys(dateFilter) ? { createdAt: dateFilter } : {}) } },
+        where: {
+          order: {
+            tenantId, status: { notIn: ['CANCELLED', 'REFUNDED'] },
+            ...(hasKeys(dateFilter) ? { createdAt: dateFilter } : {}),
+            ...buildOrderExtraFiltersForItems({ filterPdv, filterSaleType, filterPayment, filterUser }),
+          },
+          ...(filterProduct ? { productId: filterProduct } : {}),
+        },
         _sum: { quantity: true, totalPrice: true },
         _count: { id: true },
         orderBy: { _sum: { quantity: 'desc' } },
@@ -303,6 +332,40 @@ export async function GET(request: Request) {
 const todayStr = () => new Date().toISOString().slice(0, 10)
 const fmtN     = (v: any) => Number(v ?? 0).toFixed(2)
 const hasKeys  = (o: object) => Object.keys(o).length > 0
+
+// Constrói os campos extras de filtro (PDV, tipo de venda, pagamento, produto,
+// usuário) a serem espalhados junto ao `where` de um Order — espelha a mesma
+// lógica usada em app/(dashboard)/dashboard/reports/page.tsx para garantir
+// que a exportação reflita exatamente os filtros aplicados na tela.
+function buildOrderExtraFilters(opts: {
+  filterPdv: string; filterSaleType: string
+  filterPayment: string; filterProduct: string; filterUser: string
+}): any {
+  const { filterPdv, filterSaleType, filterPayment, filterProduct, filterUser } = opts
+  const extra: any = {}
+  if (filterPdv === 'null') extra.pdvId = null
+  else if (filterPdv)       extra.pdvId = filterPdv
+  if (filterSaleType) extra.type = filterSaleType
+  if (filterPayment)  extra.payments = { some: { method: filterPayment } }
+  if (filterProduct)  extra.items    = { some: { productId: filterProduct } }
+  if (filterUser) {
+    extra.statusHistory = {
+      some: { userId: filterUser, notes: { contains: 'Pagamento confirmado' } },
+    }
+  }
+  return extra
+}
+
+// Mesma coisa, mas sem o filtro de produto — usado dentro de `order: {...}`
+// no relatório de Produtos (orderItem.groupBy), onde o filtro de produto é
+// aplicado diretamente no nível do item, não como "algum item contém X".
+function buildOrderExtraFiltersForItems(opts: {
+  filterPdv: string; filterSaleType: string
+  filterPayment: string; filterUser: string
+}): any {
+  const { filterPdv, filterSaleType, filterPayment, filterUser } = opts
+  return buildOrderExtraFilters({ filterPdv, filterSaleType, filterPayment, filterProduct: '', filterUser })
+}
 
 const periodLabel = (s: string | null, e: string | null) =>
   s && e ? `${new Date(s).toLocaleDateString('pt-BR')} a ${new Date(e).toLocaleDateString('pt-BR')}` : 'Todo o período'

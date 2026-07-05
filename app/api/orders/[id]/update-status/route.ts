@@ -58,7 +58,11 @@ export async function PATCH(
 
   const order = await prisma.order.findFirst({
     where: { id, tenantId },
-    select: { id: true, status: true, orderNumber: true, waiterId: true, type: true, pdvId: true },
+    select: {
+      id: true, status: true, orderNumber: true, waiterId: true, type: true, pdvId: true,
+      paymentStatus: true,
+      payments: { select: { setAtOrderCreation: true, status: true } },
+    },
   })
 
   if (!order) {
@@ -134,6 +138,26 @@ export async function PATCH(
   if (!allowedTransitions[order.status]?.includes(status)) {
     return NextResponse.json(
       { error: `Transição inválida: ${order.status} → ${status}` },
+      { status: 422 }
+    )
+  }
+
+  // Pedidos de balcão/mesa criados com "pagar agora" só podem ser confirmados
+  // depois que o pagamento for de fato confirmado (PAID) — evita liberar o
+  // pedido para a cozinha achando que já foi pago quando ainda está pendente
+  // (ex.: PIX aguardando o cliente escanear, ou dinheiro/cartão ainda não
+  // confirmado manualmente pelo caixa).
+  const isImmediatePdvPayment =
+    (order.type === 'PDV' || order.type === 'TABLE') &&
+    order.payments.some((p) => p.setAtOrderCreation)
+
+  if (
+    status === 'CONFIRMED' &&
+    isImmediatePdvPayment &&
+    order.paymentStatus !== 'PAID'
+  ) {
+    return NextResponse.json(
+      { error: 'Confirme o pagamento antes de avançar o pedido.' },
       { status: 422 }
     )
   }

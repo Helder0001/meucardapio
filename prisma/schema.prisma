@@ -587,6 +587,13 @@ model Order {
   paymentStatus  PaymentStatus @default(PENDING)
   notes          String?       // observações gerais do pedido
 
+  // Rodada de preparo atual (balcão/mesa). Incrementa toda vez que um
+  // pedido já ENTREGUE é reaberto para adicionar itens — os OrderItems
+  // criados a partir daí levam esse mesmo número em `OrderItem.kitchenRound`,
+  // permitindo que o card do Kanban mostre só o que falta preparar sem
+  // mexer no total/itens antigos do pedido (que seguem valendo pra fatura).
+  kitchenRound   Int           @default(0)
+
   // ─────────────────────────────────────────────────
   // VALORES: calculados 100% server-side
   // NUNCA aceitar estes valores vindos do frontend
@@ -659,6 +666,12 @@ model OrderItem {
   unitPrice    Decimal  @db.Decimal(10, 2) // preço unitário + adicionais
   totalPrice   Decimal  @db.Decimal(10, 2) // unitPrice × quantity
   notes        String?  // "sem cebola", "bem passado"
+
+  // Em qual rodada de preparo este item foi criado (ver Order.kitchenRound).
+  // 0 = rodada original do pedido. Usado só para o Kanban decidir o que
+  // exibir no card depois que um pedido entregue é reaberto — não afeta
+  // total, faturamento ou histórico.
+  kitchenRound Int      @default(0)
 
   order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product      Product  @relation(fields: [productId], references: [id])

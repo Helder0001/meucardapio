@@ -104,7 +104,11 @@ export async function createPaymentPreference(
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
-      'X-Idempotency-Key': `pref-${params.orderId}`,
+      // A chave de idempotência inclui o total: assim, chamadas repetidas com o
+      // MESMO valor reaproveitam a preference (evita duplicar em clique duplo),
+      // mas depois de editar o pedido (total mudou) o MP gera uma preference
+      // NOVA em vez de devolver a antiga com o valor desatualizado.
+      'X-Idempotency-Key': `pref-${params.orderId}-${params.total.toFixed(2)}`,
     },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(15_000),

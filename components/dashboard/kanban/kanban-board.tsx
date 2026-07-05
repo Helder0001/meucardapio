@@ -140,6 +140,21 @@ export function KanbanBoard({ tenantId, userRole = '', lockedFilter }: KanbanBoa
           }
 
           case 'ORDER_UPDATED': {
+            const exists = prev.some((o) => o.id === event.orderId)
+
+            // Pedido não está na lista em memória (ex.: balcão/mesa ENTREGUE
+            // reaberto e voltando pra PENDING) — busca os dados completos e
+            // insere de volta no Kanban, igual acontece num pedido novo.
+            if (!exists) {
+              fetch(`/api/orders/${event.orderId}`)
+                .then((r) => (r.ok ? r.json() : null))
+                .then((order) => {
+                  if (order) setOrders((p) => (p.some((o) => o.id === order.id) ? p : [order, ...p]))
+                })
+                .catch(() => {})
+              return prev
+            }
+
             // Status atualizado — mover para outra coluna
             return prev.map((o) =>
               o.id === event.orderId

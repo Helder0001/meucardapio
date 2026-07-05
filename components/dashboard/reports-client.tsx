@@ -303,6 +303,11 @@ export function ReportsClient({
     setExporting(key)
     try {
       const params = new URLSearchParams({ type, format, start: startDate, end: endDate })
+      if (pdv)      params.set('pdv',      pdv)
+      if (payment)  params.set('payment',  payment)
+      if (product)  params.set('product',  product)
+      if (saleType) params.set('saleType', saleType)
+      if (user)     params.set('user',     user)
       const res = await fetch(`/api/reports/export?${params}`)
       if (!res.ok) {
         let message = 'Erro ao exportar'

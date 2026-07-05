@@ -85,6 +85,7 @@ export async function GET(request: Request) {
       createdAt: true,
       notes: true,
       deliveryBairro: true,
+      kitchenRound: true,
       table: { select: { number: true, sector: true } },
       customer: { select: { name: true, phone: true } },
       waiter: { select: { name: true } },
@@ -95,16 +96,21 @@ export async function GET(request: Request) {
           productName: true,
           quantity: true,
           notes: true,
+          kitchenRound: true,
           addons: { select: { addonName: true } },
         },
       },
     },
   })
 
-  // 3. Serializar (converter Decimal para number)
+  // 3. Serializar (converter Decimal para number). Pedidos balcão/mesa
+  // reabertos após ENTREGUE (kitchenRound > 0) mostram no card apenas os
+  // itens da rodada atual — os itens antigos já saíram pra cozinha e
+  // continuam só no total/fatura do pedido, não aqui.
   const serialized = activeOrders.map((o) => ({
     ...o,
     total: Number(o.total),
+    items: o.kitchenRound > 0 ? o.items.filter((i) => i.kitchenRound === o.kitchenRound) : o.items,
   }))
 
   // 4. Criar stream SSE
