@@ -47,7 +47,7 @@ export async function POST(
   }
 
   const order = await prisma.order.findFirst({
-    where: isStaff ? { id, tenantId: session!.user.tenantId } : { id },
+    where: isStaff ? { id, tenantId: session!.user.tenantId ?? undefined } : { id },
     select: {
       id: true,
       tenantId: true,

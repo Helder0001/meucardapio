@@ -311,13 +311,17 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
         customerName: name || undefined,
         // 'LINK' não é um método aceito na criação do pedido (só existe pro
         // cardápio/balcão escolherem) — pra esse caso o pedido é criado sem
-        // pagamento embutido, e o link é gerado depois, à parte.
-        payments: isPaymentLink ? undefined : payments.map((p) => ({
-          method: p.method,
-          amount: parseFloat(p.amount),
-          changeFor: p.method === 'CASH' && p.changeFor ? Number(p.changeFor) : undefined,
-        })),
-        paymentMethod: isPaymentLink ? undefined : payments[0].method,
+        // pagamento embutido, e o link é gerado depois, à parte. O filter
+        // abaixo também prova ao TypeScript que nenhum item aqui é 'LINK'
+        // (isPaymentLink já garante isso em runtime).
+        payments: isPaymentLink ? undefined : payments
+          .filter((p): p is typeof p & { method: Exclude<PaymentMethodValue, 'LINK'> } => p.method !== 'LINK')
+          .map((p) => ({
+            method: p.method,
+            amount: parseFloat(p.amount),
+            changeFor: p.method === 'CASH' && p.changeFor ? Number(p.changeFor) : undefined,
+          })),
+        paymentMethod: isPaymentLink ? undefined : (payments[0].method as Exclude<PaymentMethodValue, 'LINK'>),
         changeFor: !isPaymentLink && payments[0].method === 'CASH' && payments[0].changeFor ? Number(payments[0].changeFor) : undefined,
         deviceId,
         customerCpf: payments.some((p) => p.method === 'PIX') ? cpf : undefined,
