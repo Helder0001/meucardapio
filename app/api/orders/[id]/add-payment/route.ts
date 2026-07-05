@@ -19,6 +19,9 @@ const paymentEntrySchema = z.object({
 
 const bodySchema = z.object({
   payments: z.array(paymentEntrySchema).min(1).max(5),
+  // Device ID do Mercado Pago (security.js), enviado como X-Meli-Session-Id
+  // na criação do PIX pra reduzir recusas de antifraude.
+  deviceId: z.string().optional(),
 })
 
 const ALLOWED_ROLES = ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'STAFF']
@@ -28,6 +31,7 @@ async function createPixPayment(params: {
   tenantId: string
   orderId: string
   amount: number
+  deviceId?: string
 }) {
   const accessToken = await resolveTenantMpAccessToken(params.tenantId)
   if (!accessToken) throw new Error('Mercado Pago não configurado')
@@ -38,6 +42,10 @@ async function createPixPayment(params: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
       'X-Idempotency-Key': `${params.orderId}-pix-addpay-${params.amount}`,
+      // Device ID (security.js do MP, capturado no navegador do atendente
+      // na tela do balcão) — reduz recusas de antifraude em pagamentos
+      // criados via API direta. Opcional, não bloqueia se ausente.
+      ...(params.deviceId ? { 'X-Meli-Session-Id': params.deviceId } : {}),
     },
     body: JSON.stringify({
       transaction_amount: params.amount,
@@ -115,7 +123,7 @@ export async function POST(
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
   }
-  const { payments } = parsed.data
+  const { payments, deviceId } = parsed.data
 
   // ── Buscar pedido ─────────────────────────────────────────────────────────
   const order = await prisma.order.findFirst({
@@ -161,7 +169,7 @@ export async function POST(
     if (p.method === 'PIX') {
       // PIX: gera QR Code no Mercado Pago (fora da transaction para evitar timeout)
       try {
-        const pixResult = await createPixPayment({ tenantId, orderId, amount: p.amount })
+        const pixResult = await createPixPayment({ tenantId, orderId, amount: p.amount, deviceId })
         createdPayments.push({
           id: pixResult.created.id,
           method: 'PIX',

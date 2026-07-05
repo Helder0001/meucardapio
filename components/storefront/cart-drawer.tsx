@@ -268,6 +268,12 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
 
     setIsSubmitting(true)
     try {
+      // Device ID gerado pelo script de segurança do Mercado Pago
+      // (window.MP_DEVICE_SESSION_ID), carregado no layout do storefront.
+      // Se o script ainda não rodou (ex.: bloqueado por ad-blocker), segue
+      // sem ele — não bloqueia o pedido.
+      const deviceId = typeof window !== 'undefined' ? (window as any).MP_DEVICE_SESSION_ID : undefined
+
       const result = await createOrderAction({
         tenantId: tenant.id,
         items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, addonIds: i.addons.map((a) => a.id), notes: i.notes })),
@@ -287,6 +293,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
         })),
         paymentMethod: payments[0].method,
         changeFor: payments[0].method === 'CASH' && payments[0].changeFor ? Number(payments[0].changeFor) : undefined,
+        deviceId,
       })
 
       if (result.error) { toast.error(result.error); return }

@@ -143,6 +143,10 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
 
     start(async () => {
       try {
+        // Device ID gerado pelo script de segurança do Mercado Pago
+        // (window.MP_DEVICE_SESSION_ID), carregado no layout do dashboard.
+        const deviceId = typeof window !== 'undefined' ? (window as any).MP_DEVICE_SESSION_ID : undefined
+
         const result = await createOrderAction({
           tenantId,
           items: items.map((i) => ({ productId: i.productId, quantity: i.quantity, addonIds: [] })),
@@ -159,6 +163,7 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
             ? finalPayments.filter((p): p is PaymentEntry & { method: Exclude<PaymentMethodType, 'LINK'> } => p.method !== 'LINK')
             : undefined,
           notes: notes || undefined,
+          deviceId,
         })
         if (result.error) { toast.error(result.error); return }
 

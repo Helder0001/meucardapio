@@ -16,6 +16,7 @@ import { auth } from '@/lib/auth/session'
 import { Sidebar } from '@/components/dashboard/sidebar'
 import { Header } from '@/components/dashboard/header'
 import { InactivityWarning } from '@/components/shared/inactivity-warning'
+import Script from 'next/script'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
@@ -25,6 +26,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      {/*
+        Script de segurança do Mercado Pago — gera Device ID
+        (window.MP_DEVICE_SESSION_ID) usado ao criar PIX no fluxo de pedido
+        balcão/kanban, reduzindo recusas de antifraude.
+      */}
+      <Script src="https://www.mercadopago.com/v2/security.js" strategy="afterInteractive" {...({ view: 'checkout' } as any)} />
       <Sidebar
         userRole={session.user.role}
         tenantSlug={session.user.tenantSlug ?? ''}

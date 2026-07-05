@@ -71,6 +71,13 @@ const createOrderSchema = z.object({
   pointsToRedeem: z.number().int().min(0).optional(),
   deliveryAddress: z.string().max(300).optional(),
   notes: z.string().max(500).optional(),
+
+  // Device ID do Mercado Pago (gerado pelo security.js no navegador do
+  // cliente/atendente) — enviado como header X-Meli-Session-Id na criação
+  // do pagamento PIX, pra reduzir recusas de antifraude em pagamentos
+  // criados via API direta (sem isso, o MP não tem nenhum sinal de
+  // dispositivo, o que é tratado como suspeito).
+  deviceId: z.string().optional(),
 })
   // CORREÇÃO: endereço de entrega agora é obrigatório no servidor para
   // pedidos do tipo DELIVERY — validação no cart-drawer (cliente) pode ser
@@ -337,6 +344,7 @@ export async function createOrderAction(
           amount: payment.amount,
           customerPhone: data.customerPhone,
           customerName: data.customerName,
+          deviceId: data.deviceId,
         })
       } catch (err) {
         console.error('[createOrder] PIX creation failed:', err)
@@ -421,6 +429,7 @@ async function createPixPayment(params: {
   amount: number
   customerPhone?: string
   customerName?: string
+  deviceId?: string
 }) {
   const accessToken = await resolveTenantMpAccessToken(params.tenantId)
 
@@ -434,6 +443,13 @@ async function createPixPayment(params: {
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
       'X-Idempotency-Key': `${params.orderId}-pix-${params.amount}`,
+      // Device ID (gerado pelo security.js do MP no navegador do cliente
+      // ou do atendente) — ajuda o antifraude do MP a diferenciar pagamentos
+      // legítimos de chamadas "cegas" via API, reduzindo recusas do tipo
+      // "Pagamento rejeitado pelo PSP do recebedor". Opcional: se o
+      // frontend não mandou (script bloqueado, ad-blocker, etc.), seguimos
+      // sem o header — não bloqueia a criação do PIX.
+      ...(params.deviceId ? { 'X-Meli-Session-Id': params.deviceId } : {}),
     },
     body: JSON.stringify({
       transaction_amount: params.amount,

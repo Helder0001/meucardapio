@@ -199,10 +199,14 @@ export function OrderDetail({
       return
     }
     startAddPayment(async () => {
+      // Device ID gerado pelo script de segurança do Mercado Pago
+      // (window.MP_DEVICE_SESSION_ID), carregado no layout do dashboard.
+      const deviceId = typeof window !== 'undefined' ? (window as any).MP_DEVICE_SESSION_ID : undefined
+
       const res = await fetch(`/api/orders/${order.id}/add-payment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payments: addPayments }),
+        body: JSON.stringify({ payments: addPayments, deviceId }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { toast.error(data.error ?? 'Erro ao registrar pagamento'); return }
