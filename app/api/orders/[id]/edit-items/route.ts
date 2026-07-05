@@ -290,13 +290,23 @@ export async function PATCH(
       }
     }
 
-    // 3. Atualizar totais do pedido — e, se estava ENTREGUE, reabrir para
-    // PENDING numa nova rodada de preparo (kitchenRound).
+    // 3. Atualizar totais do pedido — e recalcular paymentStatus: editar um
+    // pedido já pago pra adicionar itens gera saldo em aberto, mas sem isso
+    // o pedido continuava marcado como PAID (bloqueando gerar novo link de
+    // pagamento pra cobrar a diferença — via "Pedido já está pago").
+    // Também reabre para PENDING no Kanban se estava ENTREGUE (balcão/mesa).
+    const paidSum = order.payments
+      .filter((p) => p.status === 'PAID')
+      .reduce((s, p) => s + Number(p.amount), 0)
+    const newPaymentStatus =
+      paidSum >= newTotal - 0.01 ? 'PAID' : paidSum > 0 ? 'PARTIAL' : 'PENDING'
+
     await tx.order.update({
       where: { id: orderId },
       data: {
         subtotal: newSubtotal,
         total: newTotal,
+        paymentStatus: newPaymentStatus,
         ...(isReopeningDeliveredPdv
           ? { status: 'PENDING', kitchenRound: newRound, deliveredAt: null }
           : {}),

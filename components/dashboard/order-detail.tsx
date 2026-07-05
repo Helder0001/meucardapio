@@ -31,10 +31,12 @@ function makeItemKey(productId: string, addonIds: string[]): string {
 
 // Formas de pagamento para as quais é possível trocar um pagamento ainda
 // não confirmado (mesma lista aceita pela rota change-payment-method).
+// "Crédito (online)" (CREDIT_CARD) fica de fora de propósito: esse método é
+// reservado ao link de pagamento gerado pelo sistema (Checkout Pro) — só
+// trocar o rótulo pra ele aqui não gera cobrança nenhuma, só confunde.
 const CHANGE_METHOD_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'PIX',                label: '⚡ PIX' },
   { value: 'CASH',                label: '💵 Dinheiro' },
-  { value: 'CREDIT_CARD',         label: '💳 Crédito (online)' },
   { value: 'CREDIT_CARD_MANUAL',  label: '💳 Crédito (entrega/retirada)' },
   { value: 'DEBIT_CARD',          label: '💳 Débito' },
   { value: 'VOUCHER',             label: '🎟️ Voucher' },
@@ -182,15 +184,26 @@ export function OrderDetail({
   const alreadyPaid  = payments.filter((p: any) => p.status === 'PAID').reduce((s: number, p: any) => s + Number(p.amount), 0)
   const stillOwed    = Math.max(0, Math.round((totalOrder - alreadyPaid) * 100) / 100)
 
+  // Pagamento registrado manualmente (dinheiro/cartão na hora) mas ainda
+  // não confirmado pelo operador — diferente de um link/PIX pendente
+  // (aquele espera o CLIENTE pagar; este já foi "recebido", só falta
+  // confirmar). Tem `checkoutUrl` só quando veio do link de pagamento.
+  const pendingManualPayments = payments.filter((p: any) => p.status === 'PENDING' && !p.checkoutUrl)
+  const hasPendingManualPayment = pendingManualPayments.length > 0
+
   const addPaymentsSum      = addPayments.reduce((s, p) => s + (p.amount || 0), 0)
   const addPaymentRemaining = Math.round((stillOwed - addPaymentsSum) * 100) / 100
 
   // Só mostra o botão de adicionar pagamento em pedidos PDV/TABLE/PICKUP
-  // com pagamento pendente (cobrar no final ou pagamento ainda não registrado)
+  // com pagamento pendente (cobrar no final ou pagamento ainda não registrado).
+  // Bloqueado enquanto já existir um pagamento manual aguardando confirmação
+  // — senão dava pra clicar "Registrar pagamento" de novo e duplicar (dois
+  // pagamentos cobrindo o mesmo valor, os dois confirmáveis).
   const canAddPayment =
     order.type !== 'DELIVERY' &&
     !['CANCELLED', 'REFUNDED'].includes(status) &&
     stillOwed > 0 &&
+    !hasPendingManualPayment &&
     ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'STAFF'].includes(userRole)
 
   const handleAddPayment = () => {

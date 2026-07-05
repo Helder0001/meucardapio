@@ -26,7 +26,9 @@ import { z } from 'zod'
 
 // CASHBACK é usado internamente pelo sistema de fidelidade — não é uma
 // forma de pagamento que o lojista escolhe manualmente ao trocar aqui.
-const ALLOWED_METHODS = ['PIX', 'CASH', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD', 'VOUCHER'] as const
+// "Crédito (online)" fica de fora — reservado ao link de pagamento gerado
+// pelo sistema, não algo que o operador escolhe manualmente aqui.
+const ALLOWED_METHODS = ['PIX', 'CASH', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD', 'VOUCHER'] as const
 
 const bodySchema = z.object({
   paymentId: z.string().cuid(),

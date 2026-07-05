@@ -131,7 +131,7 @@ export async function POST(
     select: {
       id: true, orderNumber: true, status: true,
       paymentStatus: true, type: true, total: true, customerId: true,
-      payments: { select: { id: true, method: true, status: true, amount: true } },
+      payments: { select: { id: true, method: true, status: true, amount: true, checkoutUrl: true } },
     },
   })
   if (!order) {
@@ -153,6 +153,20 @@ export async function POST(
   const alreadyPaid = order.payments.filter((p) => p.status === 'PAID').reduce((s, p) => s + Number(p.amount), 0)
   const newTotal    = payments.reduce((s, p) => s + p.amount, 0)
   const orderTotal  = Number(order.total)
+
+  // Pagamentos registrados manualmente (sem checkoutUrl — diferente de um
+  // link/PIX aguardando o cliente) que já estão pendentes de confirmação.
+  // Se eles já cobrem o total, bloqueia registrar mais um por cima — senão
+  // os dois podem ser confirmados depois e o pedido fica com pagamento em
+  // duplicidade (valor recebido maior que o total do pedido).
+  const pendingManualSum = order.payments
+    .filter((p) => p.status === 'PENDING' && !p.checkoutUrl)
+    .reduce((s, p) => s + Number(p.amount), 0)
+  if (alreadyPaid + pendingManualSum >= orderTotal - 0.01) {
+    return NextResponse.json({
+      error: 'Já existe um pagamento registrado aguardando confirmação para este pedido. Confirme-o antes de registrar outro.',
+    }, { status: 422 })
+  }
 
   if (alreadyPaid + newTotal < orderTotal - 0.01) {
     return NextResponse.json({
