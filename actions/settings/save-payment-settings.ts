@@ -75,7 +75,7 @@ export type ToggleState = { error?: string; success?: boolean; value?: boolean }
 // gerava confusão: o lojista trocava o toggle, saía da tela sem apertar
 // "Salvar" e via tudo voltar ao estado anterior).
 export async function togglePaymentOption(
-  field: 'pixEnabled' | 'cardEnabled',
+  field: 'pixEnabled' | 'cardEnabled' | 'linkEnabled',
   enabled: boolean
 ): Promise<ToggleState> {
   const session = await auth()

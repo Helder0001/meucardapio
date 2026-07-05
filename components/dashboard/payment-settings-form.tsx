@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils'
 // tinha efeito). Estado otimista na hora do clique, com rollback se falhar.
 function PaymentToggle({
   field, label, description, initialValue,
-}: { field: 'pixEnabled' | 'cardEnabled'; label: string; description: string; initialValue: boolean }) {
+}: { field: 'pixEnabled' | 'cardEnabled' | 'linkEnabled'; label: string; description: string; initialValue: boolean }) {
   const [checked, setChecked] = useState(initialValue)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -94,9 +94,10 @@ interface PaymentSettingsFormProps {
   hasSecret: boolean
   pixEnabled: boolean
   cardEnabled: boolean
+  linkEnabled: boolean
 }
 
-export function PaymentSettingsForm({ hasSecret, pixEnabled, cardEnabled }: PaymentSettingsFormProps) {
+export function PaymentSettingsForm({ hasSecret, pixEnabled, cardEnabled, linkEnabled }: PaymentSettingsFormProps) {
   const [state, formAction] = useFormState(savePaymentSettings, {})
   const [showSecret, setShowSecret] = useState(false)
   const [isRemoving, setIsRemoving] = useState(false)
@@ -278,6 +279,12 @@ export function PaymentSettingsForm({ hasSecret, pixEnabled, cardEnabled }: Paym
         label="Habilitar cartão online"
         description="Exibe a opção de cartão no checkout do cardápio digital e no link de pagamento do PDV"
         initialValue={cardEnabled}
+      />
+      <PaymentToggle
+        field="linkEnabled"
+        label="Habilitar link de pagamento"
+        description="Exibe a opção 'Link de pagamento' no checkout do cardápio digital — o cliente escolhe Pix ou cartão na própria página do Mercado Pago"
+        initialValue={linkEnabled}
       />
 
       {/* Webhook secret */}

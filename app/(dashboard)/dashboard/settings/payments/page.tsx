@@ -25,6 +25,7 @@ export default async function PaymentSettingsPage() {
   const hasSecret = !!settings.mercadoPagoWebhookSecret
   const pixEnabled = (settings.pixEnabled ?? true) === true
   const cardEnabled = (settings.cardEnabled ?? true) === true
+  const linkEnabled = (settings.linkEnabled ?? true) === true
 
   return (
     <div className="max-w-2xl space-y-5">
@@ -40,6 +41,7 @@ export default async function PaymentSettingsPage() {
           hasSecret={hasSecret}
           pixEnabled={pixEnabled}
           cardEnabled={cardEnabled}
+          linkEnabled={linkEnabled}
         />
       </Suspense>
     </div>

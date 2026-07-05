@@ -21,6 +21,7 @@ interface CartDrawerProps {
     settings?: any
     pixEnabled?: boolean
     cardEnabled?: boolean
+    linkEnabled?: boolean
     deliveryZones: Array<{
       id: string
       bairro: string | null
@@ -78,10 +79,11 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const color = tenant.primaryColor ?? '#f97316'
   const pixEnabled = tenant.pixEnabled ?? tenant.settings?.pixEnabled ?? true
   const cardEnabled = tenant.cardEnabled ?? tenant.settings?.cardEnabled ?? true
+  const linkEnabled = tenant.linkEnabled ?? tenant.settings?.linkEnabled ?? true
   const onlineOptions = ONLINE_PAYMENT_OPTIONS.filter((o) => {
     if (o.value === 'PIX') return pixEnabled
     if (o.value === 'CREDIT_CARD') return cardEnabled
-    if (o.value === 'LINK') return pixEnabled || cardEnabled
+    if (o.value === 'LINK') return linkEnabled && (pixEnabled || cardEnabled)
     return true
   })
 
