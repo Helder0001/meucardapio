@@ -5,11 +5,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
 import crypto from 'crypto'
 
-function isValidCronSecret(provided: string | null): boolean {
-  const expected = process.env.CRON_SECRET
-  // Se a env não estiver configurada, nunca autoriza — evita que a ausência
-  // acidental da variável vire um "aceita qualquer coisa" (inclusive vazio).
-  if (!expected || !provided) return false
+function timingSafeEqualStr(expected: string, provided: string): boolean {
   if (expected.length !== provided.length) return false
   try {
     return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(provided))
@@ -18,9 +14,26 @@ function isValidCronSecret(provided: string | null): boolean {
   }
 }
 
+// A Vercel envia o CRON_SECRET automaticamente como
+// "Authorization: Bearer <CRON_SECRET>" para crons definidos em vercel.json
+// — é assim que ela autentica execuções agendadas. Mantemos também o header
+// legado "x-cron-secret" para chamadas manuais (curl/monitoramento externo),
+// no mesmo padrão já usado em /api/internal/cron/cleanup.
+function isValidCronSecretHeader(request: Request): boolean {
+  const expected = process.env.CRON_SECRET
+  if (!expected) return false
+
+  const authHeader = request.headers.get('authorization')
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
+  const legacySecret = request.headers.get('x-cron-secret')
+
+  if (bearerToken && timingSafeEqualStr(expected, bearerToken)) return true
+  if (legacySecret && timingSafeEqualStr(expected, legacySecret)) return true
+  return false
+}
+
 export async function GET(request: Request) {
-  const secret = request.headers.get('x-cron-secret')
-  if (!isValidCronSecret(secret)) {
+  if (!isValidCronSecretHeader(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

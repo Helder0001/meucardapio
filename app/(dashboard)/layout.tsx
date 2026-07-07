@@ -13,6 +13,7 @@
 
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth/session'
+import { prisma } from '@/lib/db/client'
 import { Sidebar } from '@/components/dashboard/sidebar'
 import { Header } from '@/components/dashboard/header'
 import { InactivityWarning } from '@/components/shared/inactivity-warning'
@@ -23,6 +24,29 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (!session?.user) redirect('/login')
   if (!session.user.tenantId && session.user.role !== 'MASTER_ADMIN') redirect('/login')
+
+  // CORREÇÃO: o status da assinatura só era checado no momento do login
+  // (lib/auth/config.ts). Uma sessão já aberta (JWT válido) continuava
+  // acessando o dashboard normalmente mesmo depois do trial vencer ou do
+  // tenant ser suspenso, já que nada revalidava isso a cada request. Aqui
+  // buscamos o status atual direto no banco (sempre fresco, sem cache) e
+  // derrubamos o acesso imediatamente quando necessário — sem depender do
+  // cron de suspensão, que só roda 1x por dia.
+  if (session.user.role !== 'MASTER_ADMIN' && session.user.tenantId) {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: session.user.tenantId },
+      select: { subscriptionStatus: true, trialEndsAt: true },
+    })
+
+    const trialExpired =
+      tenant?.subscriptionStatus === 'TRIAL' &&
+      !!tenant.trialEndsAt &&
+      tenant.trialEndsAt < new Date()
+
+    if (tenant?.subscriptionStatus === 'SUSPENDED' || trialExpired) {
+      redirect('/assinatura')
+    }
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
