@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Payload inválido' }, { status: 400 })
   }
 
-  const { reason, payer_email, card_token_id, payer, billing_cycle } = body
+  const { reason, payer_email, card_token_id, payer, billing_cycle, start_immediately } = body
 
   if (!payer_email) {
     return NextResponse.json({ error: 'Dados obrigatórios ausentes' }, { status: 400 })
@@ -46,7 +46,12 @@ export async function POST(req: NextRequest) {
   const frequencyType = isAnnual ? 'years' : 'months'
   const isPixPayment  = !card_token_id
 
-  const startDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+  // Cadastro novo (trial de 7 dias): primeira cobrança só depois do trial.
+  // Reativação (start_immediately=true): cobrar já, no ato — sem mais 7 dias
+  // de acesso grátis embutidos na própria reativação.
+  const startDate = start_immediately
+    ? new Date(Date.now() + 60 * 1000)
+    : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
   // SEMPRE status 'pending' no POST — o PUT vai autorizar o cartão
   const mpPayload: Record<string, any> = {

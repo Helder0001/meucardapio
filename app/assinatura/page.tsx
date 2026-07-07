@@ -9,8 +9,10 @@
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/client'
-import { PayButton } from './pay-button'
+import { SubscriptionCardForm } from './subscription-card-form'
 import { SignOutLink } from './sign-out-link'
+
+const PLAN_PRICE_MONTHLY = 1.00
 
 export default async function AssinaturaPage() {
   const session = await auth()
@@ -60,11 +62,14 @@ export default async function AssinaturaPage() {
         </p>
 
         <div className="mt-6">
-          <PayButton />
+          <SubscriptionCardForm
+            amount={PLAN_PRICE_MONTHLY}
+            publicKey={process.env.NEXT_PUBLIC_MP_PUBLIC_KEY ?? ''}
+          />
         </div>
 
         <p className="mt-4 text-xs text-neutral-400">
-          Você será redirecionado ao Mercado Pago para concluir o pagamento.
+          Assinatura mensal — cobrança automática no cartão a cada 30 dias.
         </p>
 
         <div className="mt-6 border-t border-neutral-100 pt-4">

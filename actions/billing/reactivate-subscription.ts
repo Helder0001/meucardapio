@@ -9,6 +9,12 @@
 // fluxo de cobrança paralelo. Quando o pagamento for confirmado, o webhook
 // (handleSubscriptionWebhook em app/api/webhooks/mercadopago/route.ts) já
 // sabe atualizar subscriptionStatus do tenant para ACTIVE.
+//
+// IMPORTANTE: assinatura (preapproval) no Mercado Pago só existe com
+// cartão — PIX não tem cobrança recorrente automática nessa API (isso é
+// "Pix Automático", um produto diferente, não integrado aqui). Por isso
+// esta action exige um card_token_id já tokenizado no browser via Card
+// Payment Brick (components/... "cardPayment"), nunca dado de cartão cru.
 
 import { prisma } from '@/lib/db/client'
 import { auth } from '@/lib/auth/session'
@@ -17,14 +23,29 @@ import { getInternalApiSecret } from '@/lib/security/internal-secret'
 const PLAN_PRICE_MONTHLY = 1.00
 const PLAN_PRICE_ANNUAL = parseFloat((PLAN_PRICE_MONTHLY * 12 * 0.9).toFixed(2))
 
-export type ReactivateResult = { error?: string; pixInitPoint?: string }
+export type ReactivateResult = { error?: string; status?: string }
+
+export interface ReactivateCardInput {
+  cardToken: string
+  payerEmail: string
+  payerCpf: string
+  cardholderName: string
+  billingCycle?: 'MONTHLY' | 'ANNUAL'
+}
 
 export async function reactivateSubscriptionAction(
-  billingCycle: 'MONTHLY' | 'ANNUAL' = 'MONTHLY'
+  input: ReactivateCardInput
 ): Promise<ReactivateResult> {
   const session = await auth()
   if (!session?.user?.tenantId || session.user.role === 'MASTER_ADMIN') {
     return { error: 'Sessão inválida.' }
+  }
+
+  const { cardToken, payerEmail, payerCpf, cardholderName } = input
+  const billingCycle = input.billingCycle ?? 'MONTHLY'
+
+  if (!cardToken || !payerEmail || !payerCpf) {
+    return { error: 'Dados do cartão incompletos.' }
   }
 
   const tenant = await prisma.tenant.findUnique({
@@ -39,13 +60,14 @@ export async function reactivateSubscriptionAction(
     return { error: 'Pagamento não configurado no servidor. Contate o suporte.' }
   }
 
-  const email = session.user.email ?? ''
-  if (!email) return { error: 'Email da conta não encontrado.' }
-
   const isAnnual = billingCycle === 'ANNUAL'
   const amount = isAnnual ? PLAN_PRICE_ANNUAL : PLAN_PRICE_MONTHLY
 
-  let mpResult: { subscriptionId?: string; pixInitPoint?: string; error?: string }
+  const nameParts = cardholderName.trim().split(/\s+/)
+  const firstName = nameParts[0] || payerEmail.split('@')[0]
+  const lastName = nameParts.slice(1).join(' ') || 'Cliente'
+
+  let mpResult: { subscriptionId?: string; error?: string }
   try {
     const res = await fetch(`${appUrl}/api/mp/preapproval`, {
       method: 'POST',
@@ -55,29 +77,31 @@ export async function reactivateSubscriptionAction(
       },
       body: JSON.stringify({
         reason: `Meu Cardápio — Reativação Plano PRO ${isAnnual ? 'Anual' : 'Mensal'} — ${tenant.name}`,
-        payer_email: email,
+        payer_email: payerEmail,
         billing_cycle: billingCycle,
+        card_token_id: cardToken,
+        start_immediately: true,
         payer: {
-          email,
-          first_name: session.user.name?.split(' ')[0] ?? email.split('@')[0],
-          last_name: session.user.name?.split(' ').slice(1).join(' ') || 'Cliente',
-          identification: { type: 'CPF', number: '' },
+          email: payerEmail,
+          first_name: firstName,
+          last_name: lastName,
+          identification: { type: payerCpf.replace(/\D/g, '').length > 11 ? 'CNPJ' : 'CPF', number: payerCpf.replace(/\D/g, '') },
         },
       }),
     })
 
     const data = await res.json()
     if (!res.ok) {
-      return { error: data.error ?? 'Erro ao processar pagamento. Tente novamente.' }
+      return { error: data.error ?? 'Pagamento não autorizado. Verifique os dados do cartão.' }
     }
-    mpResult = { subscriptionId: data.subscriptionId, pixInitPoint: data.pixInitPoint }
+    mpResult = { subscriptionId: data.subscriptionId }
   } catch (err) {
     console.error('[reactivate-subscription] erro ao chamar /api/mp/preapproval:', err)
     return { error: 'Erro ao conectar ao Mercado Pago. Tente novamente.' }
   }
 
   if (!mpResult.subscriptionId) {
-    return { error: 'Não foi possível gerar a cobrança. Tente novamente.' }
+    return { error: 'Não foi possível ativar a assinatura. Tente novamente.' }
   }
 
   const now = new Date()
@@ -87,30 +111,39 @@ export async function reactivateSubscriptionAction(
 
   // Upsert: o tenant já tem uma Subscription de quando se cadastrou
   // (tenantId é @unique nessa tabela) — atualizamos com o novo
-  // mercadoPagoSubId em vez de criar um registro duplicado.
-  await prisma.subscription.upsert({
-    where: { tenantId: tenant.id },
-    update: {
-      mercadoPagoSubId: mpResult.subscriptionId,
-      billingCycle: billingCycle as any,
-      status: 'PAST_DUE',
-      amount,
-      currentPeriodStart: now,
-      currentPeriodEnd: periodEnd,
-      cancelledAt: null,
-      cancelReason: null,
-    },
-    create: {
-      tenantId: tenant.id,
-      plan: 'PRO',
-      billingCycle: billingCycle as any,
-      status: 'PAST_DUE',
-      mercadoPagoSubId: mpResult.subscriptionId,
-      currentPeriodStart: now,
-      currentPeriodEnd: periodEnd,
-      amount,
-    },
-  })
+  // mercadoPagoSubId em vez de criar um registro duplicado. Status ACTIVE
+  // aqui é otimista (o cartão já foi autorizado no PUT dentro de
+  // /api/mp/preapproval); o webhook subscription_preapproval confirma e
+  // pode corrigir se o MP reportar outro status.
+  await prisma.$transaction([
+    prisma.subscription.upsert({
+      where: { tenantId: tenant.id },
+      update: {
+        mercadoPagoSubId: mpResult.subscriptionId,
+        billingCycle: billingCycle as any,
+        status: 'ACTIVE',
+        amount,
+        currentPeriodStart: now,
+        currentPeriodEnd: periodEnd,
+        cancelledAt: null,
+        cancelReason: null,
+      },
+      create: {
+        tenantId: tenant.id,
+        plan: 'PRO',
+        billingCycle: billingCycle as any,
+        status: 'ACTIVE',
+        mercadoPagoSubId: mpResult.subscriptionId,
+        currentPeriodStart: now,
+        currentPeriodEnd: periodEnd,
+        amount,
+      },
+    }),
+    prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { subscriptionStatus: 'ACTIVE' },
+    }),
+  ])
 
-  return { pixInitPoint: mpResult.pixInitPoint }
+  return { status: 'authorized' }
 }
