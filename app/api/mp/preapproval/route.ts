@@ -53,7 +53,14 @@ export async function POST(req: NextRequest) {
     ? new Date(Date.now() + 60 * 1000)
     : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
-  // SEMPRE status 'pending' no POST — o PUT vai autorizar o cartão
+  // Com card_token_id: a assinatura já nasce autorizada num único POST.
+  // (O padrão antigo — POST pending + PUT/preapproval/{id} pra autorizar —
+  // é rejeitado pelo Mercado Pago com "You cannot authorize a preapproval,
+  // only the payer can": esse PUT só pode ser chamado pelo próprio pagador
+  // via checkout, nunca pelo vendedor via API. Documentação oficial do MP
+  // confirma que o correto é enviar card_token_id + status: "authorized"
+  // já na criação.)
+  // Sem card_token_id (fluxo legado de PIX no cadastro): mantém 'pending'.
   const mpPayload: Record<string, any> = {
     reason: reason ?? `Meu Cardápio — Plano PRO ${isAnnual ? 'Anual' : 'Mensal'}`,
     payer_email,
@@ -65,8 +72,9 @@ export async function POST(req: NextRequest) {
     },
     start_date: startDate.toISOString(),
     back_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
-    status: 'pending',
+    status: isPixPayment ? 'pending' : 'authorized',
     payer,
+    ...(isPixPayment ? {} : { card_token_id }),
   }
 
   console.log('[mp/preapproval] payload:', JSON.stringify({
@@ -75,7 +83,6 @@ export async function POST(req: NextRequest) {
   }))
 
   try {
-    // Passo 1: POST com status pending (sempre)
     const mpRes = await fetch('https://api.mercadopago.com/preapproval', {
       method: 'POST',
       headers: {
@@ -117,39 +124,12 @@ export async function POST(req: NextRequest) {
 
     const subscriptionId = String(data.id)
 
-    // Passo 2: se cartão, PUT para autorizar
-    if (!isPixPayment) {
-      try {
-        const putRes = await fetch(`https://api.mercadopago.com/preapproval/${subscriptionId}`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-            'X-Idempotency-Key': `authorize-${subscriptionId}`,
-          },
-          body: JSON.stringify({ card_token_id, status: 'authorized' }),
-        })
-        const putText = await putRes.text()
-        console.log('[mp/preapproval] PUT authorize status:', putRes.status, 'body:', putText)
-
-        if (!putRes.ok) {
-          const putData = JSON.parse(putText)
-          const putMsg = putData?.message ?? 'Erro ao autorizar cartão'
-          console.error('[mp/preapproval] PUT authorize erro completo:', putText)
-          // PUT falhou — cancela a preapproval criada e retorna erro
-          return NextResponse.json({ error: `Cartão recusado: ${putMsg}` }, { status: 400 })
-        }
-      } catch (putErr) {
-        console.error('[mp/preapproval] PUT authorize error:', putErr)
-        return NextResponse.json({ error: 'Erro ao autorizar cartão. Tente novamente.' }, { status: 502 })
-      }
-    }
-
     return NextResponse.json({
       subscriptionId,
       billingCycle:  isAnnual ? 'ANNUAL' : 'MONTHLY',
       amount,
       paymentMethod: isPixPayment ? 'PIX' : 'CARD',
+      status: data.status,
       pixInitPoint:  isPixPayment ? data?.init_point : undefined,
     })
   } catch (err: any) {
