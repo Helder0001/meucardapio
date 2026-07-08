@@ -189,6 +189,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true })
     }
 
+    // O Mercado Pago manda a cobrança recorrente da assinatura (preapproval)
+    // como type: 'payment' — igual a um pagamento normal de pedido —, não só
+    // como 'subscription_preapproval' (esse último é só pra mudanças de
+    // status da assinatura em si: autorizada/pausada/cancelada). Sem este
+    // bloco, essa notificação cairia direto no fluxo de pedido abaixo, não
+    // acharia nenhum Payment/Order correspondente (porque não existe: é
+    // cobrança de plano, não de cliente final) e retornaria { ok: true } sem
+    // atualizar nada. Só entra aqui quando ainda não achamos um Payment de
+    // pedido pelo mercadoPagoId (evita custo extra no caminho normal de
+    // PIX/cartão/link).
+    if (event.type === 'payment' && event.data?.id && !payment) {
+      const wasSubscriptionPayment = await handleSubscriptionPaymentEvent(String(event.data.id))
+      if (wasSubscriptionPayment) {
+        return NextResponse.json({ ok: true })
+      }
+    }
+
     // Ignorar eventos que não são de pagamento
     if (event.type !== 'payment' || !event.data?.id) {
       return NextResponse.json({ ok: true })
@@ -501,6 +518,97 @@ async function fetchPaymentFromMP(mercadoPagoId: string, tenantId: string) {
   } catch {
     return null
   }
+}
+
+// Consulta um pagamento usando as credenciais da PLATAFORMA (não as do
+// tenant). Cobranças de assinatura (preapproval) são recebidas pela conta MP
+// da plataforma, então só o token da plataforma consegue enxergar esse
+// pagamento — o token de um tenant normalmente recebe 404/403 aqui, o que é
+// esperado (só loga warn, não error, pra não gerar ruído no caminho comum de
+// pedidos via link de pagamento, que também cai nesta checagem).
+async function fetchPlatformPayment(mercadoPagoId: string) {
+  const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN
+  if (!accessToken) return null
+
+  try {
+    const res = await fetch(`https://api.mercadopago.com/v1/payments/${mercadoPagoId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    if (!res.ok) {
+      console.warn('[MP API][platform] Pagamento não encontrado com o token da plataforma (esperado se for pagamento de um tenant)', { paymentId: mercadoPagoId, status: res.status })
+      return null
+    }
+    return await res.json()
+  } catch (err) {
+    console.error('[MP API][platform] Exceção ao consultar pagamento', { paymentId: mercadoPagoId, err: String(err) })
+    return null
+  }
+}
+
+// Trata a notificação type:'payment' quando ela é, na verdade, a cobrança
+// recorrente de uma assinatura (preapproval) — e não o pagamento de um
+// pedido de cliente final. Retorna `true` quando o evento era de assinatura
+// (processado ou não — nesse caso não deve cair no fluxo de pedido de jeito
+// nenhum) e `false` quando não é assinatura, pra o caller seguir o fluxo
+// normal de pedido.
+async function handleSubscriptionPaymentEvent(mercadoPagoId: string): Promise<boolean> {
+  const mpPayment = await fetchPlatformPayment(mercadoPagoId)
+  if (!mpPayment) return false // provavelmente pagamento de tenant, não de assinatura
+
+  const preapprovalId: string | undefined =
+    mpPayment.preapproval_id ?? mpPayment.point_of_interaction?.transaction_data?.subscription_id
+  if (!preapprovalId) return false // pagamento da plataforma, mas não é de assinatura
+
+  console.log('[SUBSCRIPTION PAYMENT]', {
+    mercadoPagoId,
+    preapprovalId,
+    status: mpPayment.status,
+    status_detail: mpPayment.status_detail,
+    transaction_amount: mpPayment.transaction_amount,
+    date_approved: mpPayment.date_approved,
+  })
+
+  const subscription = await prisma.subscription.findFirst({
+    where: { mercadoPagoSubId: preapprovalId },
+  })
+
+  if (!subscription) {
+    console.warn('[SUBSCRIPTION PAYMENT] Nenhuma Subscription encontrada para este preapproval_id', { preapprovalId })
+    return true
+  }
+
+  if (mpPayment.status === 'approved') {
+    const nextPeriodEnd = new Date(subscription.currentPeriodEnd)
+    if (subscription.billingCycle === 'ANNUAL') {
+      nextPeriodEnd.setFullYear(nextPeriodEnd.getFullYear() + 1)
+    } else {
+      nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 1)
+    }
+
+    await prisma.$transaction([
+      prisma.subscription.update({
+        where: { id: subscription.id },
+        data: { status: 'ACTIVE', currentPeriodEnd: nextPeriodEnd },
+      }),
+      prisma.tenant.update({
+        where: { id: subscription.tenantId },
+        data: { subscriptionStatus: 'ACTIVE' },
+      }),
+    ])
+  } else if (mpPayment.status === 'rejected') {
+    await prisma.$transaction([
+      prisma.subscription.update({
+        where: { id: subscription.id },
+        data: { status: 'PAST_DUE' },
+      }),
+      prisma.tenant.update({
+        where: { id: subscription.tenantId },
+        data: { subscriptionStatus: 'PAST_DUE' },
+      }),
+    ])
+  }
+
+  return true
 }
 
 // applyCashback e applyLoyaltyPoints agora vêm de lib/loyalty/apply-rewards
