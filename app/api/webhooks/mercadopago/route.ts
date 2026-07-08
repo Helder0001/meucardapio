@@ -117,12 +117,23 @@ export async function POST(request: Request) {
     // do tenant via user_id roda pra QUALQUER tipo de evento que tenha
     // esse campo — só a busca do Payment em si continua específica de
     // 'payment' mais abaixo.
+    // Eventos de ASSINATURA (cobrança do plano PRO da própria plataforma)
+    // são sempre da conta da PLATAFORMA — nunca de um tenant. Se a gente
+    // deixasse cair na resolução por user_id abaixo, e por acaso a conta MP
+    // da plataforma coincidisse com o user_id de algum tenant conectado via
+    // OAuth (ex.: mesma conta usada em testes), a validação usaria o secret
+    // ERRADO e o webhook de assinatura seria rejeitado (401) silenciosamente.
+    const isSubscriptionEvent =
+      event.type === 'subscription_preapproval' ||
+      event.type === 'subscription_authorized_payment' ||
+      event.type === 'subscription_preapproval_plan'
+
     if (event.type === 'payment' && event.data?.id) {
       payment = await findPaymentByMpId(String(event.data.id))
       if (payment) connectionTenantId = payment.order.tenantId
     }
 
-    if (!connectionTenantId && event.user_id) {
+    if (!isSubscriptionEvent && !connectionTenantId && event.user_id) {
       const connection = await findConnectionByMpUserId(String(event.user_id))
       if (connection) connectionTenantId = connection.tenantId
     }

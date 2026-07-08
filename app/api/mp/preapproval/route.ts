@@ -72,6 +72,11 @@ export async function POST(req: NextRequest) {
     },
     start_date: startDate.toISOString(),
     back_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
+    // Assinaturas não recebem webhook configurado no painel do MP ("Suas
+    // integrações") — pra esse produto o notification_url TEM que ir aqui,
+    // na criação, senão a gente nunca recebe subscription_preapproval nem
+    // os pagamentos recorrentes seguintes.
+    notification_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/mercadopago`,
     status: isPixPayment ? 'pending' : 'authorized',
     payer,
     ...(isPixPayment ? {} : { card_token_id }),
