@@ -240,6 +240,7 @@ export async function POST(request: Request) {
     }
 
     const mpStatus = mpPayment.status
+    console.log('[WEBHOOK PAYMENT]', {mercadoPagoId,status: mpPayment.status,status_detail: mpPayment.status_detail,payment_type: mpPayment.payment_type_id,method: mpPayment.payment_method_id,orderId: payment.order.id,tenantId: payment.order.tenantId})
 
     // Processar apenas transições válidas (idempotência)
     if (mpStatus === 'approved' && payment.status !== 'PAID') {
@@ -490,8 +491,13 @@ async function fetchPaymentFromMP(mercadoPagoId: string, tenantId: string) {
     const res = await fetch(`https://api.mercadopago.com/v1/payments/${mercadoPagoId}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
-    if (!res.ok) return null
-    return res.json()
+    if (!res.ok) {
+      console.error('[MP API] Erro ao consultar pagamento',{paymentId:mercadoPagoId,status:res.status,body:await res.text()})
+      return null
+    }
+    const payment=await res.json()
+    console.log('[MP API] Pagamento consultado',{id:payment.id,status:payment.status,status_detail:payment.status_detail,payment_type_id:payment.payment_type_id,payment_method_id:payment.payment_method_id,transaction_amount:payment.transaction_amount,external_reference:payment.external_reference,date_approved:payment.date_approved})
+    return payment
   } catch {
     return null
   }
@@ -521,6 +527,7 @@ async function handleSubscriptionWebhook(event: any) {
   })
   if (!res.ok) return
   const sub = await res.json()
+  console.log('[SUBSCRIPTION]',{id:sub.id,status:sub.status,reason:sub.reason,next_payment_date:sub.next_payment_date,payer_email:sub.payer_email})
 
   // Encontrar o tenant pela subscription
   const { prisma: db } = await import('@/lib/db/client')
