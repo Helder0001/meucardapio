@@ -99,20 +99,43 @@ export async function POST(req: NextRequest) {
     })
 
     const rawText = await mpRes.text()
-    console.log('[mp/preapproval] response status:', mpRes.status, 'body:', rawText)
-
     let data: any = {}
     try {
       data = JSON.parse(rawText)
     } catch {
-      console.error('[mp/preapproval] body não é JSON:', rawText)
+      console.error('[mp/preapproval] body não é JSON: ' + rawText.slice(0, 1500))
       return NextResponse.json({ error: 'Resposta inesperada do Mercado Pago' }, { status: 502 })
+    }
+
+    // Log enxuto com os campos que importam pra diagnosticar (o corpo bruto
+    // completo pode passar do limite de tamanho de log da Vercel e sumir
+    // silenciosamente — por isso não logamos rawText inteiro aqui).
+    console.log('[mp/preapproval] response: ' + JSON.stringify({
+      httpStatus: mpRes.status,
+      id: data?.id ?? null,
+      status: data?.status ?? null,
+      status_detail: data?.status_detail ?? null,
+      message: data?.message ?? null,
+    }))
+
+    // IMPORTANTE: pedimos status "authorized" no POST, mas o Mercado Pago
+    // pode responder 200/201 com data.id presente e MESMO ASSIM devolver
+    // status "pending" (a criação foi aceita, mas a autorização do cartão
+    // não foi confirmada de fato). Sem essa checagem, a gente marcava a
+    // assinatura como ativa no nosso banco sem o MP ter cobrado nada.
+    if (!isPixPayment && data?.status !== 'authorized') {
+      console.error('[mp/preapproval] cartão não autorizado apesar de HTTP 200: ' + JSON.stringify({
+        id: data?.id, status: data?.status, status_detail: data?.status_detail,
+      }))
+      return NextResponse.json({
+        error: `Cartão não autorizado (status: ${data?.status ?? 'desconhecido'}). Verifique os dados ou tente outro cartão.`,
+      }, { status: 400 })
     }
 
     if (!mpRes.ok || !data?.id) {
       const msg: string    = data?.message ?? data?.error ?? 'Erro ao processar pagamento'
       const causes: string = JSON.stringify(data?.cause ?? data?.causes ?? '')
-      console.error('[mp/preapproval] erro MP completo:', JSON.stringify(data))
+      console.error('[mp/preapproval] erro MP completo: ' + JSON.stringify(data))
 
       if (causes.includes('CC_VAL_433') || msg.includes('CC_VAL_433')) {
         return NextResponse.json({ error: 'Dados do cartão inválidos. Verifique e tente novamente.' }, { status: 400 })
@@ -138,7 +161,7 @@ export async function POST(req: NextRequest) {
       pixInitPoint:  isPixPayment ? data?.init_point : undefined,
     })
   } catch (err: any) {
-    console.error('[mp/preapproval] fetch error:', err)
+    console.error('[mp/preapproval] fetch error: ' + String(err?.message ?? err))
     return NextResponse.json({ error: 'Erro ao conectar ao Mercado Pago. Tente novamente.' }, { status: 502 })
   }
 }
