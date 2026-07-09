@@ -43,7 +43,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
       !!tenant.trialEndsAt &&
       tenant.trialEndsAt < new Date()
 
-    if (tenant?.subscriptionStatus === 'SUSPENDED' || trialExpired) {
+    // CORREÇÃO: antes só bloqueava explicitamente em SUSPENDED (ou trial
+    // vencido) — modelo "permitir por padrão". Isso deixava PAST_DUE (ex.:
+    // cobrança de reativação recusada no cartão) passar direto com acesso
+    // total, porque PAST_DUE nunca era checado aqui. Trocado para modelo
+    // "bloquear por padrão": só libera acesso em ACTIVE, ou TRIAL ainda
+    // dentro do prazo. Qualquer outro status (PAST_DUE, SUSPENDED,
+    // CANCELLED, ou um valor futuro que a gente esqueça de tratar aqui)
+    // cai no paywall.
+    const hasValidAccess =
+      tenant?.subscriptionStatus === 'ACTIVE' ||
+      (tenant?.subscriptionStatus === 'TRIAL' && !trialExpired)
+
+    if (!hasValidAccess) {
       redirect('/assinatura')
     }
   }

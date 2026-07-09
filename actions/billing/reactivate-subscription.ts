@@ -109,41 +109,41 @@ export async function reactivateSubscriptionAction(
     now.getTime() + (isAnnual ? 365 : 30) * 24 * 60 * 60 * 1000
   )
 
-  // Upsert: o tenant já tem uma Subscription de quando se cadastrou
-  // (tenantId é @unique nessa tabela) — atualizamos com o novo
-  // mercadoPagoSubId em vez de criar um registro duplicado. Status ACTIVE
-  // aqui é otimista (o cartão já foi autorizado no PUT dentro de
-  // /api/mp/preapproval); o webhook subscription_preapproval confirma e
-  // pode corrigir se o MP reportar outro status.
-  await prisma.$transaction([
-    prisma.subscription.upsert({
-      where: { tenantId: tenant.id },
-      update: {
-        mercadoPagoSubId: mpResult.subscriptionId,
-        billingCycle: billingCycle as any,
-        status: 'ACTIVE',
-        amount,
-        currentPeriodStart: now,
-        currentPeriodEnd: periodEnd,
-        cancelledAt: null,
-        cancelReason: null,
-      },
-      create: {
-        tenantId: tenant.id,
-        plan: 'PRO',
-        billingCycle: billingCycle as any,
-        status: 'ACTIVE',
-        mercadoPagoSubId: mpResult.subscriptionId,
-        currentPeriodStart: now,
-        currentPeriodEnd: periodEnd,
-        amount,
-      },
-    }),
-    prisma.tenant.update({
-      where: { id: tenant.id },
-      data: { subscriptionStatus: 'ACTIVE' },
-    }),
-  ])
+  // CORREÇÃO: status ACTIVE aqui era otimista, baseado só no preapproval
+  // vir "authorized" — mas "authorized" no /preapproval só confirma que o
+  // MANDATO (cartão validado) foi criado, não que a PRIMEIRA COBRANÇA em si
+  // foi aprovada. O MP tenta cobrar de forma assíncrona logo em seguida, e
+  // essa cobrança pode ser recusada (cartão sem limite, antifraude etc.) —
+  // nesse caso o preapproval continua "authorized" (MP vai tentar cobrar de
+  // novo depois), só que sem ter recebido nada ainda. Marcar ACTIVE aqui
+  // liberava o acesso do estabelecimento mesmo com a cobrança recusada.
+  // Agora: salvamos o mercadoPagoSubId mas mantemos o status atual do
+  // tenant (SUSPENDED/PAST_DUE) intocado — só o webhook de pagamento
+  // (handleSubscriptionPaymentEvent, evento 'payment' ou
+  // 'subscription_authorized_payment') vira pra ACTIVE quando a cobrança
+  // for realmente aprovada.
+  await prisma.subscription.upsert({
+    where: { tenantId: tenant.id },
+    update: {
+      mercadoPagoSubId: mpResult.subscriptionId,
+      billingCycle: billingCycle as any,
+      amount,
+      currentPeriodStart: now,
+      currentPeriodEnd: periodEnd,
+      cancelledAt: null,
+      cancelReason: null,
+    },
+    create: {
+      tenantId: tenant.id,
+      plan: 'PRO',
+      billingCycle: billingCycle as any,
+      status: 'PAST_DUE',
+      mercadoPagoSubId: mpResult.subscriptionId,
+      currentPeriodStart: now,
+      currentPeriodEnd: periodEnd,
+      amount,
+    },
+  })
 
-  return { status: 'authorized' }
+  return { status: 'pending_confirmation' }
 }

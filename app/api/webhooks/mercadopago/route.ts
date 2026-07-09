@@ -189,6 +189,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true })
     }
 
+    // BUG CORRIGIDO: 'subscription_authorized_payment' já era reconhecido
+    // como evento de assinatura lá em cima (só pra resolver o secret certo
+    // na validação de assinatura), mas nunca tinha handler de verdade — caía
+    // direto no "ignorar eventos que não são de pagamento" mais abaixo e
+    // voltava { ok: true } sem tocar em nada. Como esse é o tipo que o MP
+    // manda pra cobrança de assinatura em algumas contas (em vez de
+    // 'payment'), uma cobrança recusada nunca revertia o status ACTIVE
+    // otimista setado na reativação — o estabelecimento ficava com acesso
+    // liberado mesmo com o cartão recusado. O 'data.id' desse evento é o id
+    // do "authorized_payment" (endpoint /authorized_payments/{id}, não
+    // /v1/payments/{id}) — dentro dele vem o pagamento de fato em `.payment`.
+    if (event.type === 'subscription_authorized_payment' && event.data?.id) {
+      await handleSubscriptionAuthorizedPaymentEvent(String(event.data.id))
+      return NextResponse.json({ ok: true })
+    }
+
     // O Mercado Pago manda a cobrança recorrente da assinatura (preapproval)
     // como type: 'payment' — igual a um pagamento normal de pedido —, não só
     // como 'subscription_preapproval' (esse último é só pra mudanças de
@@ -609,6 +625,88 @@ async function handleSubscriptionPaymentEvent(mercadoPagoId: string): Promise<bo
   }
 
   return true
+}
+
+// Consulta um "authorized_payment" (invoice de assinatura) com o token da
+// PLATAFORMA — esse recurso só existe no contexto de preapproval, sempre
+// recebido pela conta MP da plataforma, nunca do tenant.
+async function fetchAuthorizedPayment(authorizedPaymentId: string) {
+  const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN
+  if (!accessToken) return null
+
+  try {
+    const res = await fetch(`https://api.mercadopago.com/authorized_payments/${authorizedPaymentId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    if (!res.ok) {
+      console.error('[MP API][authorized_payment] Erro ao consultar', { authorizedPaymentId, status: res.status })
+      return null
+    }
+    return await res.json()
+  } catch (err) {
+    console.error('[MP API][authorized_payment] Exceção ao consultar', { authorizedPaymentId, err: String(err) })
+    return null
+  }
+}
+
+// Trata o evento 'subscription_authorized_payment'. Estrutura de resposta do
+// /authorized_payments/{id}: { preapproval_id, status, payment: { id,
+// status, ... } } — o `status` no nível raiz é do "invoice" (scheduled,
+// processed, ...), o que interessa pra ACTIVE/PAST_DUE é o status do
+// pagamento em si, dentro de `.payment`.
+async function handleSubscriptionAuthorizedPaymentEvent(authorizedPaymentId: string): Promise<void> {
+  const invoice = await fetchAuthorizedPayment(authorizedPaymentId)
+  if (!invoice) return
+
+  const preapprovalId: string | undefined = invoice.preapproval_id
+  const paymentStatus: string | undefined = invoice.payment?.status ?? invoice.status
+  if (!preapprovalId || !paymentStatus) return
+
+  console.log('[SUBSCRIPTION AUTHORIZED PAYMENT]', {
+    authorizedPaymentId,
+    preapprovalId,
+    invoiceStatus: invoice.status,
+    paymentStatus,
+  })
+
+  const subscription = await prisma.subscription.findFirst({
+    where: { mercadoPagoSubId: preapprovalId },
+  })
+  if (!subscription) {
+    console.warn('[SUBSCRIPTION AUTHORIZED PAYMENT] Nenhuma Subscription encontrada', { preapprovalId })
+    return
+  }
+
+  if (paymentStatus === 'approved' || paymentStatus === 'processed') {
+    const nextPeriodEnd = new Date(subscription.currentPeriodEnd)
+    if (subscription.billingCycle === 'ANNUAL') {
+      nextPeriodEnd.setFullYear(nextPeriodEnd.getFullYear() + 1)
+    } else {
+      nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 1)
+    }
+
+    await prisma.$transaction([
+      prisma.subscription.update({
+        where: { id: subscription.id },
+        data: { status: 'ACTIVE', currentPeriodEnd: nextPeriodEnd },
+      }),
+      prisma.tenant.update({
+        where: { id: subscription.tenantId },
+        data: { subscriptionStatus: 'ACTIVE' },
+      }),
+    ])
+  } else if (paymentStatus === 'rejected' || paymentStatus === 'refunded' || paymentStatus === 'cancelled') {
+    await prisma.$transaction([
+      prisma.subscription.update({
+        where: { id: subscription.id },
+        data: { status: 'PAST_DUE' },
+      }),
+      prisma.tenant.update({
+        where: { id: subscription.tenantId },
+        data: { subscriptionStatus: 'PAST_DUE' },
+      }),
+    ])
+  }
 }
 
 // applyCashback e applyLoyaltyPoints agora vêm de lib/loyalty/apply-rewards
