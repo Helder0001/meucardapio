@@ -39,6 +39,32 @@ export async function GET(request: Request) {
 
   const results: Record<string, number> = {}
 
+  // 0. Cancelamentos solicitados (cancelledAt setado) cujo período já pago
+  // (currentPeriodEnd) já passou → agora sim finaliza: bloqueia o acesso.
+  // Antes disso, o tenant continua ACTIVE de propósito (cancelar não corta
+  // o acesso na hora, só impede a próxima cobrança — ver
+  // actions/billing/cancel-subscription.ts).
+  const endedCancellations = await prisma.subscription.findMany({
+    where: {
+      cancelledAt: { not: null },
+      status: { not: 'CANCELLED' },
+      currentPeriodEnd: { lt: new Date() },
+    },
+    select: { id: true, tenantId: true },
+  })
+
+  if (endedCancellations.length > 0) {
+    await prisma.subscription.updateMany({
+      where: { id: { in: endedCancellations.map((s) => s.id) } },
+      data: { status: 'CANCELLED' },
+    })
+    await prisma.tenant.updateMany({
+      where: { id: { in: endedCancellations.map((s) => s.tenantId) } },
+      data: { subscriptionStatus: 'CANCELLED' },
+    })
+  }
+  results.cancellationsFinalized = endedCancellations.length
+
   // 1. Trials expirados → mudar para SUSPENDED
   const { count: expiredTrials } = await prisma.tenant.updateMany({
     where: {

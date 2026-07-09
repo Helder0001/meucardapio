@@ -30,12 +30,23 @@ export default async function AssinaturaPage() {
   // Se por algum motivo o status já estiver ok (ex.: pagamento confirmado
   // em outra aba, ou cron ainda não rodou mas o trial não venceu de fato),
   // manda direto pro dashboard em vez de mostrar a cobrança.
+  //
+  // CORREÇÃO: antes checava só `!== 'SUSPENDED'`, então PAST_DUE (ou
+  // CANCELLED) mandava de volta pro /dashboard — que por sua vez bloqueia
+  // qualquer status que não seja ACTIVE/TRIAL válido e redireciona de volta
+  // pra cá, gerando loop infinito. Agora espelha exatamente a mesma regra
+  // do layout do dashboard: só volta pro /dashboard se ACTIVE ou TRIAL
+  // ainda dentro do prazo.
   const trialExpired =
     tenant.subscriptionStatus === 'TRIAL' &&
     !!tenant.trialEndsAt &&
     tenant.trialEndsAt < new Date()
 
-  if (tenant.subscriptionStatus !== 'SUSPENDED' && !trialExpired) {
+  const hasValidAccess =
+    tenant.subscriptionStatus === 'ACTIVE' ||
+    (tenant.subscriptionStatus === 'TRIAL' && !trialExpired)
+
+  if (hasValidAccess) {
     redirect('/dashboard')
   }
 
@@ -55,9 +66,11 @@ export default async function AssinaturaPage() {
         </h1>
 
         <p className="mt-2 text-sm text-neutral-600">
-          {trialEndsAtLabel
-            ? `O teste grátis do ${tenant.name} venceu em ${trialEndsAtLabel}.`
-            : `O acesso do ${tenant.name} está suspenso por falta de pagamento.`}{' '}
+          {tenant.subscriptionStatus === 'CANCELLED'
+            ? `A assinatura do ${tenant.name} foi cancelada e o período pago já terminou.`
+            : trialEndsAtLabel
+              ? `O teste grátis do ${tenant.name} venceu em ${trialEndsAtLabel}.`
+              : `O acesso do ${tenant.name} está suspenso por falta de pagamento.`}{' '}
           Para continuar usando o Meu Cardápio, ative sua assinatura do Plano PRO.
         </p>
 

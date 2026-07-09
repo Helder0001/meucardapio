@@ -27,6 +27,36 @@ export default async function ProfilePage() {
 
   if (!user) redirect('/login')
 
+  // Assinatura da plataforma (Plano PRO) — só faz sentido buscar/exibir pra
+  // quem tem tenant e é TENANT_ADMIN (billing não é assunto de garçom).
+  const subscription =
+    session.user.role === 'TENANT_ADMIN' && session.user.tenantId
+      ? await prisma.subscription.findUnique({
+          where: { tenantId: session.user.tenantId },
+          select: {
+            status: true,
+            plan: true,
+            billingCycle: true,
+            amount: true,
+            currentPeriodEnd: true,
+            cancelledAt: true,
+          },
+        })
+      : null
+
+  // Prisma Decimal/Date não cruzam a fronteira Server->Client Component de
+  // forma serializável — convertendo aqui antes de passar pro ProfileForm.
+  const subscriptionForClient = subscription
+    ? {
+        status: subscription.status,
+        plan: subscription.plan,
+        billingCycle: subscription.billingCycle,
+        amount: Number(subscription.amount),
+        currentPeriodEnd: subscription.currentPeriodEnd.toISOString(),
+        cancelledAt: subscription.cancelledAt?.toISOString() ?? null,
+      }
+    : null
+
   return (
     <div className="max-w-2xl space-y-5">
       <div>
@@ -35,7 +65,7 @@ export default async function ProfilePage() {
           Gerencie suas informações pessoais e senha
         </p>
       </div>
-      <ProfileForm user={user} />
+      <ProfileForm user={user} subscription={subscriptionForClient} />
     </div>
   )
 }
