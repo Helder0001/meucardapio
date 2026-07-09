@@ -24,7 +24,29 @@ interface SubscriptionCardFormProps {
   publicKey: string
 }
 
-type LoadState = 'loading-sdk' | 'ready' | 'submitting' | 'error' | 'success'
+type LoadState = 'loading-sdk' | 'ready' | 'submitting' | 'error' | 'processing' | 'success'
+
+// Cobrança de assinatura no MP é assíncrona: o preapproval pode nascer
+// "authorized" (mandato validado) sem a primeira cobrança ainda ter sido
+// aprovada — ela fica "Processando" por alguns segundos (às vezes mais,
+// se cair em análise antifraude). Por isso não dá mais pra redirecionar
+// direto pro /dashboard só com o preapproval criado (isso é otimista e
+// foi corrigido em actions/billing/reactivate-subscription.ts) — aqui a
+// gente espera de verdade a confirmação, consultando o status a cada
+// poucos segundos, antes de mandar o usuário pro dashboard.
+const POLL_INTERVAL_MS = 3_000
+const POLL_MAX_ATTEMPTS = 40 // ~2 minutos
+
+async function checkSubscriptionActive(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/billing/subscription-status', { cache: 'no-store' })
+    if (!res.ok) return false
+    const data = await res.json()
+    return Boolean(data?.hasValidAccess)
+  } catch {
+    return false
+  }
+}
 
 export function SubscriptionCardForm({ amount, publicKey }: SubscriptionCardFormProps) {
   const router = useRouter()
@@ -100,9 +122,36 @@ export function SubscriptionCardForm({ amount, publicKey }: SubscriptionCardForm
               return
             }
 
-            setState('success')
-            router.push('/dashboard')
-            router.refresh()
+            // O cartão foi autorizado (mandato criado), mas a cobrança em
+            // si ainda pode estar em processamento no MP — só sabemos que
+            // deu certo de verdade quando o webhook confirmar e o status
+            // virar ACTIVE. Enquanto isso, mostramos "processando" em vez
+            // de redirecionar no escuro.
+            setState('processing')
+
+            for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt++) {
+              if (cancelled) return
+              const isActive = await checkSubscriptionActive()
+              if (isActive) {
+                if (cancelled) return
+                setState('success')
+                router.push('/dashboard')
+                router.refresh()
+                return
+              }
+              await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
+            }
+
+            // Passou do tempo razoável de espera sem confirmação — não é
+            // necessariamente um erro (o MP às vezes demora mais em
+            // análise antifraude); só avisamos e paramos de bloquear a
+            // tela, sem mandar pro dashboard (ele bloquearia de novo).
+            if (!cancelled) {
+              setState('error')
+              setErrorMessage(
+                'Seu pagamento ainda está sendo processado pelo Mercado Pago — isso pode levar alguns minutos em análises mais demoradas. Você pode atualizar esta página daqui a pouco para verificar se já foi confirmado.'
+              )
+            }
           },
         },
       })
@@ -146,10 +195,12 @@ export function SubscriptionCardForm({ amount, publicKey }: SubscriptionCardForm
         </div>
       )}
 
-      {(state === 'submitting' || state === 'success') && (
-        <div className="flex items-center justify-center py-3 text-neutral-500 text-sm gap-2 mb-2">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          {state === 'success' ? 'Assinatura ativada! Redirecionando...' : 'Ativando assinatura...'}
+      {(state === 'submitting' || state === 'processing' || state === 'success') && (
+        <div className="flex items-center justify-center py-3 text-neutral-500 text-sm gap-2 mb-2 text-center">
+          <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
+          {state === 'submitting' && 'Enviando dados do cartão...'}
+          {state === 'processing' && 'Confirmando pagamento com o Mercado Pago... isso pode levar alguns segundos.'}
+          {state === 'success' && 'Pagamento confirmado! Redirecionando...'}
         </div>
       )}
 
