@@ -237,7 +237,10 @@ export async function createOrderAction(
         orderNumber,
         type: data.type,
         status: 'PENDING',
-        paymentStatus: 'PENDING',
+        // Total já zerado (cashback/desconto cobriu tudo) — nada a cobrar,
+        // então já nasce pago. Sem isso, o pedido ficava "pendente de
+        // pagamento" pra sempre, já que não existe nenhum Payment a criar.
+        paymentStatus: calculation.total <= 0 ? 'PAID' : 'PENDING',
         tableId: data.tableId,
         pdvId: data.pdvId,
         createdById: data.createdByUserId,

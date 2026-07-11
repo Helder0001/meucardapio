@@ -111,11 +111,14 @@ export function CardPaymentForm({ orderId, amount, publicKey, color, statusToken
                   token: statusToken,
                   cardToken: cardFormData.token,
                   installments: cardFormData.installments,
-                  paymentMethodId: cardFormData.paymentMethodId,
-                  issuerId: cardFormData.issuerId,
+                  // BUG: o Brick do MP retorna esses campos em snake_case
+                  // (payment_method_id, issuer_id), não camelCase — por isso
+                  // vinham undefined e a nossa própria validação rejeitava
+                  // o pagamento antes mesmo de tentar cobrar de verdade.
+                  paymentMethodId: cardFormData.payment_method_id,
+                  issuerId: cardFormData.issuer_id,
                   customerEmail: cardFormData.payer?.email,
                   customerCpf: cardFormData.payer?.identification?.number,
-                  customerName: cardFormData.cardholderName ?? '',
                 }),
               })
 

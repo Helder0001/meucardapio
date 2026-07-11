@@ -264,23 +264,29 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
       return
     }
 
-    if (payments.some((p) => !p.amount || parseFloat(p.amount) <= 0)) {
-      toast.error('Informe o valor de cada forma de pagamento')
-      return
-    }
-    if (payments.some((p) => p.method === 'LINK') && payments.length > 1) {
-      toast.error('"Link de pagamento" não pode ser combinado com outra forma de pagamento')
-      return
-    }
-    if (payments.some((p) => p.method === 'PIX') && !isValidCpf(cpf)) {
-      toast.error('Informe um CPF válido para pagar com PIX')
-      return
-    }
-    if (!isFullyAllocated) {
-      const diff = estimatedTotal - totalAllocated
-      if (diff > 0.01) {
-        toast.error(`Faltam ${formatCurrency(diff)} para completar o pagamento`)
+    // Total já cobre zero (cashback/desconto cobriu tudo) — não faz sentido
+    // pedir forma de pagamento pra cobrar R$0,00.
+    const isFullyCovered = estimatedTotal <= 0
+
+    if (!isFullyCovered) {
+      if (payments.some((p) => !p.amount || parseFloat(p.amount) <= 0)) {
+        toast.error('Informe o valor de cada forma de pagamento')
         return
+      }
+      if (payments.some((p) => p.method === 'LINK') && payments.length > 1) {
+        toast.error('"Link de pagamento" não pode ser combinado com outra forma de pagamento')
+        return
+      }
+      if (payments.some((p) => p.method === 'PIX') && !isValidCpf(cpf)) {
+        toast.error('Informe um CPF válido para pagar com PIX')
+        return
+      }
+      if (!isFullyAllocated) {
+        const diff = estimatedTotal - totalAllocated
+        if (diff > 0.01) {
+          toast.error(`Faltam ${formatCurrency(diff)} para completar o pagamento`)
+          return
+        }
       }
     }
 
@@ -314,15 +320,15 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
         // pagamento embutido, e o link é gerado depois, à parte. O filter
         // abaixo também prova ao TypeScript que nenhum item aqui é 'LINK'
         // (isPaymentLink já garante isso em runtime).
-        payments: isPaymentLink ? undefined : payments
+        payments: isFullyCovered || isPaymentLink ? undefined : payments
           .filter((p): p is typeof p & { method: Exclude<PaymentMethodValue, 'LINK'> } => p.method !== 'LINK')
           .map((p) => ({
             method: p.method,
             amount: parseFloat(p.amount),
             changeFor: p.method === 'CASH' && p.changeFor ? Number(p.changeFor) : undefined,
           })),
-        paymentMethod: isPaymentLink ? undefined : (payments[0].method as Exclude<PaymentMethodValue, 'LINK'>),
-        changeFor: !isPaymentLink && payments[0].method === 'CASH' && payments[0].changeFor ? Number(payments[0].changeFor) : undefined,
+        paymentMethod: isFullyCovered || isPaymentLink ? undefined : (payments[0].method as Exclude<PaymentMethodValue, 'LINK'>),
+        changeFor: !isFullyCovered && !isPaymentLink && payments[0].method === 'CASH' && payments[0].changeFor ? Number(payments[0].changeFor) : undefined,
         deviceId,
         customerCpf: payments.some((p) => p.method === 'PIX') ? cpf : undefined,
         deferPaymentLink: isPaymentLink,

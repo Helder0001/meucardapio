@@ -9,6 +9,7 @@ import { prisma } from '@/lib/db/client'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
+import { paymentMethodLabel } from '@/lib/utils/payment-labels'
 import { z } from 'zod'
 import { isValidCpf, onlyDigits } from '@/lib/utils/cpf'
 
@@ -239,7 +240,7 @@ export async function POST(
       orderId,
       status: order.status as any,
       userId: session.user.id,
-      notes: `Pagamento adicionado por ${session.user.name ?? session.user.email}: ${payments.map((p) => `${p.method} R$${p.amount.toFixed(2)}`).join(', ')}`,
+      notes: `Pagamento adicionado por ${session.user.name ?? session.user.email}: ${payments.map((p) => `${paymentMethodLabel(p.method, order.type)} R$${p.amount.toFixed(2)}`).join(', ')}`,
     },
   })
 

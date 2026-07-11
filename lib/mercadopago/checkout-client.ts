@@ -140,7 +140,7 @@ export interface CreateCardPaymentParams {
   customerEmail: string
   customerCpf: string        // obrigatório pelo MP para cartão — CPF ou CNPJ
   customerDocumentType?: 'CPF' | 'CNPJ'  // CORREÇÃO: era sempre CPF, ignorando CNPJ
-  customerName: string
+  customerName?: string
   description?: string
 }
 

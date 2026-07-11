@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { Loader2, CheckCircle2, XCircle, CreditCard, Plus, X, Pencil, Minus, Trash2, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatCpf, isValidCpf } from '@/lib/utils/cpf'
+import { paymentMethodLabel } from '@/lib/utils/payment-labels'
 
 interface CatalogProduct { id: string; name: string; price: number; isOutOfStock?: boolean }
 interface CatalogCategory { id: string; name: string; products: CatalogProduct[] }
@@ -35,27 +36,18 @@ function makeItemKey(productId: string, addonIds: string[]): string {
 // "Crédito (online)" (CREDIT_CARD) fica de fora de propósito: esse método é
 // reservado ao link de pagamento gerado pelo sistema (Checkout Pro) — só
 // trocar o rótulo pra ele aqui não gera cobrança nenhuma, só confunde.
-const CHANGE_METHOD_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'PIX',                label: '⚡ PIX' },
-  { value: 'CASH',                label: '💵 Dinheiro' },
-  { value: 'CREDIT_CARD_MANUAL',  label: '💳 Crédito (entrega/retirada)' },
-  { value: 'DEBIT_CARD',          label: '💳 Débito' },
-  { value: 'VOUCHER',             label: '🎟️ Voucher' },
-]
+function changeMethodOptions(orderType?: string): Array<{ value: string; label: string }> {
+  return [
+    { value: 'PIX',                label: '⚡ PIX' },
+    { value: 'CASH',                label: '💵 Dinheiro' },
+    { value: 'CREDIT_CARD_MANUAL',  label: paymentMethodLabel('CREDIT_CARD_MANUAL', orderType) },
+    { value: 'DEBIT_CARD',          label: '💳 Débito' },
+    { value: 'VOUCHER',             label: '🎟️ Voucher' },
+  ]
+}
 
 type AddPaymentMethod = 'PIX' | 'CASH' | 'CREDIT_CARD' | 'CREDIT_CARD_MANUAL' | 'DEBIT_CARD' | 'VOUCHER' | 'TRANSFER'
 interface AddPaymentEntry { method: AddPaymentMethod; amount: number }
-
-const PAYMENT_METHODS: Record<string, string> = {
-  PIX:                '⚡ PIX',
-  CASH:               '💵 Dinheiro',
-  CREDIT_CARD:        '💳 Cartão de Crédito',
-  CREDIT_CARD_MANUAL: '💳 Crédito (entrega/retirada)',
-  DEBIT_CARD:         '💳 Cartão de Débito',
-  VOUCHER:            '🎟️ Voucher',
-  CASHBACK:           '💰 Cashback',
-  TRANSFER:           '🏦 Transferência',
-}
 
 // Tradução dos status do histórico para português
 const STATUS_PT: Record<string, string> = {
@@ -875,7 +867,7 @@ export function OrderDetail({
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <p className="text-sm font-medium text-foreground">
-                            {PAYMENT_METHODS[p.method] ?? p.method}
+                            {paymentMethodLabel(p.method, order.type)}
                           </p>
                           <p className="text-xs font-semibold text-foreground mt-0.5">
                             {formatCurrency(p.amount)}
@@ -922,7 +914,7 @@ export function OrderDetail({
                                 onBlur={() => setChangingPaymentId(null)}
                                 className="mt-1.5 text-xs border border-input rounded-lg bg-background px-2 py-1 focus:outline-none focus:ring-2 focus:ring-ring"
                               >
-                                {CHANGE_METHOD_OPTIONS
+                                {changeMethodOptions(order.type)
                                   .filter((opt) => (opt.value === 'PIX' ? pixEnabled : true))
                                   .filter((opt) => (opt.value === 'CREDIT_CARD' ? cardEnabled : true))
                                   .map((opt) => (

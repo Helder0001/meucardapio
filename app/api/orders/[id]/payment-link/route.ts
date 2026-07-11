@@ -55,6 +55,8 @@ export async function POST(
       total: true,
       paymentStatus: true,
       customer: { select: { name: true, phone: true } },
+      tenant: { select: { slug: true } },
+      payments: { select: { id: true, status: true, amount: true, preferenceId: true } },
       items: {
         select: { productName: true, quantity: true, unitPrice: true },
       },
@@ -69,32 +71,64 @@ export async function POST(
     return NextResponse.json({ error: 'Pedido já está pago' }, { status: 400 })
   }
 
+  // BUG: o link sempre cobrava o total CHEIO do pedido, mesmo quando já
+  // havia uma parte paga (ex.: pagamento dividido) — a segunda cobrança
+  // pelo link ficava impossível de ficar correta. Agora usa o saldo
+  // realmente restante (total - já pago).
+  const alreadyPaid = order.payments
+    .filter((p) => p.status === 'PAID')
+    .reduce((s, p) => s + Number(p.amount), 0)
+  const stillOwed = Math.max(0, Math.round((Number(order.total) - alreadyPaid) * 100) / 100)
+
+  if (stillOwed <= 0) {
+    return NextResponse.json({ error: 'Não há saldo restante a cobrar neste pedido' }, { status: 400 })
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+  const slug = order.tenant.slug
+
   try {
     const preference = await createPaymentPreference({
       tenantId: order.tenantId,
       orderId: order.id,
       orderNumber: order.orderNumber,
-      total: Number(order.total),
+      total: stillOwed,
       customerName: order.customer?.name ?? undefined,
       customerPhone: order.customer?.phone ?? undefined,
-      items: order.items.map((item: { productName: string; quantity: number; unitPrice: any }) => ({
-        title: item.productName,
-        quantity: item.quantity,
-        unit_price: Number(item.unitPrice),
-      })),
+      items: stillOwed === Number(order.total)
+        ? order.items.map((item: { productName: string; quantity: number; unitPrice: any }) => ({
+            title: item.productName,
+            quantity: item.quantity,
+            unit_price: Number(item.unitPrice),
+          }))
+        // Saldo parcial (segundo pagamento) — não dá pra listar os itens
+        // originais com os preços de sempre, porque a soma não bateria
+        // com o valor cobrado. Um item único representando o saldo evita
+        // o Mercado Pago rejeitar a preferência por inconsistência.
+        : [{ title: `Saldo restante — Pedido #${String(order.orderNumber).padStart(4, '0')}`, quantity: 1, unit_price: stillOwed }],
+      // BUG: sem isso, o cliente pagava e o Mercado Pago tentava redirecionar
+      // pra "/menu/pedido/{id}" (sem o slug do estabelecimento) — rota que
+      // não existe — em vez de voltar pra tela de status do pedido.
+      backUrls: {
+        success: `${appUrl}/menu/${slug}/pedido/${order.id}?status=success`,
+        failure: `${appUrl}/menu/${slug}/pedido/${order.id}?status=failure`,
+        pending: `${appUrl}/menu/${slug}/pedido/${order.id}?status=pending`,
+      },
       expirationMinutes: 60, // link válido por 1 hora
     })
 
-    // Salvar o link no banco — se já existia um Payment PENDING para este
-    // pedido, atualiza; senão cria um novo.
-    const existingPayment = await prisma.payment.findFirst({
-      where: { orderId: order.id, status: 'PENDING' },
-    })
+    // Salvar o link no banco — se já existia um Payment PENDING gerado por
+    // um link anterior (tem preferenceId), atualiza; senão cria um novo.
+    // Importante: só reaproveita um pagamento pendente que JÁ é um link
+    // (tem preferenceId) — nunca um pagamento manual pendente (ex.: dinheiro
+    // registrado como parte de um pagamento dividido), que é outra coisa.
+    const existingLinkPayment = order.payments.find((p) => p.status === 'PENDING' && p.preferenceId)
 
-    if (existingPayment) {
+    if (existingLinkPayment) {
       await prisma.payment.update({
-        where: { id: existingPayment.id },
+        where: { id: existingLinkPayment.id },
         data: {
+          amount: stillOwed,
           preferenceId: preference.preferenceId,
           checkoutUrl: preference.checkoutUrl,
         },
@@ -106,7 +140,7 @@ export async function POST(
           orderId: order.id,
           method: 'CREDIT_CARD',
           status: 'PENDING',
-          amount: order.total,
+          amount: stillOwed,
           preferenceId: preference.preferenceId,
           checkoutUrl: preference.checkoutUrl,
         },

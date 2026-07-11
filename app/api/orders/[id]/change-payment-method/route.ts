@@ -21,6 +21,7 @@ import { prisma } from '@/lib/db/client'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
+import { paymentMethodLabel } from '@/lib/utils/payment-labels'
 import type { PaymentStatus } from '@prisma/client'
 import { z } from 'zod'
 
@@ -127,7 +128,7 @@ export async function PATCH(
   const order = await prisma.order.findFirst({
     where: { id: orderId, tenantId },
     select: {
-      id: true, orderNumber: true, status: true,
+      id: true, orderNumber: true, status: true, type: true,
       payments: { where: { id: paymentId }, select: { id: true, method: true, status: true, amount: true } },
     },
   })
@@ -191,7 +192,7 @@ export async function PATCH(
       orderId,
       status: order.status as any,
       userId: session.user.id,
-      notes: `Forma de pagamento alterada de ${oldMethod} para ${method} por ${session.user.name ?? session.user.email}`,
+      notes: `Forma de pagamento alterada de ${paymentMethodLabel(oldMethod, order.type)} para ${paymentMethodLabel(method, order.type)} por ${session.user.name ?? session.user.email}`,
     },
   })
 

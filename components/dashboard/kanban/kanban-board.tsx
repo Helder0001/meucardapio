@@ -177,6 +177,14 @@ export function KanbanBoard({ tenantId, userRole = '', lockedFilter }: KanbanBoa
       setConnected(true)
     })
 
+    // Servidor avisando que vai fechar a conexão de forma graciosa (evita
+    // o timeout de 300s da Vercel) — reconecta na hora, sem esperar o
+    // onerror (que só dispararia alguns instantes depois).
+    es.addEventListener('reconnect', () => {
+      es.close()
+      connect()
+    })
+
     es.onerror = () => {
       setConnected(false)
       // Reconectar após 5 segundos (inclui quando Vercel mata a conexão SSE após 300s)

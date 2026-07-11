@@ -82,7 +82,7 @@ export async function PATCH(
       id: true, orderNumber: true, status: true, type: true,
       subtotal: true, deliveryFee: true, discountAmount: true, cashbackUsed: true, total: true,
       kitchenRound: true,
-      items: { select: { id: true, productId: true, quantity: true, addons: { select: { addonId: true } } } },
+      items: { select: { id: true, productId: true, productName: true, quantity: true, addons: { select: { addonId: true } } } },
       payments: { select: { id: true, method: true, status: true, amount: true } },
     },
   })
@@ -152,10 +152,10 @@ export async function PATCH(
   const finalItems = resolved as NonNullable<(typeof resolved)[number]>[]
 
   // ── Diff com os itens atuais do pedido ────────────────────────────────
-  const oldByKey = new Map<string, { id: string; productId: string; quantity: number }>()
+  const oldByKey = new Map<string, { id: string; productId: string; productName: string; quantity: number }>()
   for (const it of order.items) {
     oldByKey.set(itemKey(it.productId, it.addons.map((a) => a.addonId)), {
-      id: it.id, productId: it.productId, quantity: it.quantity,
+      id: it.id, productId: it.productId, productName: it.productName, quantity: it.quantity,
     })
   }
 
@@ -337,7 +337,7 @@ export async function PATCH(
         orderId,
         status: (isReopeningDeliveredPdv ? 'PENDING' : order.status) as any,
         userId: session.user.id,
-        notes: `Pedido editado por ${session.user.name ?? session.user.email}: total de R$${Number(order.total).toFixed(2)} para R$${newTotal.toFixed(2)}`,
+        notes: buildEditSummary(session.user.name ?? session.user.email, oldByKey, newByKey, Number(order.total), newTotal),
       },
     })
   })
@@ -394,4 +394,38 @@ export async function PATCH(
       changeAmount: p.changeAmount ? Number(p.changeAmount) : null,
     })),
   })
+}
+
+// Monta uma nota de histórico detalhando O QUE mudou (não só o total) —
+// antes só dizia "total de RX para RY", sem dizer qual item foi
+// adicionado/removido/teve a quantidade alterada.
+function buildEditSummary(
+  userLabel: string | null | undefined,
+  oldByKey: Map<string, { productId: string; productName: string; quantity: number }>,
+  newByKey: Map<string, { productId: string; productName: string; quantity: number; totalPrice: number }>,
+  oldTotal: number,
+  newTotal: number
+): string {
+  const added: string[] = []
+  const removed: string[] = []
+  const changed: string[] = []
+
+  for (const [key, newItem] of newByKey) {
+    const old = oldByKey.get(key)
+    if (!old) {
+      added.push(`+${newItem.quantity}x ${newItem.productName} (R$${newItem.totalPrice.toFixed(2)})`)
+    } else if (old.quantity !== newItem.quantity) {
+      changed.push(`${newItem.productName}: ${old.quantity}x → ${newItem.quantity}x`)
+    }
+  }
+  for (const [key, old] of oldByKey) {
+    if (!newByKey.has(key)) {
+      removed.push(`-${old.quantity}x ${old.productName}`)
+    }
+  }
+
+  const parts = [...added, ...removed, ...changed]
+  const detail = parts.length > 0 ? parts.join(', ') : 'sem alteração nos itens'
+
+  return `Pedido editado por ${userLabel}: ${detail} (total de R$${oldTotal.toFixed(2)} para R$${newTotal.toFixed(2)})`
 }

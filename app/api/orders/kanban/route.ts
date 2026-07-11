@@ -136,6 +136,18 @@ export async function GET(request: Request) {
         send('heartbeat', { ts: Date.now() })
       }, 30_000)
 
+      // A Vercel mata funções serverless após um tempo máximo (300s aqui) —
+      // isso já era tratado no cliente (reconecta via onerror), mas cada
+      // conexão morta gerava um "Vercel Runtime Timeout Error" barulhento
+      // nos logs. Fechamos a conexão de forma graciosa um pouco antes desse
+      // limite, avisando o cliente pra reconectar na hora, sem esperar o
+      // erro/timeout.
+      const gracefulClose = setTimeout(() => {
+        send('reconnect', { reason: 'graceful-timeout' })
+        clearInterval(heartbeat)
+        try { controller.close() } catch {}
+      }, 280_000) // 280s — 20s de margem antes do limite de 300s da Vercel
+
       // Criar cliente Redis dedicado para subscribe
       // (o cliente principal não pode ser usado enquanto está no modo subscribe)
       let subscriber: any = null
@@ -167,6 +179,7 @@ export async function GET(request: Request) {
       // Limpar quando o cliente desconectar
       request.signal.addEventListener('abort', () => {
         clearInterval(heartbeat)
+        clearTimeout(gracefulClose)
         try {
           if (subscriber) subscriber.unsubscribe?.()
         } catch {}
