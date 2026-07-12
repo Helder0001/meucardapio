@@ -6,7 +6,6 @@ import { z } from 'zod'
 import { prisma } from '@/lib/db/client'
 import { hashPassword } from '@/lib/auth/password'
 import { nanoid } from 'nanoid'
-import { getInternalApiSecret } from '@/lib/security/internal-secret'
 
 const registerSchema = z.object({
   tenantName:   z.string().min(2).max(100),
@@ -60,9 +59,13 @@ export async function registerAction(
   const existingSlug = await prisma.tenant.findUnique({ where: { slug } })
   if (existingSlug) slug = `${slug}-${nanoid(4)}`
 
-  // 3. Criar assinatura no Mercado Pago
-  const mpResult = await createMpSubscription({ tenantName, email, billingCycle })
-  if (mpResult.error) return { error: mpResult.error }
+  // 3. Assinatura: cria só o registro local de TRIAL (7 dias grátis). Sem
+  // cartão nenhum ainda — o cadastro nunca exigiu cartão de fato (o campo
+  // cardToken existia no schema mas nunca era passado pra frente pro MP,
+  // então a chamada ao /api/mp/preapproval aqui não fazia nada de útil).
+  // O cartão real só é coletado na reativação, quando o trial vence
+  // (actions/billing/reactivate-subscription.ts, que já usa Efí Bank).
+  const mpResult: { subscriptionId?: string; pixInitPoint?: string; error?: string } = {}
 
   const passwordHash = await hashPassword(password)
   const trialEndsAt  = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
@@ -95,20 +98,18 @@ export async function registerAction(
         },
       })
 
-      if (mpResult.subscriptionId) {
-        await tx.subscription.create({
-          data: {
-            tenantId:           tenant.id,
-            plan:               'PRO',
-            billingCycle:       billingCycle as any,
-            status:             'TRIAL',
-            mercadoPagoSubId:   mpResult.subscriptionId,
-            currentPeriodStart: new Date(),
-            currentPeriodEnd:   trialEndsAt,
-            amount,
-          },
-        })
-      }
+      await tx.subscription.create({
+        data: {
+          tenantId:           tenant.id,
+          plan:               'PRO',
+          provider:           'EFI',
+          billingCycle:       billingCycle as any,
+          status:             'TRIAL',
+          currentPeriodStart: new Date(),
+          currentPeriodEnd:   trialEndsAt,
+          amount,
+        },
+      })
 
       await tx.pDV.create({
         data: { tenantId: tenant.id, name: tenantName, type: 'STORE', isActive: true },
@@ -138,57 +139,3 @@ export async function registerAction(
   }
 }
 
-async function createMpSubscription(params: {
-  tenantName:   string
-  email:        string
-  billingCycle: string
-}): Promise<{ subscriptionId?: string; pixInitPoint?: string; error?: string }> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL
-  if (!appUrl) {
-    console.error('[register] NEXT_PUBLIC_APP_URL não configurado')
-    return { error: 'Configuração do servidor inválida.' }
-  }
-
-  if (!process.env.MERCADOPAGO_ACCESS_TOKEN) {
-    console.warn('[register] MERCADOPAGO_ACCESS_TOKEN not set — skipping payment validation')
-    return {}
-  }
-
-  try {
-    console.log('[register] chamando /api/mp/preapproval...')
-
-    const res = await fetch(`${appUrl}/api/mp/preapproval`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-internal-secret': getInternalApiSecret(),
-      },
-      body: JSON.stringify({
-        reason:        `Meu Cardápio — Plano PRO ${params.billingCycle === 'ANNUAL' ? 'Anual' : 'Mensal'} — ${params.tenantName}`,
-        payer_email:   params.email,
-        billing_cycle: params.billingCycle,
-        payer: {
-          email:      params.email,
-          first_name: params.email.split('@')[0],
-          last_name:  'Cliente',
-          identification: { type: 'CPF', number: '' },
-        },
-      }),
-    })
-
-    const data = await res.json()
-    console.log('[register] /api/mp/preapproval response:', res.status, JSON.stringify(data))
-
-    if (!res.ok) {
-      return { error: data.error ?? 'Erro ao processar pagamento. Tente novamente.' }
-    }
-
-    return {
-      subscriptionId: data.subscriptionId,
-      pixInitPoint:   data.pixInitPoint,
-    }
-  } catch (err: any) {
-    console.error('[register] erro ao chamar /api/mp/preapproval:', err)
-    return { error: 'Erro ao processar pagamento. Tente novamente.' }
-  }
-}

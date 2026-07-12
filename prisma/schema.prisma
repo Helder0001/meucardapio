@@ -190,10 +190,21 @@ model Tenant {
   @@index([isActive])
 }
 
+enum PaymentProvider {
+  MERCADOPAGO
+  EFI
+}
+
 model Subscription {
   id                 String             @id @default(cuid())
   tenantId           String             @unique
+  provider           PaymentProvider    @default(MERCADOPAGO)
   mercadoPagoSubId   String?            @unique
+  // Efí Bank (API Cobranças / Assinaturas) — substitui o preapproval do MP
+  // para a cobrança recorrente do PRÓPRIO plano PRO da plataforma.
+  efiPlanId          Int?
+  efiSubscriptionId  Int?               @unique
+  efiChargeId        Int?
   plan               Plan
   billingCycle       BillingCycle       @default(MONTHLY)
   status             SubscriptionStatus
@@ -207,6 +218,16 @@ model Subscription {
   updatedAt          DateTime           @updatedAt
 
   tenant             Tenant             @relation(fields: [tenantId], references: [id])
+}
+
+// Cache do plan_id criado na Efí pra cada ciclo de cobrança (mensal/anual).
+// A Efí exige criar um "plano" (nome + intervalo + repetições) antes de
+// poder vincular assinaturas a ele — criamos uma vez e reaproveitamos.
+model EfiPlan {
+  id           String       @id @default(cuid())
+  billingCycle BillingCycle @unique
+  efiPlanId    Int          @unique
+  createdAt    DateTime     @default(now())
 }
 
 // ══════════════════════════════════════════════════════════

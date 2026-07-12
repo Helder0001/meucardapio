@@ -23,6 +23,7 @@
 
 import { prisma } from '@/lib/db/client'
 import { auth } from '@/lib/auth/session'
+import { cancelEfiSubscription } from '@/lib/efi/subscription'
 
 export type CancelSubscriptionResult = { error?: string; accessUntil?: string }
 
@@ -54,9 +55,22 @@ export async function cancelSubscriptionAction(reason?: string): Promise<CancelS
     return { accessUntil: subscription.currentPeriodEnd.toISOString() }
   }
 
-  // Cancela o mandato no Mercado Pago (credenciais da PLATAFORMA — é a
-  // cobrança do plano do Meu Cardápio, não um pagamento do tenant).
-  if (subscription.mercadoPagoSubId) {
+  // MIGRAÇÃO: assinaturas criadas depois da troca pra Efí Bank cancelam por
+  // lá; assinaturas antigas (criadas quando ainda era Mercado Pago)
+  // continuam cancelando no MP — o campo `provider` diz qual API usar.
+  if (subscription.provider === 'EFI' && subscription.efiSubscriptionId) {
+    if (!process.env.EFI_CLIENT_ID || !process.env.EFI_CLIENT_SECRET) {
+      return { error: 'Pagamento não configurado no servidor. Contate o suporte.' }
+    }
+    try {
+      await cancelEfiSubscription(subscription.efiSubscriptionId)
+    } catch (err) {
+      console.error('[cancel-subscription][efi] Erro ao cancelar assinatura', String(err))
+      return { error: 'Não foi possível cancelar a cobrança automática. Tente novamente ou contate o suporte.' }
+    }
+  } else if (subscription.mercadoPagoSubId) {
+    // Cancela o mandato no Mercado Pago (credenciais da PLATAFORMA — é a
+    // cobrança do plano do Meu Cardápio, não um pagamento do tenant).
     const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN
     if (!accessToken) {
       return { error: 'Pagamento não configurado no servidor. Contate o suporte.' }

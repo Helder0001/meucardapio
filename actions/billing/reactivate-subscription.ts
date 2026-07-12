@@ -2,23 +2,22 @@
 
 // actions/billing/reactivate-subscription.ts
 //
-// Gera um novo preapproval (assinatura) no Mercado Pago para um tenant cujo
-// trial venceu ou que foi suspenso por falta de pagamento. Reaproveita
-// exatamente o mesmo mecanismo já usado em actions/auth/register.ts —
-// /api/mp/preapproval, com as credenciais da PLATAFORMA — em vez de criar um
-// fluxo de cobrança paralelo. Quando o pagamento for confirmado, o webhook
-// (handleSubscriptionWebhook em app/api/webhooks/mercadopago/route.ts) já
-// sabe atualizar subscriptionStatus do tenant para ACTIVE.
+// Gera uma nova assinatura na Efí Bank (API Cobranças) para um tenant cujo
+// trial venceu ou que foi suspenso por falta de pagamento.
 //
-// IMPORTANTE: assinatura (preapproval) no Mercado Pago só existe com
-// cartão — PIX não tem cobrança recorrente automática nessa API (isso é
-// "Pix Automático", um produto diferente, não integrado aqui). Por isso
-// esta action exige um card_token_id já tokenizado no browser via Card
-// Payment Brick (components/... "cardPayment"), nunca dado de cartão cru.
+// MIGRAÇÃO: isso ANTES usava o Mercado Pago (preapproval). Trocado pra Efí
+// Bank a pedido — só a cobrança recorrente do PRÓPRIO plano PRO da
+// plataforma. Os pagamentos dos tenants pros clientes deles (PIX/cartão no
+// cardápio) continuam 100% no Mercado Pago, sem nenhuma mudança.
+//
+// IMPORTANTE: o `cardToken` aqui é um `payment_token` gerado no browser via
+// Efí.js (biblioteca JS específica da conta Efí, injetada no formulário de
+// /assinatura) — não é mais o card_token_id do Card Payment Brick do MP.
 
 import { prisma } from '@/lib/db/client'
 import { auth } from '@/lib/auth/session'
-import { getInternalApiSecret } from '@/lib/security/internal-secret'
+import { createEfiCardSubscription } from '@/lib/efi/subscription'
+import { onlyDigits } from '@/lib/utils/cpf'
 
 const PLAN_PRICE_MONTHLY = 1.00
 const PLAN_PRICE_ANNUAL = parseFloat((PLAN_PRICE_MONTHLY * 12 * 0.9).toFixed(2))
@@ -26,7 +25,7 @@ const PLAN_PRICE_ANNUAL = parseFloat((PLAN_PRICE_MONTHLY * 12 * 0.9).toFixed(2))
 export type ReactivateResult = { error?: string; status?: string }
 
 export interface ReactivateCardInput {
-  cardToken: string
+  cardToken: string // payment_token da Efí (Efí.js), não mais card_token_id do MP
   payerEmail: string
   payerCpf: string
   cardholderName: string
@@ -54,54 +53,29 @@ export async function reactivateSubscriptionAction(
   })
   if (!tenant) return { error: 'Estabelecimento não encontrado.' }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL
-  if (!appUrl) return { error: 'Configuração do servidor inválida.' }
-  if (!process.env.MERCADOPAGO_ACCESS_TOKEN) {
+  if (!process.env.EFI_CLIENT_ID || !process.env.EFI_CLIENT_SECRET) {
     return { error: 'Pagamento não configurado no servidor. Contate o suporte.' }
   }
 
   const isAnnual = billingCycle === 'ANNUAL'
   const amount = isAnnual ? PLAN_PRICE_ANNUAL : PLAN_PRICE_MONTHLY
 
-  const nameParts = cardholderName.trim().split(/\s+/)
-  const firstName = nameParts[0] || payerEmail.split('@')[0]
-  const lastName = nameParts.slice(1).join(' ') || 'Cliente'
-
-  let mpResult: { subscriptionId?: string; error?: string }
+  let efiResult: Awaited<ReturnType<typeof createEfiCardSubscription>>
   try {
-    const res = await fetch(`${appUrl}/api/mp/preapproval`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-internal-secret': getInternalApiSecret(),
-      },
-      body: JSON.stringify({
-        reason: `Meu Cardápio — Reativação Plano PRO ${isAnnual ? 'Anual' : 'Mensal'} — ${tenant.name}`,
-        payer_email: payerEmail,
-        billing_cycle: billingCycle,
-        card_token_id: cardToken,
-        start_immediately: true,
-        payer: {
-          email: payerEmail,
-          first_name: firstName,
-          last_name: lastName,
-          identification: { type: payerCpf.replace(/\D/g, '').length > 11 ? 'CNPJ' : 'CPF', number: payerCpf.replace(/\D/g, '') },
-        },
-      }),
+    efiResult = await createEfiCardSubscription({
+      billingCycle,
+      amount,
+      planLabel: `Meu Cardápio — Reativação Plano PRO ${isAnnual ? 'Anual' : 'Mensal'} — ${tenant.name}`,
+      customerName: cardholderName,
+      customerCpf: onlyDigits(payerCpf),
+      customerEmail: payerEmail,
+      paymentToken: cardToken,
+      // sem trial_days aqui: reativação cobra imediatamente, o período
+      // grátis já foi usado no cadastro.
     })
-
-    const data = await res.json()
-    if (!res.ok) {
-      return { error: data.error ?? 'Pagamento não autorizado. Verifique os dados do cartão.' }
-    }
-    mpResult = { subscriptionId: data.subscriptionId }
   } catch (err) {
-    console.error('[reactivate-subscription] erro ao chamar /api/mp/preapproval:', err)
-    return { error: 'Erro ao conectar ao Mercado Pago. Tente novamente.' }
-  }
-
-  if (!mpResult.subscriptionId) {
-    return { error: 'Não foi possível ativar a assinatura. Tente novamente.' }
+    console.error('[reactivate-subscription][efi] erro ao criar assinatura:', err)
+    return { error: 'Pagamento não autorizado. Verifique os dados do cartão.' }
   }
 
   const now = new Date()
@@ -109,23 +83,18 @@ export async function reactivateSubscriptionAction(
     now.getTime() + (isAnnual ? 365 : 30) * 24 * 60 * 60 * 1000
   )
 
-  // CORREÇÃO: status ACTIVE aqui era otimista, baseado só no preapproval
-  // vir "authorized" — mas "authorized" no /preapproval só confirma que o
-  // MANDATO (cartão validado) foi criado, não que a PRIMEIRA COBRANÇA em si
-  // foi aprovada. O MP tenta cobrar de forma assíncrona logo em seguida, e
-  // essa cobrança pode ser recusada (cartão sem limite, antifraude etc.) —
-  // nesse caso o preapproval continua "authorized" (MP vai tentar cobrar de
-  // novo depois), só que sem ter recebido nada ainda. Marcar ACTIVE aqui
-  // liberava o acesso do estabelecimento mesmo com a cobrança recusada.
-  // Agora: salvamos o mercadoPagoSubId mas mantemos o status atual do
-  // tenant (SUSPENDED/PAST_DUE) intocado — só o webhook de pagamento
-  // (handleSubscriptionPaymentEvent, evento 'payment' ou
-  // 'subscription_authorized_payment') vira pra ACTIVE quando a cobrança
-  // for realmente aprovada.
+  // Mesma cautela de antes: NÃO marcar ACTIVE otimista. O charge da Efí
+  // nasce com status 'waiting' (aguardando confirmação do banco emissor do
+  // cartão) — só o webhook (app/api/webhooks/efi/route.ts), ao receber a
+  // confirmação 'paid' da cobrança, vira o status pra ACTIVE de verdade.
   await prisma.subscription.upsert({
     where: { tenantId: tenant.id },
     update: {
-      mercadoPagoSubId: mpResult.subscriptionId,
+      provider: 'EFI',
+      efiPlanId: efiResult.efiPlanId,
+      efiSubscriptionId: efiResult.efiSubscriptionId,
+      efiChargeId: efiResult.efiChargeId,
+      mercadoPagoSubId: null,
       billingCycle: billingCycle as any,
       amount,
       currentPeriodStart: now,
@@ -136,9 +105,12 @@ export async function reactivateSubscriptionAction(
     create: {
       tenantId: tenant.id,
       plan: 'PRO',
+      provider: 'EFI',
       billingCycle: billingCycle as any,
       status: 'PAST_DUE',
-      mercadoPagoSubId: mpResult.subscriptionId,
+      efiPlanId: efiResult.efiPlanId,
+      efiSubscriptionId: efiResult.efiSubscriptionId,
+      efiChargeId: efiResult.efiChargeId,
       currentPeriodStart: now,
       currentPeriodEnd: periodEnd,
       amount,
