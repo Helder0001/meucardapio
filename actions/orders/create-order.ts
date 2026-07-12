@@ -515,6 +515,21 @@ async function createPixPayment(params: {
 
   const mpData = await response.json()
 
+  // BUG: o status que o MP retorna na criação do PIX (mpData.status /
+  // status_detail) nunca aparecia em log nenhum — só ia direto pro banco
+  // em mercadoPagoStatus. Se o PIX já nasce 'rejected' (acontece: o MP
+  // pode recusar na hora de gerar o QR code, antes mesmo do cliente tentar
+  // pagar), a gente salvava like se fosse normal e não tinha nenhum rastro
+  // no Vercel pra saber que rejeitou. Logando aqui pra qualquer rejeição
+  // ficar visível de cara.
+  console.log('[pix][create]', {
+    orderId: params.orderId,
+    mpPaymentId: mpData.id,
+    status: mpData.status,
+    statusDetail: mpData.status_detail,
+    hasQrCode: !!mpData.point_of_interaction?.transaction_data?.qr_code,
+  })
+
   await prisma.payment.create({
     data: {
       tenantId: params.tenantId,

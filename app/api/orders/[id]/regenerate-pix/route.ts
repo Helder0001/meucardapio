@@ -86,6 +86,13 @@ export async function POST(
     }
 
     const mpData = await mpRes.json()
+    console.log('[pix][regenerate]', {
+      orderId: id,
+      mpPaymentId: mpData.id,
+      status: mpData.status,
+      statusDetail: mpData.status_detail,
+      hasQrCode: !!mpData.point_of_interaction?.transaction_data?.qr_code,
+    })
     const pixQrCode       = mpData.point_of_interaction?.transaction_data?.qr_code ?? null
     const pixQrCodeBase64 = mpData.point_of_interaction?.transaction_data?.qr_code_base64 ?? null
     const pixExpiresAt    = new Date(Date.now() + 5 * 60 * 1000)

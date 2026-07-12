@@ -79,6 +79,13 @@ async function createPixPayment(params: {
   }
 
   const mpData = await response.json()
+  console.log('[pix][add-payment]', {
+    orderId: params.orderId,
+    mpPaymentId: mpData.id,
+    status: mpData.status,
+    statusDetail: mpData.status_detail,
+    hasQrCode: !!mpData.point_of_interaction?.transaction_data?.qr_code,
+  })
   const pixQrCode       = mpData.point_of_interaction?.transaction_data?.qr_code as string | undefined
   const pixQrCodeBase64 = mpData.point_of_interaction?.transaction_data?.qr_code_base64 as string | undefined
   const pixExpiresAt    = mpData.date_of_expiration
