@@ -296,7 +296,9 @@ export async function POST(request: Request) {
         : mpPayment.payment_type_id === 'bank_transfer' ? 'PIX'
         : undefined // método desconhecido — preserva o que já estava salvo
 
-      const processed = await prisma.$transaction(async (tx: Tx) => {
+      type TxResult = { processed: false } | { processed: true; isFullyPaid: boolean; remaining: number }
+
+      const result: TxResult = await prisma.$transaction(async (tx: Tx): Promise<TxResult> => {
         // Update atômico e condicional: garante que, mesmo se dois webhooks
         // chegarem em paralelo (ou o MP reenviar), só um consiga transicionar
         // o pagamento para PAID. O outro recebe count === 0 e sai sem
@@ -317,13 +319,44 @@ export async function POST(request: Request) {
 
         if (updated.count === 0) {
           // Outro webhook concorrente já processou este pagamento.
-          return false
+          return { processed: false }
         }
+
+        // BUG: pedido com pagamento dividido (ex.: parte no PIX, parte no
+        // link) tinha o status geral marcado como 'PAID' assim que
+        // QUALQUER UM dos pagamentos era confirmado — mesmo faltando
+        // saldo. Isso deixava o pedido "preso": a tela ainda mostrava
+        // saldo restante, mas /payment-link e /pay-card recusavam gerar
+        // nova cobrança porque liam order.paymentStatus === 'PAID'. Agora
+        // somamos todos os pagamentos PAID do pedido (incluindo o que
+        // acabou de ser confirmado) e só marcamos PAID/CONFIRMED quando
+        // isso cobre o total; senão, marcamos PARTIAL e mantemos o pedido
+        // como está (sem confirmar automaticamente).
+        const paidPayments = await tx.payment.findMany({
+          where: { orderId: payment.order.id, status: 'PAID' },
+          select: { amount: true },
+        })
+        const totalPaid = paidPayments.reduce((s: number, p: { amount: any }) => s + Number(p.amount), 0)
+        const orderTotal = Number(payment.order.total)
+        const isFullyPaid = totalPaid + 0.001 >= orderTotal // tolerância de arredondamento
 
         await tx.order.update({
           where: { id: payment.order.id },
-          data: { paymentStatus: 'PAID', status: 'CONFIRMED', confirmedAt: new Date() },
+          data: isFullyPaid
+            ? { paymentStatus: 'PAID', status: 'CONFIRMED', confirmedAt: new Date() }
+            : { paymentStatus: 'PARTIAL' },
         })
+
+        if (!isFullyPaid) {
+          await tx.orderStatusHistory.create({
+            data: {
+              orderId: payment.order.id,
+              status:  payment.order.status,
+              notes:   `Pagamento parcial via ${paymentMethodLabel} confirmado (R$ ${Number(payment.amount).toFixed(2)}) — saldo restante: R$ ${(orderTotal - totalPaid).toFixed(2)}`,
+            },
+          })
+          return { processed: true, isFullyPaid: false, remaining: orderTotal - totalPaid }
+        }
 
         await tx.orderStatusHistory.create({
           data: {
@@ -338,10 +371,10 @@ export async function POST(request: Request) {
           await applyLoyaltyPoints(tx, payment.order.tenantId, payment.order.customerId, payment.order.id, Number(payment.order.total))
         }
 
-        return true
+        return { processed: true, isFullyPaid: true, remaining: 0 }
       })
 
-      if (processed) {
+      if (result.processed) {
         // Efeitos colaterais não-críticos: não precisam ser atômicos com o
         // pagamento, então rodam depois da resposta ser enviada ao MP — evita
         // arriscar estourar o tempo de execução da function na Vercel.
@@ -351,8 +384,8 @@ export async function POST(request: Request) {
               type: 'ORDER_UPDATED',
               orderId: payment.order.id,
               orderNumber: payment.order.orderNumber,
-              status: 'CONFIRMED',
-              paymentStatus: 'PAID',
+              status: result.isFullyPaid ? 'CONFIRMED' : payment.order.status,
+              paymentStatus: result.isFullyPaid ? 'PAID' : 'PARTIAL',
             })
 
             await auditLog({

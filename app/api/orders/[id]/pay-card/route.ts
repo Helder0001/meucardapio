@@ -86,6 +86,7 @@ export async function POST(
       tenantId: true,
       orderNumber: true,
       total: true,
+      status: true,
       paymentStatus: true,
       customerId: true,
     },
@@ -98,11 +99,25 @@ export async function POST(
     return NextResponse.json({ error: 'Pedido já está pago' }, { status: 400 })
   }
 
+  // Mesmo bug do /payment-link: cobrava sempre o total CHEIO do pedido,
+  // ignorando pagamentos parciais já registrados (ex.: parte no PIX).
+  const alreadyPaidBefore = await prisma.payment.aggregate({
+    where: { orderId: order.id, status: 'PAID' },
+    _sum: { amount: true },
+  })
+  const stillOwed = Math.max(
+    0,
+    Math.round((Number(order.total) - Number(alreadyPaidBefore._sum.amount ?? 0)) * 100) / 100
+  )
+  if (stillOwed <= 0) {
+    return NextResponse.json({ error: 'Não há saldo restante a cobrar neste pedido' }, { status: 400 })
+  }
+
   try {
     const result = await createCardPayment({
       tenantId: order.tenantId,
       orderId: order.id,
-      amount: Number(order.total),
+      amount: stillOwed,
       cardToken: body.cardToken,
       installments: body.installments ?? 1,
       paymentMethodId: body.paymentMethodId,
@@ -137,7 +152,7 @@ export async function POST(
         status: result.status === 'approved' ? 'PAID'
           : result.status === 'rejected' ? 'FAILED'
           : 'PENDING',
-        amount: order.total,
+        amount: stillOwed,
         mercadoPagoId: result.mercadoPagoId,
         mercadoPagoStatus: result.status,
         cardLastDigits: result.cardLastDigits,
@@ -148,36 +163,46 @@ export async function POST(
       },
     })
 
-    // Aprovado imediatamente — confirmar o pedido e aplicar rewards
+    // Aprovado imediatamente — confirmar o pedido (se cobrir o total) e
+    // aplicar rewards. Mesma lógica do webhook: só marca PAID/CONFIRMED
+    // quando a soma de tudo que já foi pago cobre o total do pedido.
     if (result.status === 'approved') {
-      await prisma.$transaction(async (tx: Tx) => {
+      const isFullyPaid = await prisma.$transaction(async (tx: Tx) => {
+        const paidPayments = await tx.payment.findMany({
+          where: { orderId: order.id, status: 'PAID' },
+          select: { amount: true },
+        })
+        const totalPaid = paidPayments.reduce((s: number, p: { amount: any }) => s + Number(p.amount), 0)
+        const fullyPaid = totalPaid + 0.001 >= Number(order.total)
+
         await tx.order.update({
           where: { id: order.id },
-          data: {
-            paymentStatus: 'PAID',
-            status: 'CONFIRMED',
-            confirmedAt: new Date(),
-          },
+          data: fullyPaid
+            ? { paymentStatus: 'PAID', status: 'CONFIRMED', confirmedAt: new Date() }
+            : { paymentStatus: 'PARTIAL' },
         })
         await tx.orderStatusHistory.create({
           data: {
             orderId: order.id,
-            status: 'CONFIRMED',
-            notes: `Pagamento com cartão ${result.cardBrand ?? ''} aprovado — final ${result.cardLastDigits ?? ''}`,
+            status: fullyPaid ? 'CONFIRMED' : order.status,
+            notes: fullyPaid
+              ? `Pagamento com cartão ${result.cardBrand ?? ''} aprovado — final ${result.cardLastDigits ?? ''}`
+              : `Pagamento parcial com cartão ${result.cardBrand ?? ''} aprovado (R$ ${stillOwed.toFixed(2)}) — final ${result.cardLastDigits ?? ''}`,
           },
         })
-        if (order.customerId) {
+        if (fullyPaid && order.customerId) {
           await applyCashback(tx, order.tenantId, order.customerId, order.id, Number(order.total))
           await applyLoyaltyPoints(tx, order.tenantId, order.customerId, order.id, Number(order.total))
         }
+        return fullyPaid
       })
 
       await publishOrderEvent(order.tenantId, {
         type: 'ORDER_UPDATED',
         orderId: order.id,
         orderNumber: order.orderNumber,
-        status: 'CONFIRMED',
-        paymentStatus: 'PAID',
+        status: isFullyPaid ? 'CONFIRMED' : order.status,
+        paymentStatus: isFullyPaid ? 'PAID' : 'PARTIAL',
       })
     }
 
