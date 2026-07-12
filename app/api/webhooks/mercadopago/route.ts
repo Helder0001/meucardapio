@@ -81,8 +81,31 @@ async function findPendingPaymentForTenant(tenantId: string, orderId: string | u
 
 export async function POST(request: Request) {
   try {
-    const body      = await request.text()
     const signature = request.headers.get('x-signature')
+
+    // Formato legado de IPN do Mercado Pago: manda `topic`/`id` via query
+    // string (em vez de `type`/`data.id` no corpo JSON) e NÃO inclui o header
+    // `x-signature` — não existe como validar autenticidade dessa notificação.
+    // O MP manda essa notificação em paralelo à do formato novo (assinado),
+    // que é a que realmente processamos. Sem este bloco, ela caía direto na
+    // validação de assinatura, sempre falhava por falta de `x-signature`, e
+    // retornava 401 — o MP então ficava reenviando essa notificação legada
+    // sem parar, sem nenhum ganho (o pagamento já foi/será processado pela
+    // notificação nova). Aqui só confirmamos o recebimento e ignoramos.
+    if (!signature) {
+      const url = new URL(request.url)
+      const legacyTopic = url.searchParams.get('topic')
+      const legacyId    = url.searchParams.get('id')
+      if (legacyTopic && legacyId) {
+        console.log('[webhook/mp] Notificação IPN legada ignorada (sem x-signature)', {
+          topic: legacyTopic,
+          id: legacyId,
+        })
+        return NextResponse.json({ ok: true })
+      }
+    }
+
+    const body      = await request.text()
     const requestId = request.headers.get('x-request-id')
 
     let event: any
