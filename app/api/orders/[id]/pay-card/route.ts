@@ -173,7 +173,7 @@ export async function POST(
           select: { amount: true },
         })
         const totalPaid = paidPayments.reduce((s: number, p: { amount: any }) => s + Number(p.amount), 0)
-        const fullyPaid = totalPaid + 0.001 >= Number(order.total)
+        const fullyPaid = Math.round(totalPaid * 100) >= Math.round(Number(order.total) * 100)
 
         await tx.order.update({
           where: { id: order.id },

@@ -299,8 +299,17 @@ export async function PATCH(
     const paidSum = order.payments
       .filter((p) => p.status === 'PAID')
       .reduce((s, p) => s + Number(p.amount), 0)
+    // BUG: a tolerância de arredondamento aqui era R$0,01 fixo — o que
+    // funciona pra totais normais, mas quebra quando o saldo em aberto é
+    // exatamente 1 centavo: paidSum=0,01 e newTotal=0,02 passava no teste
+    // "paidSum >= newTotal - 0,01" (0,01 >= 0,01), marcando PAID mesmo
+    // faltando metade do valor. Comparando em centavos inteiros (sem
+    // tolerância nenhuma, já que ambos os valores já vêm arredondados a
+    // 2 casas) evita esse falso positivo em qualquer valor pequeno.
+    const paidCents = Math.round(paidSum * 100)
+    const totalCents = Math.round(newTotal * 100)
     const newPaymentStatus =
-      paidSum >= newTotal - 0.01 ? 'PAID' : paidSum > 0 ? 'PARTIAL' : 'PENDING'
+      paidCents >= totalCents ? 'PAID' : paidCents > 0 ? 'PARTIAL' : 'PENDING'
 
     console.log('[edit-items] recálculo de paymentStatus', {
       orderId,
