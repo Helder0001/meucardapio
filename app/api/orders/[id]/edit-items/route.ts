@@ -81,6 +81,7 @@ export async function PATCH(
     select: {
       id: true, orderNumber: true, status: true, type: true,
       subtotal: true, deliveryFee: true, discountAmount: true, cashbackUsed: true, total: true,
+      paymentStatus: true,
       kitchenRound: true,
       items: { select: { id: true, productId: true, productName: true, quantity: true, addons: { select: { addonId: true } } } },
       payments: { select: { id: true, method: true, status: true, amount: true } },
@@ -300,6 +301,16 @@ export async function PATCH(
       .reduce((s, p) => s + Number(p.amount), 0)
     const newPaymentStatus =
       paidSum >= newTotal - 0.01 ? 'PAID' : paidSum > 0 ? 'PARTIAL' : 'PENDING'
+
+    console.log('[edit-items] recálculo de paymentStatus', {
+      orderId,
+      oldTotal: Number(order.total),
+      newTotal,
+      paidSum,
+      payments: order.payments.map((p) => ({ status: p.status, amount: Number(p.amount) })),
+      oldPaymentStatus: order.paymentStatus,
+      newPaymentStatus,
+    })
 
     await tx.order.update({
       where: { id: orderId },

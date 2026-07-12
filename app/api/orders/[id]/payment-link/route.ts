@@ -68,6 +68,11 @@ export async function POST(
   }
 
   if (order.paymentStatus === 'PAID') {
+    console.log('[payment-link][400] pedido já marcado PAID', {
+      orderId: order.id,
+      orderTotal: Number(order.total),
+      payments: order.payments.map((p) => ({ status: p.status, amount: Number(p.amount) })),
+    })
     return NextResponse.json({ error: 'Pedido já está pago' }, { status: 400 })
   }
 
@@ -81,6 +86,12 @@ export async function POST(
   const stillOwed = Math.max(0, Math.round((Number(order.total) - alreadyPaid) * 100) / 100)
 
   if (stillOwed <= 0) {
+    console.log('[payment-link][400] sem saldo restante', {
+      orderId: order.id,
+      orderTotal: Number(order.total),
+      alreadyPaid,
+      payments: order.payments.map((p) => ({ status: p.status, amount: Number(p.amount) })),
+    })
     return NextResponse.json({ error: 'Não há saldo restante a cobrar neste pedido' }, { status: 400 })
   }
 
