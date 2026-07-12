@@ -5,7 +5,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
 import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
-import { onlyDigits } from '@/lib/utils/cpf'
+import { onlyDigits, pixPayerEmail } from '@/lib/utils/cpf'
 import crypto from 'crypto'
 
 function validateStatusToken(orderId: string, token: string): boolean {
@@ -69,7 +69,7 @@ export async function POST(
           // CORREÇÃO: usava CPF de teste fixo (11144477735) pra qualquer
           // pagador. Agora usa o CPF real coletado no checkout — ver
           // comentário acima sobre pedidos antigos sem CPF salvo.
-          email: 'cliente@meucardapio.app',
+          email: pixPayerEmail(customerCpf),
           identification: { type: 'CPF', number: customerCpf },
         },
         description: `Pedido #${id.slice(-8).toUpperCase()}`,

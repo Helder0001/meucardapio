@@ -11,7 +11,7 @@ import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
 import { paymentMethodLabel } from '@/lib/utils/payment-labels'
 import { z } from 'zod'
-import { isValidCpf, onlyDigits } from '@/lib/utils/cpf'
+import { isValidCpf, onlyDigits, pixPayerEmail } from '@/lib/utils/cpf'
 
 const paymentEntrySchema = z.object({
   method: z.enum(['PIX', 'CASH', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD', 'VOUCHER', 'TRANSFER']),
@@ -63,7 +63,7 @@ async function createPixPayment(params: {
         // CORREÇÃO: usava CPF de teste fixo (11144477735) pra qualquer
         // pagador — agora usa o CPF real coletado na tela (ver comentário
         // equivalente em actions/orders/create-order.ts).
-        email: 'cliente@meucardapio.app',
+        email: pixPayerEmail(params.customerCpf ?? ''),
         identification: { type: 'CPF', number: onlyDigits(params.customerCpf ?? '') },
       },
       description: `Pedido #${params.orderId.slice(-8).toUpperCase()}`,

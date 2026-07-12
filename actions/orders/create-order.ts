@@ -16,7 +16,7 @@
 // 9. Retornar orderId para redirecionar
 
 import { z } from 'zod'
-import { isValidCpf, onlyDigits } from '@/lib/utils/cpf'
+import { isValidCpf, onlyDigits, pixPayerEmail } from '@/lib/utils/cpf'
 import crypto from 'crypto'
 import { checkAndPublishStockAlerts } from '@/lib/utils/stock-alerts'
 import { decrementStockForOrder, revalidateStorefrontForTenant } from '@/lib/utils/stock'
@@ -498,7 +498,7 @@ async function createPixPayment(params: {
         // mesmo com o cliente pagando certinho pelo banco dele. Agora
         // exigimos o CPF real (validado em createOrderSchema) sempre que
         // o pedido inclui PIX pago na hora.
-        email: 'cliente@meucardapio.app',
+        email: pixPayerEmail(params.customerCpf ?? ''),
         identification: { type: 'CPF', number: onlyDigits(params.customerCpf ?? '') },
       },
       description: `Pedido #${params.orderId.slice(-8).toUpperCase()}`,
