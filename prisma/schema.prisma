@@ -223,11 +223,20 @@ model Subscription {
 // Cache do plan_id criado na Efí pra cada ciclo de cobrança (mensal/anual).
 // A Efí exige criar um "plano" (nome + intervalo + repetições) antes de
 // poder vincular assinaturas a ele — criamos uma vez e reaproveitamos.
+enum EfiEnvironment {
+  SANDBOX
+  PRODUCTION
+}
+
 model EfiPlan {
-  id           String       @id @default(cuid())
-  billingCycle BillingCycle @unique
-  efiPlanId    Int          @unique
-  createdAt    DateTime     @default(now())
+  id           String         @id @default(cuid())
+  billingCycle BillingCycle
+  environment  EfiEnvironment
+  efiPlanId    Int
+  createdAt    DateTime       @default(now())
+
+  @@unique([billingCycle, environment])
+  @@unique([efiPlanId, environment])
 }
 
 // ══════════════════════════════════════════════════════════
