@@ -255,7 +255,7 @@ export function SubscriptionCardForm({ amount, accountIdentifier, sandbox }: Sub
         </div>
       )}
 
-      {state !== 'loading-sdk' && !isBusy && state !== 'success' && (
+      {state !== 'loading-sdk' && !isBusy && (
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label className="block text-xs text-neutral-500 mb-1">Número do cartão</label>
