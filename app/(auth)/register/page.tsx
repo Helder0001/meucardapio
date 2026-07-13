@@ -8,14 +8,14 @@ import { AuthLogo } from '@/components/shared/auth-logo'
 
 export const metadata: Metadata = {
   title: 'Criar conta grátis',
-  description: 'Comece seu teste grátis de 7 dias',
+  description: 'Comece seu teste grátis de 7 dias ou ative na hora',
 }
 
 const benefits = [
   'Cardápio digital com QR Code',
   'Pedidos por WhatsApp e online',
   'Painel de gestão completo',
-  'Sem cartão de crédito para testar',
+  '7 dias grátis ou ative na hora',
 ]
 
 export default function RegisterPage() {
@@ -55,10 +55,13 @@ export default function RegisterPage() {
             Criar conta grátis
           </h1>
           <p className="text-muted-foreground text-sm mb-8">
-            7 dias de teste • Sem cartão de crédito
+            7 dias grátis ou ative na hora
           </p>
 
-          <RegisterForm />
+          <RegisterForm
+            efiAccountIdentifier={process.env.NEXT_PUBLIC_EFI_ACCOUNT_IDENTIFIER ?? ''}
+            efiSandbox={process.env.NEXT_PUBLIC_EFI_SANDBOX !== 'false'}
+          />
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Já tem conta?{' '}
