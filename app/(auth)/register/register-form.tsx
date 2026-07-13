@@ -9,7 +9,7 @@ import { Eye, EyeOff, Loader2, CheckCircle2, Calendar, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
-const PLAN_PRICE_MONTHLY = 1.00
+const PLAN_PRICE_MONTHLY = 3.00
 const PLAN_PRICE_ANNUAL  = parseFloat((PLAN_PRICE_MONTHLY * 12 * 0.9).toFixed(2))
 const ANNUAL_DISCOUNT_PCT = 10
 
