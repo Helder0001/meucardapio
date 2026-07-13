@@ -14,7 +14,7 @@ interface CreateSubscriptionParams {
   customerName: string
   customerCpf: string // só dígitos
   customerEmail: string
-  customerPhone?: string
+  customerPhone: string // OBRIGATÓRIO pra Efí (erro 3500023 "required_property" sem isso)
   paymentToken: string // gerado no frontend via Efí.js a partir dos dados do cartão
   trialDays?: number // dias de teste grátis antes da 1ª cobrança (só existe pra credit_card)
 }
