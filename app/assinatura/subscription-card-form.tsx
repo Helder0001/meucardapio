@@ -351,7 +351,7 @@ export function SubscriptionCardForm({ amount, accountIdentifier, sandbox }: Sub
 
           <button
             type="submit"
-            disabled={isBusy || state === 'loading-sdk'}
+            disabled={isBusy}
             className="w-full rounded-lg bg-neutral-900 text-white text-sm font-medium py-2.5 mt-2 hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Pagar R$ {amount.toFixed(2).replace('.', ',')}
