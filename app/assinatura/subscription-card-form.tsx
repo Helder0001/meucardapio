@@ -42,7 +42,15 @@ type LoadState = 'loading-sdk' | 'ready' | 'submitting' | 'error' | 'processing'
 const POLL_INTERVAL_MS = 3_000
 const POLL_MAX_ATTEMPTS = 40 // ~2 minutos
 
-const EFI_SCRIPT_SRC = 'https://cdn.jsdelivr.net/npm/payment-token-efi/dist/payment-token-efi-umd.min.js'
+// Servido do próprio domínio (public/vendor/), não do CDN da Efí
+// (cdn.jsdelivr.net) — alguns bloqueadores de anúncio e VPNs com filtro de
+// conteúdo (comum no Android: AdGuard, NextDNS etc.) bloqueiam
+// silenciosamente scripts de terceiros relacionados a pagamento/tokenização,
+// derrubando o checkout sem erro nenhum visível pro usuário. Servindo do
+// mesmo domínio do site, o script não cai em listas de bloqueio de
+// terceiros. Arquivo é a lib oficial da Efí (payment-token-efi v3.4.1,
+// MIT), sem nenhuma modificação — só copiada localmente.
+const EFI_SCRIPT_SRC = '/vendor/payment-token-efi.js'
 
 async function checkSubscriptionActive(): Promise<boolean> {
   try {
