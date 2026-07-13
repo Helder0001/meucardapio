@@ -79,6 +79,9 @@ export async function efiRequest<T = any>(
   path: string,
   body?: unknown
 ): Promise<T> {
+  // DEBUG TEMPORÁRIO — remover depois de confirmar o ambiente real usado.
+  console.log('[efi][debug] ambiente:', isSandbox ? 'SANDBOX' : 'PRODUÇÃO', '| BASE_URL:', BASE_URL, '| path:', path)
+
   const accessToken = await getAccessToken()
 
   const res = await fetch(`${BASE_URL}${path}`, {
