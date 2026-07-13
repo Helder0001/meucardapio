@@ -27,7 +27,7 @@ function generateSlug(name: string): string {
     .replace(/\s+/g, '-').replace(/-+/g, '-').slice(0, 50)
 }
 
-const PLAN_PRICE_MONTHLY = 1.00
+const PLAN_PRICE_MONTHLY = 3.00
 const PLAN_PRICE_ANNUAL  = parseFloat((PLAN_PRICE_MONTHLY * 12 * 0.9).toFixed(2))
 
 export async function registerAction(
