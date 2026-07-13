@@ -2,40 +2,47 @@
 
 // app/assinatura/subscription-card-form.tsx
 //
-// Mesmo padrão do components/storefront/card-payment-form.tsx (Card Payment
-// Brick do MP.js), mas aqui o token do cartão vai pra
-// reactivateSubscriptionAction, que cria/autoriza um preapproval (assinatura
-// recorrente) em vez de um pagamento avulso — assinatura no Mercado Pago só
-// existe com cartão, então é por isso que PIX não aparece aqui.
+// MIGRAÇÃO MP → EFÍ: diferente do Card Payment Brick do Mercado Pago (que
+// renderizava a própria UI dentro de um container e devolvia um token
+// pronto), a lib de tokenização da Efí (`payment-token-efi`, carregada via
+// CDN abaixo) só faz a criptografia dos dados de cartão no navegador — quem
+// desenha os campos é a gente. Por isso este componente ganhou inputs de
+// verdade (número, validade, CVV, nome do titular) que não existiam antes.
+//
+// Fluxo: EfiPay.CreditCard.setCardNumber(...).verifyCardBrand() identifica a
+// bandeira → EfiPay.CreditCard.setAccount(...).setEnvironment(...)
+// .setCreditCardData(...).getPaymentToken() gera o payment_token → esse
+// token vai pra reactivateSubscriptionAction, que cria a assinatura na Efí
+// (API Cobranças).
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, AlertCircle, ShieldCheck } from 'lucide-react'
 import { reactivateSubscriptionAction } from '@/actions/billing/reactivate-subscription'
+import { formatCpf, isValidCpf, onlyDigits } from '@/lib/utils/cpf'
 
 declare global {
   interface Window {
-    MercadoPago?: any
+    EfiPay?: any
   }
 }
 
 interface SubscriptionCardFormProps {
   amount: number
-  publicKey: string
+  accountIdentifier: string // "Identificador de Conta" da Efí (API > Introdução), NÃO é o client_id/secret
+  sandbox: boolean
 }
 
 type LoadState = 'loading-sdk' | 'ready' | 'submitting' | 'error' | 'processing' | 'success'
 
-// Cobrança de assinatura no MP é assíncrona: o preapproval pode nascer
-// "authorized" (mandato validado) sem a primeira cobrança ainda ter sido
-// aprovada — ela fica "Processando" por alguns segundos (às vezes mais,
-// se cair em análise antifraude). Por isso não dá mais pra redirecionar
-// direto pro /dashboard só com o preapproval criado (isso é otimista e
-// foi corrigido em actions/billing/reactivate-subscription.ts) — aqui a
-// gente espera de verdade a confirmação, consultando o status a cada
-// poucos segundos, antes de mandar o usuário pro dashboard.
+// Mesma cautela de antes (era true pro MP, agora vale pra Efí também): a
+// cobrança nasce "waiting"/"nova" e só o webhook (app/api/webhooks/efi/route.ts),
+// ao confirmar o pagamento, vira o status pra ACTIVE de verdade — não dá pra
+// redirecionar direto pro /dashboard só com a assinatura criada.
 const POLL_INTERVAL_MS = 3_000
 const POLL_MAX_ATTEMPTS = 40 // ~2 minutos
+
+const EFI_SCRIPT_SRC = 'https://cdn.jsdelivr.net/npm/payment-token-efi/dist/payment-token-efi-umd.min.js'
 
 async function checkSubscriptionActive(): Promise<boolean> {
   try {
@@ -48,137 +55,181 @@ async function checkSubscriptionActive(): Promise<boolean> {
   }
 }
 
-export function SubscriptionCardForm({ amount, publicKey }: SubscriptionCardFormProps) {
+function formatCardNumber(value: string): string {
+  return onlyDigits(value).slice(0, 19).replace(/(\d{4})(?=\d)/g, '$1 ')
+}
+
+const CURRENT_YEAR = new Date().getFullYear()
+const EXPIRATION_YEARS = Array.from({ length: 13 }, (_, i) => String(CURRENT_YEAR + i))
+const EXPIRATION_MONTHS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'))
+
+export function SubscriptionCardForm({ amount, accountIdentifier, sandbox }: SubscriptionCardFormProps) {
   const router = useRouter()
-  const containerRef = useRef<HTMLDivElement>(null)
-  const brickControllerRef = useRef<any>(null)
   const [state, setState] = useState<LoadState>('loading-sdk')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
+  const [cardNumber, setCardNumber] = useState('')
+  const [expirationMonth, setExpirationMonth] = useState('')
+  const [expirationYear, setExpirationYear] = useState('')
+  const [cvv, setCvv] = useState('')
+  const [cardholderName, setCardholderName] = useState('')
+  const [payerEmail, setPayerEmail] = useState('')
+  const [payerCpf, setPayerCpf] = useState('')
+
+  const cancelledRef = useRef(false)
+
   useEffect(() => {
-    let cancelled = false
+    cancelledRef.current = false
     const timeoutId = setTimeout(() => {
-      if (!cancelled && state === 'loading-sdk') {
+      if (!cancelledRef.current && state === 'loading-sdk') {
         setState('error')
         setErrorMessage('O formulário de pagamento demorou demais para carregar. Atualize a página e tente novamente.')
       }
     }, 12_000)
 
     async function init() {
-      if (!publicKey) {
+      if (!accountIdentifier) {
         setState('error')
         setErrorMessage('Pagamento não configurado. Contate o suporte.')
         return
       }
 
-      if (!window.MercadoPago) {
+      if (!window.EfiPay) {
         await new Promise<void>((resolve, reject) => {
           const script = document.createElement('script')
-          script.src = 'https://sdk.mercadopago.com/js/v2'
+          script.src = EFI_SCRIPT_SRC
           script.onload = () => resolve()
-          script.onerror = () => reject(new Error('Falha ao carregar SDK do Mercado Pago'))
+          script.onerror = () => reject(new Error('Falha ao carregar SDK da Efí'))
           document.body.appendChild(script)
         })
       }
 
-      if (cancelled || !containerRef.current) return
-
-      const mp = new window.MercadoPago(publicKey, { locale: 'pt-BR' })
-      const bricksBuilder = mp.bricks()
-
-      const controller = await bricksBuilder.create('cardPayment', containerRef.current.id, {
-        initialization: { amount },
-        customization: {
-          visual: { style: { theme: 'default' } },
-          paymentMethods: { maxInstallments: 1 }, // assinatura recorrente: sempre à vista por ciclo
-        },
-        callbacks: {
-          onReady: () => {
-            clearTimeout(timeoutId)
-            if (!cancelled) setState('ready')
-          },
-          onError: (error: any) => {
-            clearTimeout(timeoutId)
-            console.error('[subscription-card-form]', error)
-            if (!cancelled) {
-              setState('error')
-              setErrorMessage('Erro ao carregar o formulário de cartão. Atualize a página e tente novamente.')
-            }
-          },
-          onSubmit: async (cardFormData: any) => {
-            setState('submitting')
-            setErrorMessage(null)
-
-            const result = await reactivateSubscriptionAction({
-              cardToken: cardFormData.token,
-              payerEmail: cardFormData.payer?.email,
-              payerCpf: cardFormData.payer?.identification?.number ?? '',
-              cardholderName: cardFormData.cardholderName ?? '',
-            })
-
-            if (result.error) {
-              setState('ready')
-              setErrorMessage(result.error)
-              return
-            }
-
-            // O cartão foi autorizado (mandato criado), mas a cobrança em
-            // si ainda pode estar em processamento no MP — só sabemos que
-            // deu certo de verdade quando o webhook confirmar e o status
-            // virar ACTIVE. Enquanto isso, mostramos "processando" em vez
-            // de redirecionar no escuro.
-            setState('processing')
-
-            for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt++) {
-              if (cancelled) return
-              const isActive = await checkSubscriptionActive()
-              if (isActive) {
-                if (cancelled) return
-                setState('success')
-                router.push('/dashboard')
-                router.refresh()
-                return
-              }
-              await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
-            }
-
-            // Passou do tempo razoável de espera sem confirmação — não é
-            // necessariamente um erro (o MP às vezes demora mais em
-            // análise antifraude); só avisamos e paramos de bloquear a
-            // tela, sem mandar pro dashboard (ele bloquearia de novo).
-            if (!cancelled) {
-              setState('error')
-              setErrorMessage(
-                'Seu pagamento ainda está sendo processado pelo Mercado Pago — isso pode levar alguns minutos em análises mais demoradas. Você pode atualizar esta página daqui a pouco para verificar se já foi confirmado.'
-              )
-            }
-          },
-        },
-      })
-
-      brickControllerRef.current = controller
+      if (cancelledRef.current) return
+      clearTimeout(timeoutId)
+      setState('ready')
     }
 
     init().catch((err) => {
       console.error('[subscription-card-form] erro fatal na inicialização:', err)
-      if (!cancelled) {
+      if (!cancelledRef.current) {
         setState('error')
         setErrorMessage('Não foi possível carregar o pagamento com cartão.')
       }
     })
 
     return () => {
-      cancelled = true
+      cancelledRef.current = true
       clearTimeout(timeoutId)
-      brickControllerRef.current?.unmount?.()
     }
-  }, [publicKey, amount]) // eslint-disable-line
+  }, [accountIdentifier])
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setErrorMessage(null)
+
+    const digits = onlyDigits(cardNumber)
+    if (digits.length < 13) {
+      setErrorMessage('Número do cartão inválido.')
+      return
+    }
+    if (!expirationMonth || !expirationYear) {
+      setErrorMessage('Informe a validade do cartão.')
+      return
+    }
+    if (!cvv || cvv.length < 3) {
+      setErrorMessage('CVV inválido.')
+      return
+    }
+    if (!cardholderName.trim()) {
+      setErrorMessage('Informe o nome impresso no cartão.')
+      return
+    }
+    if (!payerEmail.trim()) {
+      setErrorMessage('Informe um e-mail para o recibo.')
+      return
+    }
+    if (!isValidCpf(payerCpf)) {
+      setErrorMessage('CPF inválido.')
+      return
+    }
+
+    setState('submitting')
+
+    try {
+      const brand = await window.EfiPay.CreditCard.setCardNumber(digits).verifyCardBrand()
+      if (!brand || brand === 'undefined' || brand === 'unsupported') {
+        setState('ready')
+        setErrorMessage('Bandeira do cartão não identificada ou não suportada.')
+        return
+      }
+
+      const tokenResult = await window.EfiPay.CreditCard
+        .setAccount(accountIdentifier)
+        .setEnvironment(sandbox ? 'sandbox' : 'production')
+        .setCreditCardData({
+          brand,
+          number: digits,
+          cvv,
+          expirationMonth,
+          expirationYear,
+          reuse: true, // assinatura recorrente precisa reutilizar o payment_token nas cobranças seguintes
+        })
+        .getPaymentToken()
+
+      const result = await reactivateSubscriptionAction({
+        cardToken: tokenResult.payment_token,
+        payerEmail: payerEmail.trim(),
+        payerCpf,
+        cardholderName: cardholderName.trim(),
+      })
+
+      if (result.error) {
+        setState('ready')
+        setErrorMessage(result.error)
+        return
+      }
+
+      setState('processing')
+
+      for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt++) {
+        if (cancelledRef.current) return
+        const isActive = await checkSubscriptionActive()
+        if (isActive) {
+          if (cancelledRef.current) return
+          setState('success')
+          router.push('/dashboard')
+          router.refresh()
+          return
+        }
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
+      }
+
+      // Passou do tempo razoável de espera sem confirmação — não é
+      // necessariamente um erro (o banco emissor às vezes demora mais);
+      // só avisamos e paramos de bloquear a tela, sem mandar pro dashboard
+      // (ele bloquearia de novo).
+      if (!cancelledRef.current) {
+        setState('error')
+        setErrorMessage(
+          'Seu pagamento ainda está sendo processado — isso pode levar alguns minutos em análises mais demoradas. Você pode atualizar esta página daqui a pouco para verificar se já foi confirmado.'
+        )
+      }
+    } catch (err: any) {
+      console.error('[subscription-card-form][efi] erro ao gerar payment_token:', err)
+      setState('ready')
+      setErrorMessage(err?.error_description || 'Não foi possível processar o cartão. Confira os dados e tente novamente.')
+    }
+  }
+
+  const isBusy = state === 'submitting' || state === 'processing' || state === 'success'
+  const inputClass =
+    'w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900/10 focus:border-neutral-300 disabled:bg-neutral-50 disabled:text-neutral-400'
 
   return (
     <div className="text-left">
       <div className="flex items-center gap-2 mb-3">
         <ShieldCheck className="h-4 w-4 text-neutral-400" />
-        <p className="text-xs text-neutral-500">Seus dados são processados de forma segura pelo Mercado Pago</p>
+        <p className="text-xs text-neutral-500">Seus dados são processados de forma segura pela Efí</p>
       </div>
 
       {errorMessage && (
@@ -195,16 +246,118 @@ export function SubscriptionCardForm({ amount, publicKey }: SubscriptionCardForm
         </div>
       )}
 
-      {(state === 'submitting' || state === 'processing' || state === 'success') && (
+      {isBusy && (
         <div className="flex items-center justify-center py-3 text-neutral-500 text-sm gap-2 mb-2 text-center">
           <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
           {state === 'submitting' && 'Enviando dados do cartão...'}
-          {state === 'processing' && 'Confirmando pagamento com o Mercado Pago... isso pode levar alguns segundos.'}
+          {state === 'processing' && 'Confirmando pagamento... isso pode levar alguns segundos.'}
           {state === 'success' && 'Pagamento confirmado! Redirecionando...'}
         </div>
       )}
 
-      <div id="subscriptionCardPaymentBrick" ref={containerRef} />
+      {state !== 'loading-sdk' && !isBusy && state !== 'success' && (
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1">Número do cartão</label>
+            <input
+              className={inputClass}
+              inputMode="numeric"
+              placeholder="0000 0000 0000 0000"
+              value={cardNumber}
+              onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+              disabled={isBusy}
+              maxLength={23}
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Mês</label>
+              <select
+                className={inputClass}
+                value={expirationMonth}
+                onChange={(e) => setExpirationMonth(e.target.value)}
+                disabled={isBusy}
+              >
+                <option value="">MM</option>
+                {EXPIRATION_MONTHS.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">Ano</label>
+              <select
+                className={inputClass}
+                value={expirationYear}
+                onChange={(e) => setExpirationYear(e.target.value)}
+                disabled={isBusy}
+              >
+                <option value="">AAAA</option>
+                {EXPIRATION_YEARS.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-neutral-500 mb-1">CVV</label>
+              <input
+                className={inputClass}
+                inputMode="numeric"
+                placeholder="000"
+                value={cvv}
+                onChange={(e) => setCvv(onlyDigits(e.target.value).slice(0, 4))}
+                disabled={isBusy}
+                maxLength={4}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1">Nome no cartão</label>
+            <input
+              className={inputClass}
+              placeholder="Como está impresso no cartão"
+              value={cardholderName}
+              onChange={(e) => setCardholderName(e.target.value)}
+              disabled={isBusy}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1">E-mail para recibo</label>
+            <input
+              className={inputClass}
+              type="email"
+              placeholder="voce@exemplo.com"
+              value={payerEmail}
+              onChange={(e) => setPayerEmail(e.target.value)}
+              disabled={isBusy}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1">CPF do titular</label>
+            <input
+              className={inputClass}
+              inputMode="numeric"
+              placeholder="000.000.000-00"
+              value={payerCpf}
+              onChange={(e) => setPayerCpf(formatCpf(e.target.value))}
+              disabled={isBusy}
+              maxLength={14}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={isBusy || state === 'loading-sdk'}
+            className="w-full rounded-lg bg-neutral-900 text-white text-sm font-medium py-2.5 mt-2 hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Pagar R$ {amount.toFixed(2).replace('.', ',')}
+          </button>
+        </form>
+      )}
     </div>
   )
 }
