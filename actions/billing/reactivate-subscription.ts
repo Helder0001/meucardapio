@@ -19,7 +19,7 @@ import { auth } from '@/lib/auth/session'
 import { createEfiCardSubscription } from '@/lib/efi/subscription'
 import { onlyDigits } from '@/lib/utils/cpf'
 
-const PLAN_PRICE_MONTHLY = 1.00
+const PLAN_PRICE_MONTHLY = 3.00
 const PLAN_PRICE_ANNUAL = parseFloat((PLAN_PRICE_MONTHLY * 12 * 0.9).toFixed(2))
 
 export type ReactivateResult = { error?: string; status?: string }
