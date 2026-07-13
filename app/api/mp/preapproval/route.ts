@@ -4,7 +4,7 @@ import { isValidInternalSecret } from '@/lib/security/internal-secret'
 
 export const maxDuration = 60
 
-const PLAN_PRICE_MONTHLY = 1.00
+const PLAN_PRICE_MONTHLY = 3.00
 const PLAN_PRICE_ANNUAL  = parseFloat((PLAN_PRICE_MONTHLY * 12 * 0.9).toFixed(2))
 
 // VULN-CRIT-05: esta rota chama a API do Mercado Pago com um card_token_id
