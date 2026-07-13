@@ -9,9 +9,9 @@
 // ciclo já pago (currentPeriodEnd). O que precisa acontecer imediatamente é
 // impedir a PRÓXIMA cobrança no cartão. Por isso:
 //
-// 1. Chamamos PUT /preapproval/{id} com status: 'cancelled' na hora — isso
-//    cancela o mandato no Mercado Pago e garante que nenhuma cobrança futura
-//    será tentada, mesmo que o usuário feche a aba antes do cron rodar.
+// 1. Chamamos PUT /subscription/{id}/cancel na Efí — isso cancela o
+//    mandato e garante que nenhuma cobrança futura será tentada, mesmo
+//    que o usuário feche a aba antes do cron rodar.
 // 2. NÃO mexemos em subscription.status nem em tenant.subscriptionStatus
 //    aqui — eles continuam ACTIVE, então o paywall do dashboard
 //    (app/(dashboard)/layout.tsx) não bloqueia nada agora.
@@ -55,10 +55,8 @@ export async function cancelSubscriptionAction(reason?: string): Promise<CancelS
     return { accessUntil: subscription.currentPeriodEnd.toISOString() }
   }
 
-  // MIGRAÇÃO: assinaturas criadas depois da troca pra Efí Bank cancelam por
-  // lá; assinaturas antigas (criadas quando ainda era Mercado Pago)
-  // continuam cancelando no MP — o campo `provider` diz qual API usar.
-  if (subscription.provider === 'EFI' && subscription.efiSubscriptionId) {
+  // Cancela o mandato na Efí — impede qualquer cobrança futura imediatamente.
+  if (subscription.efiSubscriptionId) {
     if (!process.env.EFI_CLIENT_ID || !process.env.EFI_CLIENT_SECRET) {
       return { error: 'Pagamento não configurado no servidor. Contate o suporte.' }
     }
@@ -67,37 +65,6 @@ export async function cancelSubscriptionAction(reason?: string): Promise<CancelS
     } catch (err) {
       console.error('[cancel-subscription][efi] Erro ao cancelar assinatura', String(err))
       return { error: 'Não foi possível cancelar a cobrança automática. Tente novamente ou contate o suporte.' }
-    }
-  } else if (subscription.mercadoPagoSubId) {
-    // Cancela o mandato no Mercado Pago (credenciais da PLATAFORMA — é a
-    // cobrança do plano do Meu Cardápio, não um pagamento do tenant).
-    const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN
-    if (!accessToken) {
-      return { error: 'Pagamento não configurado no servidor. Contate o suporte.' }
-    }
-
-    try {
-      const res = await fetch(`https://api.mercadopago.com/preapproval/${subscription.mercadoPagoSubId}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: 'cancelled' }),
-      })
-
-      if (!res.ok) {
-        const errBody = await res.text()
-        console.error('[cancel-subscription] Erro ao cancelar preapproval no MP', {
-          subscriptionId: subscription.mercadoPagoSubId,
-          status: res.status,
-          body: errBody.slice(0, 1000),
-        })
-        return { error: 'Não foi possível cancelar a cobrança automática. Tente novamente ou contate o suporte.' }
-      }
-    } catch (err) {
-      console.error('[cancel-subscription] Exceção ao cancelar preapproval no MP', String(err))
-      return { error: 'Erro ao conectar ao Mercado Pago. Tente novamente.' }
     }
   }
 
