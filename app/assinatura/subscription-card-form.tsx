@@ -67,6 +67,16 @@ function formatCardNumber(value: string): string {
   return onlyDigits(value).slice(0, 19).replace(/(\d{4})(?=\d)/g, '$1 ')
 }
 
+// formatPhone("11999999999") → "(11) 99999-9999" — máscara enquanto digita.
+// Diferente de lib/utils/format.ts (que só formata pra exibição de um valor
+// já completo), essa aplica progressivamente a cada tecla.
+function formatPhoneInput(value: string): string {
+  const digits = onlyDigits(value).slice(0, 11)
+  if (digits.length <= 2) return digits.length ? `(${digits}` : ''
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
+}
+
 const CURRENT_YEAR = new Date().getFullYear()
 const EXPIRATION_YEARS = Array.from({ length: 13 }, (_, i) => String(CURRENT_YEAR + i))
 const EXPIRATION_MONTHS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'))
@@ -82,6 +92,7 @@ export function SubscriptionCardForm({ amount, accountIdentifier, sandbox }: Sub
   const [cvv, setCvv] = useState('')
   const [cardholderName, setCardholderName] = useState('')
   const [payerEmail, setPayerEmail] = useState('')
+  const [payerPhone, setPayerPhone] = useState('')
   const [payerCpf, setPayerCpf] = useState('')
 
   const cancelledRef = useRef(false)
@@ -171,6 +182,11 @@ export function SubscriptionCardForm({ amount, accountIdentifier, sandbox }: Sub
       setErrorMessage('Informe um e-mail para o recibo.')
       return
     }
+    const phoneDigits = onlyDigits(payerPhone)
+    if (phoneDigits.length < 10) {
+      setErrorMessage('Informe um telefone válido, com DDD.')
+      return
+    }
     if (!isValidCpf(payerCpf)) {
       setErrorMessage('CPF inválido.')
       return
@@ -210,6 +226,7 @@ export function SubscriptionCardForm({ amount, accountIdentifier, sandbox }: Sub
       const result = await reactivateSubscriptionAction({
         cardToken: tokenResult.payment_token,
         payerEmail: payerEmail.trim(),
+        payerPhone: phoneDigits,
         payerCpf,
         cardholderName: cardholderName.trim(),
       })
@@ -370,6 +387,19 @@ export function SubscriptionCardForm({ amount, accountIdentifier, sandbox }: Sub
               value={payerEmail}
               onChange={(e) => setPayerEmail(e.target.value)}
               disabled={isBusy}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1">Telefone (com DDD)</label>
+            <input
+              className={inputClass}
+              inputMode="numeric"
+              placeholder="(11) 99999-9999"
+              value={payerPhone}
+              onChange={(e) => setPayerPhone(formatPhoneInput(e.target.value))}
+              disabled={isBusy}
+              maxLength={15}
             />
           </div>
 
