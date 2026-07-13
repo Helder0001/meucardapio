@@ -77,7 +77,8 @@ export default async function AssinaturaPage() {
         <div className="mt-6">
           <SubscriptionCardForm
             amount={PLAN_PRICE_MONTHLY}
-            publicKey={process.env.NEXT_PUBLIC_MP_PUBLIC_KEY ?? ''}
+            accountIdentifier={process.env.NEXT_PUBLIC_EFI_ACCOUNT_IDENTIFIER ?? ''}
+            sandbox={process.env.NEXT_PUBLIC_EFI_SANDBOX !== 'false'}
           />
         </div>
 
