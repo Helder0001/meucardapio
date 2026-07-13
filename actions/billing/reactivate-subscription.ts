@@ -59,7 +59,16 @@ export async function reactivateSubscriptionAction(
   // últimos dígitos, não expõe o CPF inteiro no log.
   console.log('[reactivate-subscription][debug] CPF recebido termina em:', onlyDigits(payerCpf).slice(-2))
 
+  // DEBUG TEMPORÁRIO — confirmar se EFI_CLIENT_ID/SECRET estão de fato
+  // configurados neste ambiente antes de decidir se chama a Efí ou não.
+  console.log('[reactivate-subscription][debug] credenciais Efi presentes?', {
+    hasClientId: !!process.env.EFI_CLIENT_ID,
+    hasClientSecret: !!process.env.EFI_CLIENT_SECRET,
+    sandbox: process.env.EFI_SANDBOX,
+  })
+
   if (!process.env.EFI_CLIENT_ID || !process.env.EFI_CLIENT_SECRET) {
+    console.error('[reactivate-subscription] EFI_CLIENT_ID/SECRET ausentes — abortando antes de chamar a Efi')
     return { error: 'Pagamento não configurado no servidor. Contate o suporte.' }
   }
 
