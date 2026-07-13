@@ -217,7 +217,13 @@ export function SubscriptionCardForm({ amount, accountIdentifier, sandbox }: Sub
     } catch (err: any) {
       console.error('[subscription-card-form][efi] erro ao gerar payment_token:', err)
       setState('ready')
-      setErrorMessage(err?.error_description || 'Não foi possível processar o cartão. Confira os dados e tente novamente.')
+      const detail =
+        err?.error_description || err?.error || err?.message || (typeof err === 'string' ? err : null)
+      setErrorMessage(
+        detail
+          ? `Não foi possível processar o cartão: ${detail}`
+          : 'Não foi possível processar o cartão. Confira os dados e tente novamente.'
+      )
     }
   }
 
