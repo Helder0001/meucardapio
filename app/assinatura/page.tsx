@@ -12,7 +12,7 @@ import { prisma } from '@/lib/db/client'
 import { SubscriptionCardForm } from './subscription-card-form'
 import { SignOutLink } from './sign-out-link'
 
-const PLAN_PRICE_MONTHLY = 1.00
+const PLAN_PRICE_MONTHLY = 3.00
 
 export default async function AssinaturaPage() {
   const session = await auth()
