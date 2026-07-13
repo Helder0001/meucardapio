@@ -166,11 +166,21 @@ export async function proxy(request: NextRequest) {
       // (ver commit "Device ID do Mercado Pago"). Sem esse domínio aqui, o
       // navegador bloqueia o script pelo CSP e a feature fica inerte —
       // sem erro visível, o Device ID simplesmente nunca é gerado.
-      `script-src 'self' 'unsafe-inline' https://sdk.mercadopago.com https://http2.mlstatic.com https://www.mercadopago.com`,
+      // device.clearsale.com.br: script de fingerprint de antifraude
+      // carregado internamente pela lib de tokenização da Efí
+      // (payment-token-efi, vendorizada em /vendor) ao gerar o payment_token.
+      `script-src 'self' 'unsafe-inline' https://sdk.mercadopago.com https://http2.mlstatic.com https://www.mercadopago.com https://device.clearsale.com.br`,
       "style-src 'self' 'unsafe-inline' https://http2.mlstatic.com",
       "img-src 'self' blob: data: https:",
       "font-src 'self' https://http2.mlstatic.com",
-      "connect-src 'self' https://api.mercadopago.com https://api.mercadolibre.com https://www.mercadolibre.com https://www.mercadopago.com https://events.mercadopago.com https://secure-fields.mercadopago.com https://api-static.mercadopago.com https://http2.mlstatic.com https://*.upstash.io wss:",
+      // tokenizer.sejaefi.com.br: busca o salt/chave pública usados na
+      // criptografia do cartão no navegador (só roda de verdade em
+      // produção; em sandbox a lib usa um salt fixo local, sem rede).
+      // cobrancas.api.efipay.com.br / cobrancas-h.*: API Cobranças da Efí
+      // (produção / homologação) para buscar a chave pública da conta.
+      // device.clearsale.com.br e web.fpcs-monitor.com.br: fingerprint de
+      // antifraude da própria lib da Efí.
+      "connect-src 'self' https://api.mercadopago.com https://api.mercadolibre.com https://www.mercadolibre.com https://www.mercadopago.com https://events.mercadopago.com https://secure-fields.mercadopago.com https://api-static.mercadopago.com https://http2.mlstatic.com https://*.upstash.io https://tokenizer.sejaefi.com.br https://cobrancas.api.efipay.com.br https://cobrancas-h.api.efipay.com.br https://device.clearsale.com.br https://web.fpcs-monitor.com.br wss:",
       "frame-src https://www.mercadopago.com https://www.mercadolibre.com https://secure-fields.mercadopago.com",
       `frame-ancestors ${isStorefront ? "'self'" : "'none'"}`,
       "base-uri 'self'",
