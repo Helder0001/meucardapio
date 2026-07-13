@@ -19,7 +19,7 @@ import { auth } from '@/lib/auth/session'
 import { createEfiCardSubscription } from '@/lib/efi/subscription'
 import { onlyDigits } from '@/lib/utils/cpf'
 
-const PLAN_PRICE_MONTHLY = 3.00
+const PLAN_PRICE_MONTHLY = 1.00
 const PLAN_PRICE_ANNUAL = parseFloat((PLAN_PRICE_MONTHLY * 12 * 0.9).toFixed(2))
 
 export type ReactivateResult = { error?: string; status?: string }
@@ -59,16 +59,7 @@ export async function reactivateSubscriptionAction(
   // últimos dígitos, não expõe o CPF inteiro no log.
   console.log('[reactivate-subscription][debug] CPF recebido termina em:', onlyDigits(payerCpf).slice(-2))
 
-  // DEBUG TEMPORÁRIO — confirmar se EFI_CLIENT_ID/SECRET estão de fato
-  // configurados neste ambiente antes de decidir se chama a Efí ou não.
-  console.log('[reactivate-subscription][debug] credenciais Efi presentes?', {
-    hasClientId: !!process.env.EFI_CLIENT_ID,
-    hasClientSecret: !!process.env.EFI_CLIENT_SECRET,
-    sandbox: process.env.EFI_SANDBOX,
-  })
-
   if (!process.env.EFI_CLIENT_ID || !process.env.EFI_CLIENT_SECRET) {
-    console.error('[reactivate-subscription] EFI_CLIENT_ID/SECRET ausentes — abortando antes de chamar a Efi')
     return { error: 'Pagamento não configurado no servidor. Contate o suporte.' }
   }
 
@@ -98,9 +89,16 @@ export async function reactivateSubscriptionAction(
   }
 
   const now = new Date()
-  const periodEnd = new Date(
-    now.getTime() + (isAnnual ? 365 : 30) * 24 * 60 * 60 * 1000
-  )
+  // Usa meses/anos cheios (igual o intervalo real do plano cadastrado na
+  // Efí — veja lib/efi/plans.ts, PLAN_INTERVAL_MONTHS), não dias fixos
+  // (30/365), pra bater exatamente com o "próximo vencimento" que a própria
+  // Efí calcula e mostra no painel dela.
+  const periodEnd = new Date(now)
+  if (isAnnual) {
+    periodEnd.setFullYear(periodEnd.getFullYear() + 1)
+  } else {
+    periodEnd.setMonth(periodEnd.getMonth() + 1)
+  }
 
   // Mesma cautela de antes: NÃO marcar ACTIVE otimista. O charge da Efí
   // nasce com status 'waiting' (aguardando confirmação do banco emissor do
