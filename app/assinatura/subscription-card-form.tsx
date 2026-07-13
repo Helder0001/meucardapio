@@ -104,6 +104,21 @@ export function SubscriptionCardForm({ amount, accountIdentifier, sandbox }: Sub
         })
       }
 
+      // Alguns bloqueadores de anúncio / VPNs com filtro de conteúdo (comum
+      // no Android — AdGuard, NextDNS etc.) bloqueiam silenciosamente esse
+      // script: o evento onload dispara normalmente, mas `window.EfiPay`
+      // nunca chega a existir de verdade. Sem essa checagem, o erro só
+      // aparecia depois, na hora de gerar o payment_token, como um "Cannot
+      // read properties of undefined" sem explicação nenhuma pro usuário.
+      if (cancelledRef.current) return
+      if (!window.EfiPay?.CreditCard) {
+        setState('error')
+        setErrorMessage(
+          'Não foi possível carregar o script de pagamento. Se você usa bloqueador de anúncios ou uma VPN com filtro de conteúdo (ex.: AdGuard, NextDNS), tente desativar e recarregar a página.'
+        )
+        return
+      }
+
       if (cancelledRef.current) return
       clearTimeout(timeoutId)
       setState('ready')
@@ -154,6 +169,14 @@ export function SubscriptionCardForm({ amount, accountIdentifier, sandbox }: Sub
     }
 
     setState('submitting')
+
+    if (!window.EfiPay?.CreditCard) {
+      setState('error')
+      setErrorMessage(
+        'O script de pagamento não carregou corretamente. Se você usa bloqueador de anúncios ou VPN com filtro de conteúdo, desative e recarregue a página.'
+      )
+      return
+    }
 
     try {
       const brand = await window.EfiPay.CreditCard.setCardNumber(digits).verifyCardBrand()
