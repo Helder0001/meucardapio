@@ -80,6 +80,9 @@ export async function reactivateSubscriptionAction(
       // sem trial_days aqui: reativação cobra imediatamente, o período
       // grátis já foi usado no cadastro.
     })
+    // DEBUG TEMPORÁRIO — remover depois de confirmar a causa do sumiço da
+    // assinatura no painel da Efí.
+    console.log('[reactivate-subscription][debug] SUCESSO na Efi:', JSON.stringify(efiResult))
   } catch (err) {
     console.error('[reactivate-subscription][efi] erro ao criar assinatura:', err)
     return { error: 'Pagamento não autorizado. Verifique os dados do cartão.' }
