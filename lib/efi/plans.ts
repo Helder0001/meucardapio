@@ -7,9 +7,21 @@
 // efiPlanId na tabela EfiPlan pra reaproveitar depois — igual o
 // mercadoPagoSubId era por-tenant, aqui o plan_id é compartilhado entre
 // todos os tenants do mesmo ciclo.
+//
+// IMPORTANTE: sandbox e produção são contas/bancos de dados DIFERENTES na
+// Efí — um plan_id criado em homologação não existe (e não deve ser usado)
+// em produção, e vice-versa. Por isso o cache abaixo é OBRIGATORIAMENTE
+// particionado por ambiente (isSandboxEnv), não só por billingCycle. Sem
+// isso, trocar EFI_SANDBOX de true->false faz o código reusar sem querer
+// um plan_id de sandbox contra a API de produção, e a Efí rejeita (o plano
+// simplesmente não existe do lado de lá) — erro sem log nenhum do lado de
+// dentro do efiRequest de criação de plano, porque essa chamada nem chega
+// a ser feita.
 
 import { prisma } from '@/lib/db/client'
 import { efiRequest } from './client'
+
+const isSandboxEnv = process.env.EFI_SANDBOX !== 'false'
 
 const PLAN_NAMES: Record<'MONTHLY' | 'ANNUAL', string> = {
   MONTHLY: 'Meu Cardápio PRO — Mensal',
@@ -22,7 +34,11 @@ const PLAN_INTERVAL_MONTHS: Record<'MONTHLY' | 'ANNUAL', number> = {
 }
 
 export async function getOrCreateEfiPlanId(billingCycle: 'MONTHLY' | 'ANNUAL'): Promise<number> {
-  const existing = await prisma.efiPlan.findUnique({ where: { billingCycle } })
+  const environment = isSandboxEnv ? 'SANDBOX' : 'PRODUCTION'
+
+  const existing = await prisma.efiPlan.findUnique({
+    where: { billingCycle_environment: { billingCycle, environment } },
+  })
   if (existing) return existing.efiPlanId
 
   const response = await efiRequest<{ data: { plan_id: number } }>('POST', '/v1/plan', {
@@ -37,9 +53,9 @@ export async function getOrCreateEfiPlanId(billingCycle: 'MONTHLY' | 'ANNUAL'): 
   // mesmo plano na primeira vez que o sistema roda) criando um registro
   // duplicado localmente — a Efí em si não deduplica planos por nome.
   const saved = await prisma.efiPlan.upsert({
-    where: { billingCycle },
+    where: { billingCycle_environment: { billingCycle, environment } },
     update: {},
-    create: { billingCycle, efiPlanId },
+    create: { billingCycle, environment, efiPlanId },
   })
 
   return saved.efiPlanId
