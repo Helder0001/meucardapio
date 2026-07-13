@@ -56,12 +56,28 @@ export async function POST(req: NextRequest) {
           continue
         }
 
-        const nextPeriodEnd = new Date(subscription.currentPeriodEnd)
-        if (subscription.billingCycle === 'ANNUAL') {
-          nextPeriodEnd.setFullYear(nextPeriodEnd.getFullYear() + 1)
-        } else {
-          nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 1)
-        }
+        // BUG CORRIGIDO: a primeira cobrança (criada junto com a
+        // assinatura) já nasce com currentPeriodEnd calculado (veja
+        // actions/billing/reactivate-subscription.ts) — esse webhook só
+        // está confirmando que ELA MESMA foi paga, não é uma renovação.
+        // Se a assinatura ainda não estava ACTIVE, é a primeira confirmação:
+        // só ativa, sem avançar o período de novo (senão a primeira
+        // cobrança avança 2 meses em vez de 1). Só em renovações
+        // subsequentes (assinatura já ACTIVE, chegando um charge_id novo)
+        // é que avançamos +1 intervalo a partir do período já registrado.
+        const isFirstConfirmation = subscription.status !== 'ACTIVE'
+
+        const nextPeriodEnd = isFirstConfirmation
+          ? subscription.currentPeriodEnd
+          : (() => {
+              const d = new Date(subscription.currentPeriodEnd)
+              if (subscription.billingCycle === 'ANNUAL') {
+                d.setFullYear(d.getFullYear() + 1)
+              } else {
+                d.setMonth(d.getMonth() + 1)
+              }
+              return d
+            })()
 
         await prisma.$transaction(async (tx) => {
           await tx.subscription.update({
