@@ -28,6 +28,7 @@ export interface ReactivateCardInput {
   cardToken: string // payment_token da Efí (Efí.js), não mais card_token_id do MP
   payerEmail: string
   payerCpf: string
+  payerPhone: string // Efí retorna 500 "required_property" (/payment/credit_card/customer) sem isso
   cardholderName: string
   billingCycle?: 'MONTHLY' | 'ANNUAL'
 }
@@ -40,10 +41,10 @@ export async function reactivateSubscriptionAction(
     return { error: 'Sessão inválida.' }
   }
 
-  const { cardToken, payerEmail, payerCpf, cardholderName } = input
+  const { cardToken, payerEmail, payerCpf, payerPhone, cardholderName } = input
   const billingCycle = input.billingCycle ?? 'MONTHLY'
 
-  if (!cardToken || !payerEmail || !payerCpf) {
+  if (!cardToken || !payerEmail || !payerCpf || !payerPhone) {
     return { error: 'Dados do cartão incompletos.' }
   }
 
@@ -69,6 +70,7 @@ export async function reactivateSubscriptionAction(
       customerName: cardholderName,
       customerCpf: onlyDigits(payerCpf),
       customerEmail: payerEmail,
+      customerPhone: onlyDigits(payerPhone),
       paymentToken: cardToken,
       // sem trial_days aqui: reativação cobra imediatamente, o período
       // grátis já foi usado no cadastro.
