@@ -27,6 +27,13 @@ interface EfiSubscriptionResponse {
     plan: { id: number; interval: number; repeats: number | null }
     charge: { id: number; status: string; parcel: number; total: number }
     total: number
+    // Confirmado com o suporte da Efí: este é o campo que reflete a data
+    // REAL da primeira cobrança agendada — não confiar em nada que o
+    // painel/app da Efí mostra como "próximo vencimento", que pode exibir
+    // uma projeção diferente (já viram um caso onde o painel mostrava o
+    // mês seguinte, mas first_execution batia com o esperado: trial_days
+    // contado certinho a partir da criação da assinatura).
+    first_execution?: string // formato "YYYY-MM-DD"
   }
 }
 
@@ -62,12 +69,20 @@ export async function createEfiCardSubscription(params: CreateSubscriptionParams
     }
   )
 
+  console.log('[efi][subscription] criada', {
+    efiSubscriptionId: response.data.subscription_id,
+    status: response.data.status,
+    chargeStatus: response.data.charge.status,
+    firstExecution: response.data.first_execution ?? null,
+  })
+
   return {
     efiPlanId,
     efiSubscriptionId: response.data.subscription_id,
     efiChargeId: response.data.charge.id,
     status: response.data.status, // 'active' geralmente já vem assim, mesmo em trial
     chargeStatus: response.data.charge.status, // 'waiting' | 'paid' | ...
+    firstExecution: response.data.first_execution ?? null, // "YYYY-MM-DD" — data real da 1ª cobrança
   }
 }
 

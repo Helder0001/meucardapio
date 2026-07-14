@@ -122,7 +122,14 @@ export async function registerAction(
   // vira ACTIVE quando o webhook confirmar 'paid' (por isso PAST_DUE aqui,
   // não ACTIVE otimista). Se é trial, o acesso já é liberado (status
   // TRIAL), a cobrança de verdade só acontece daqui a 7 dias.
-  const trialEndsAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+  //
+  // first_execution é o campo que a própria Efí devolve com a data REAL
+  // da primeira cobrança agendada (confirmado com o suporte deles) — usar
+  // esse valor em vez de só somar 7 dias na mão evita qualquer divergência
+  // entre o que a gente mostra e o que a Efí vai cobrar de verdade.
+  const trialEndsAt = efiResult.firstExecution
+    ? new Date(`${efiResult.firstExecution}T00:00:00`)
+    : new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
   const periodEnd = wantsImmediateAccess
     ? (() => {
         const d = new Date(now)
