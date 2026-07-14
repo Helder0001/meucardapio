@@ -54,11 +54,6 @@ export async function reactivateSubscriptionAction(
   })
   if (!tenant) return { error: 'Estabelecimento não encontrado.' }
 
-  // DEBUG TEMPORÁRIO — remover depois de confirmar a causa do erro
-  // "Recebedor e cliente não podem ser a mesma pessoa". Só loga os 2
-  // últimos dígitos, não expõe o CPF inteiro no log.
-  console.log('[reactivate-subscription][debug] CPF recebido termina em:', onlyDigits(payerCpf).slice(-2))
-
   if (!process.env.EFI_CLIENT_ID || !process.env.EFI_CLIENT_SECRET) {
     return { error: 'Pagamento não configurado no servidor. Contate o suporte.' }
   }
@@ -80,9 +75,6 @@ export async function reactivateSubscriptionAction(
       // sem trial_days aqui: reativação cobra imediatamente, o período
       // grátis já foi usado no cadastro.
     })
-    // DEBUG TEMPORÁRIO — remover depois de confirmar a causa do sumiço da
-    // assinatura no painel da Efí.
-    console.log('[reactivate-subscription][debug] SUCESSO na Efi:', JSON.stringify(efiResult))
   } catch (err) {
     console.error('[reactivate-subscription][efi] erro ao criar assinatura:', err)
     return { error: 'Pagamento não autorizado. Verifique os dados do cartão.' }
