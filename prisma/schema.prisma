@@ -176,6 +176,8 @@ model Tenant {
   cashbackConfig     CashbackConfig?
   whatsappConfig     WhatsappConfig?
   mercadoPagoConnection MercadoPagoConnection?
+  stripeConnection      StripeConnection?
+  efiConnection         EfiConnection?
   whatsappChats      WhatsappChat[]
   reportSchedules    ReportSchedule[]
   notifications      Notification[]
@@ -741,6 +743,64 @@ model OrderStatusHistory {
 // CONEXÃO OAUTH COM MERCADO PAGO (Mercado Pago Connect)
 // Substitui o modelo de colar access_token manualmente.
 // ══════════════════════════════════════════════════════════
+
+// Conexão do tenant com o Stripe Connect (OAuth padrão, igual ao MP).
+model StripeConnection {
+  id                String    @id @default(cuid())
+  tenantId          String    @unique
+
+  stripeUserId      String    // acct_xxx — a conta conectada do tenant
+  publishableKey    String?   // chave pública, se vier no token exchange
+
+  // Sensível — criptografado em repouso (AES-256-GCM)
+  accessTokenEnc    String
+  refreshTokenEnc   String?
+
+  scope             String?
+  livemode          Boolean   @default(true)
+
+  connectedAt       DateTime  @default(now())
+  connectedByUserId String?
+  revokedAt         DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenant            Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([stripeUserId])
+}
+
+// Cadastro do tenant na Efí Bank. Diferente do MP/Stripe, a Efí não tem
+// fluxo de OAuth pra plataformas terceiras — o tenant precisa abrir a
+// própria conta Efí, criar uma aplicação lá, e colar aqui o Client ID e
+// Client Secret dela (ver lib/efi/tenant-client.ts).
+model EfiConnection {
+  id                  String    @id @default(cuid())
+  tenantId            String    @unique
+
+  // Sensível — criptografado em repouso (AES-256-GCM)
+  clientIdEnc         String
+  clientSecretEnc     String
+
+  // Identificador da conta pro Efí.js (tokenização de cartão no
+  // navegador) — não é sensível, é um valor público.
+  accountIdentifier   String?
+
+  sandbox             Boolean   @default(true)
+
+  connectedAt         DateTime  @default(now())
+  connectedByUserId   String?
+  revokedAt           DateTime?
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  tenant              Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
 
 model MercadoPagoConnection {
   id                String    @id @default(cuid())

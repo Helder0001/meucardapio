@@ -10,7 +10,7 @@ import { useSearchParams } from 'next/navigation'
 import { savePaymentSettings, removePaymentCredentials, togglePaymentOption } from '@/actions/settings/save-payment-settings'
 import {
   Loader2, Eye, EyeOff, CheckCircle2, AlertCircle, ExternalLink,
-  Trash2, ShieldCheck, QrCode, Unplug, AlertTriangle,
+  Trash2, ShieldCheck, QrCode, Unplug, AlertTriangle, CreditCard,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -88,6 +88,339 @@ interface MpStatus {
   isTestKey: boolean | null
   connectedAt: string | null
   hasLegacyToken: boolean
+}
+
+interface StripeStatus {
+  connected: boolean
+  stripeUserId: string | null
+  livemode: boolean | null
+  connectedAt: string | null
+}
+
+interface EfiStatus {
+  connected: boolean
+  sandbox: boolean | null
+  connectedAt: string | null
+}
+
+// Card de conexão do Stripe Connect — mesmo padrão visual do Mercado Pago
+// acima, já que o Stripe também tem OAuth de verdade.
+function StripeConnectionCard() {
+  const [status, setStatus] = useState<StripeStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [connecting, setConnecting] = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const searchParams = useSearchParams()
+
+  async function loadStatus() {
+    try {
+      const res = await fetch('/api/stripe/status')
+      const data = await res.json()
+      setStatus(data)
+    } catch {
+      setError('Não foi possível carregar o status da conexão com o Stripe.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { loadStatus() }, [])
+
+  useEffect(() => {
+    if (searchParams.get('error') === 'stripe') {
+      setError('Não foi possível concluir a conexão com o Stripe. Tente novamente.')
+    }
+  }, [searchParams])
+
+  async function handleConnect() {
+    setConnecting(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/stripe/connect', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? 'Não foi possível iniciar a conexão.')
+        return
+      }
+      window.location.href = data.authorizationUrl
+    } finally {
+      setConnecting(false)
+    }
+  }
+
+  async function handleDisconnect() {
+    if (!confirm('Desconectar sua conta do Stripe?')) return
+    setDisconnecting(true)
+    try {
+      await fetch('/api/stripe/disconnect', { method: 'POST' })
+      await loadStatus()
+    } finally {
+      setDisconnecting(false)
+    }
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+      {error && (
+        <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2.5 text-xs text-destructive">
+          <AlertCircle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+          {error}
+        </div>
+      )}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-lg flex items-center justify-center text-white font-bold text-sm bg-[#635BFF]">
+            <CreditCard className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground">Stripe</h3>
+            <p className="text-xs text-muted-foreground">Cartão internacional dos seus clientes</p>
+          </div>
+        </div>
+
+        {loading ? (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        ) : status?.connected ? (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full text-emerald-600 bg-emerald-500/10">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Conectado
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full text-muted-foreground bg-muted">
+            Não conectado
+          </span>
+        )}
+      </div>
+
+      {!loading && status?.connected && (
+        <div className="space-y-3 pt-1">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-muted-foreground">Modo:</span>
+            {status.livemode ? (
+              <span className="font-semibold text-emerald-600">✅ Produção — pagamentos reais</span>
+            ) : (
+              <span className="font-semibold text-amber-600">⚠️ Teste — pagamentos não são reais</span>
+            )}
+          </div>
+          <div className="flex items-center justify-between pt-3 border-t border-border text-xs text-muted-foreground">
+            <span>
+              Conectado {status.connectedAt ? `em ${new Date(status.connectedAt).toLocaleDateString('pt-BR')}` : ''}
+            </span>
+            <button
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              className="flex items-center gap-1 text-destructive hover:text-destructive/80 transition-colors disabled:opacity-50"
+            >
+              {disconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unplug className="h-3.5 w-3.5" />}
+              Desconectar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!loading && !status?.connected && (
+        <button
+          onClick={handleConnect}
+          disabled={connecting}
+          className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 disabled:opacity-60 transition-colors text-sm"
+        >
+          {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+          Conectar conta do Stripe
+        </button>
+      )}
+    </div>
+  )
+}
+
+// Card de "cadastro" da Efí Bank. Diferente do MP/Stripe, a Efí não tem
+// OAuth pra plataformas terceiras — o tenant precisa colar aqui o Client
+// ID/Secret que ele mesmo gerou no painel da própria conta Efí dele.
+function EfiConnectionCard() {
+  const [status, setStatus] = useState<EfiStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [clientId, setClientId] = useState('')
+  const [clientSecret, setClientSecret] = useState('')
+  const [accountIdentifier, setAccountIdentifier] = useState('')
+  const [sandbox, setSandbox] = useState(true)
+
+  async function loadStatus() {
+    try {
+      const res = await fetch('/api/efi/status')
+      const data = await res.json()
+      setStatus(data)
+    } catch {
+      setError('Não foi possível carregar o status da conexão com a Efí.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { loadStatus() }, [])
+
+  async function handleSave() {
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/efi/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId, clientSecret, accountIdentifier, sandbox }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? 'Não foi possível salvar as credenciais.')
+        return
+      }
+      setClientId('')
+      setClientSecret('')
+      setAccountIdentifier('')
+      setShowForm(false)
+      await loadStatus()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDisconnect() {
+    if (!confirm('Remover as credenciais da Efí cadastradas?')) return
+    setDisconnecting(true)
+    try {
+      await fetch('/api/efi/disconnect', { method: 'POST' })
+      await loadStatus()
+    } finally {
+      setDisconnecting(false)
+    }
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+      {error && (
+        <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2.5 text-xs text-destructive">
+          <AlertCircle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+          {error}
+        </div>
+      )}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-lg flex items-center justify-center text-white font-bold text-sm bg-[#FF7A00]">
+            <QrCode className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground">Efí Bank</h3>
+            <p className="text-xs text-muted-foreground">PIX e cartão dos seus clientes</p>
+          </div>
+        </div>
+
+        {loading ? (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        ) : status?.connected ? (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full text-emerald-600 bg-emerald-500/10">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Conectado
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full text-muted-foreground bg-muted">
+            Não conectado
+          </span>
+        )}
+      </div>
+
+      {!loading && status?.connected && (
+        <div className="flex items-center justify-between pt-1 border-t border-border text-xs text-muted-foreground pt-3">
+          <span>
+            {status.sandbox ? '⚠️ Modo sandbox (teste)' : '✅ Modo produção'}
+            {status.connectedAt ? ` — cadastrado em ${new Date(status.connectedAt).toLocaleDateString('pt-BR')}` : ''}
+          </span>
+          <button
+            onClick={handleDisconnect}
+            disabled={disconnecting}
+            className="flex items-center gap-1 text-destructive hover:text-destructive/80 transition-colors disabled:opacity-50"
+          >
+            {disconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unplug className="h-3.5 w-3.5" />}
+            Remover
+          </button>
+        </div>
+      )}
+
+      {!loading && !status?.connected && !showForm && (
+        <button
+          onClick={() => setShowForm(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors text-sm"
+        >
+          Cadastrar credenciais da Efí
+        </button>
+      )}
+
+      {!loading && !status?.connected && showForm && (
+        <div className="space-y-3 pt-1">
+          <p className="text-xs text-muted-foreground">
+            A Efí não oferece conexão automática — abra sua conta em{' '}
+            <a href="https://sejaefi.com.br" target="_blank" rel="noreferrer" className="underline">sejaefi.com.br</a>,
+            crie uma aplicação com a API Cobranças ativada, e cole as credenciais dela aqui.
+          </p>
+          <div className="grid gap-3">
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-1">Client ID</label>
+              <input
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                className="w-full px-3 py-2 border border-input rounded-lg bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+                autoComplete="off"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-1">Client Secret</label>
+              <input
+                value={clientSecret}
+                onChange={(e) => setClientSecret(e.target.value)}
+                type="password"
+                className="w-full px-3 py-2 border border-input rounded-lg bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+                autoComplete="off"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-foreground mb-1">
+                Identificador da conta (JS de tokenização de cartão){' '}
+                <span className="font-normal text-muted-foreground">— opcional por enquanto</span>
+              </label>
+              <input
+                value={accountIdentifier}
+                onChange={(e) => setAccountIdentifier(e.target.value)}
+                className="w-full px-3 py-2 border border-input rounded-lg bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+                autoComplete="off"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={sandbox} onChange={(e) => setSandbox(e.target.checked)} />
+              Usar ambiente sandbox (teste)
+            </label>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSave}
+              disabled={saving || !clientId || !clientSecret}
+              className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 disabled:opacity-60 transition-colors text-sm"
+            >
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              Validar e salvar
+            </button>
+            <button
+              onClick={() => setShowForm(false)}
+              disabled={saving}
+              className="px-4 py-2.5 text-muted-foreground hover:text-foreground text-sm transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 interface PaymentSettingsFormProps {
@@ -265,6 +598,17 @@ export function PaymentSettingsForm({ hasSecret, pixEnabled, cardEnabled, linkEn
             </div>
           </div>
         )}
+      </div>
+
+      {/* Outras formas de receber — conexão apenas por enquanto. O
+          roteamento de qual provedor processa cada PIX/cartão/link ainda
+          não está ligado a essas conexões; fica pra uma etapa seguinte. */}
+      <div className="pt-1">
+        <h2 className="text-sm font-semibold text-foreground mb-3">Outras formas de receber</h2>
+        <div className="space-y-4">
+          <StripeConnectionCard />
+          <EfiConnectionCard />
+        </div>
       </div>
 
       {/* Toggles — salvam na hora, independentes do formulário abaixo */}
