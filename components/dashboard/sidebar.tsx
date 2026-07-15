@@ -8,7 +8,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Users, Table2,
   Truck, BarChart3, Settings, Tag, Star, MessageSquare, MessageCircle, Printer,
-  Store, QrCode, ShieldCheck, X, Menu,
+  QrCode, ShieldCheck, X, Menu,
   Bell, ClipboardList, Boxes, Plug,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
@@ -44,7 +44,6 @@ const navSections: NavSection[] = [
       { label: 'Kanban',    href: '/dashboard/orders/kanban', icon: ClipboardList,   allowedRoles: ORDERS_ROLES },
       { label: 'Mesas',     href: '/dashboard/tables',        icon: Table2,          allowedRoles: MANAGER_UP },
       { label: 'Delivery',  href: '/dashboard/delivery',      icon: Truck,           minPlan: 'PRO', allowedRoles: MANAGER_UP },
-      { label: 'Multi-PDV', href: '/dashboard/pdv',           icon: Store,           minPlan: 'PRO', allowedRoles: MANAGER_UP },
     ],
   },
   {
