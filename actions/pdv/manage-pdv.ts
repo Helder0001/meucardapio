@@ -38,6 +38,15 @@ export async function createPdvAction(_prev: PdvState, formData: FormData): Prom
   if ('error' in check) return { error: check.error }
   const { session, tenantId } = check
 
+  // Multi-PDV foi removido como funcionalidade (13/07) — cada tenant opera
+  // com um único PDV (criado automaticamente no cadastro). Mantido aqui só
+  // como trava de segurança, a tela que chamava essa action já não existe
+  // mais (app/(dashboard)/dashboard/pdv/page.tsx virou um redirect).
+  const existingCount = await prisma.pDV.count({ where: { tenantId } })
+  if (existingCount >= 1) {
+    return { error: 'Multi-PDV não está mais disponível — cada conta opera com um único ponto de venda.' }
+  }
+
   // Multi-PDV é um recurso PRO/PREMIUM
   const plan = session.user.plan ?? 'STARTER'
   if (PLAN_ORDER[plan as keyof typeof PLAN_ORDER] < PLAN_ORDER.PRO) {
