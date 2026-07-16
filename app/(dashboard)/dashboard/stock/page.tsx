@@ -15,7 +15,7 @@ export default async function StockPage() {
 
   const tenantId = session.user.tenantId
 
-  const [stocks, products, pdvs] = await Promise.all([
+  const [stocks, products] = await Promise.all([
     prisma.stock.findMany({
       where: { tenantId },
       orderBy: [{ product: { name: 'asc' } }],
@@ -34,11 +34,6 @@ export default async function StockPage() {
       orderBy: { name: 'asc' },
       select: { id: true, name: true },
     }),
-    prisma.pDV.findMany({
-      where: { tenantId, isActive: true },
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true },
-    }),
   ])
 
   const serialized = stocks.map((s) => ({
@@ -52,12 +47,12 @@ export default async function StockPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Estoque</h1>
         <p className="text-muted-foreground text-sm mt-0.5">
-          Controle a quantidade disponível de cada produto por loja/PDV.
+          Controle a quantidade disponível de cada produto.
           Vendas debitam automaticamente e cancelamentos devolvem ao estoque.
         </p>
       </div>
 
-      <StockManager stocks={serialized} products={products} pdvs={pdvs} />
+      <StockManager stocks={serialized} products={products} />
     </div>
   )
 }
