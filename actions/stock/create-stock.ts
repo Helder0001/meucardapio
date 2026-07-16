@@ -15,7 +15,9 @@ import { z } from 'zod'
 
 const createStockSchema = z.object({
   productId:   z.string().cuid('Produto inválido'),
-  pdvId:       z.string().min(1, 'PDV inválido'),
+  // Multi-PDV foi removido (13/07): não pedimos mais isso na tela, o PDV
+  // único do tenant é resolvido automaticamente abaixo.
+  pdvId:       z.string().optional(),
   quantity:    z.coerce.number().min(0, 'Quantidade não pode ser negativa'),
   minQuantity: z.coerce.number().min(0).optional().nullable(),
   unit:        z.string().min(1).max(10).optional(),
@@ -51,23 +53,35 @@ export async function createStockAction(
   }
   const data = parsed.data
 
+  // Multi-PDV removido: se não veio pdvId (telas novas não mandam mais),
+  // busca ou cria o PDV padrão do tenant — mesmo padrão já usado em
+  // actions/tables/create-table.ts.
+  let pdvId = data.pdvId
+  if (!pdvId) {
+    let defaultPdv = await prisma.pDV.findFirst({ where: { tenantId }, orderBy: { createdAt: 'asc' } })
+    if (!defaultPdv) {
+      defaultPdv = await prisma.pDV.create({ data: { tenantId, name: 'Loja Principal', type: 'STORE', isActive: true } })
+    }
+    pdvId = defaultPdv.id
+  }
+
   // IDOR prevention: produto e PDV precisam pertencer ao mesmo tenant
   const [product, pdv] = await Promise.all([
     prisma.product.findFirst({ where: { id: data.productId, tenantId }, select: { id: true, name: true } }),
-    prisma.pDV.findFirst({ where: { id: data.pdvId, tenantId }, select: { id: true, name: true } }),
+    prisma.pDV.findFirst({ where: { id: pdvId, tenantId }, select: { id: true, name: true } }),
   ])
   if (!product) return { error: 'Produto não encontrado' }
   if (!pdv) return { error: 'PDV não encontrado' }
 
   const existing = await prisma.stock.findUnique({
-    where: { pdvId_productId: { pdvId: data.pdvId, productId: data.productId } },
+    where: { pdvId_productId: { pdvId, productId: data.productId } },
   })
-  if (existing) return { error: `Já existe controle de estoque para "${product.name}" neste PDV` }
+  if (existing) return { error: `Já existe controle de estoque para "${product.name}"` }
 
   const stock = await prisma.stock.create({
     data: {
       tenantId,
-      pdvId: data.pdvId,
+      pdvId,
       productId: data.productId,
       quantity: data.quantity,
       minQuantity: data.minQuantity ?? null,
@@ -83,7 +97,7 @@ export async function createStockAction(
         tenantId,
         stockId: stock.id,
         productId: data.productId,
-        pdvId: data.pdvId,
+        pdvId,
         type: 'MANUAL_IN',
         quantity: data.quantity,
         balanceAfter: data.quantity,
@@ -101,7 +115,7 @@ export async function createStockAction(
     action: AuditActions.STOCK_CREATED,
     resource: 'stock',
     resourceId: stock.id,
-    newValue: { productId: data.productId, pdvId: data.pdvId, quantity: data.quantity },
+    newValue: { productId: data.productId, pdvId, quantity: data.quantity },
   })
 
   return { ok: true }
