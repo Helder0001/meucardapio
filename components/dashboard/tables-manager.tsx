@@ -173,12 +173,6 @@ export function TablesManager({ tables, pdvs, tenantSlug }: TablesManagerProps) 
           </div>
           <form action={handleCreateTable} className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">PDV *</label>
-              <select name="pdvId" required className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-                {pdvs.map((pdv) => <option key={pdv.id} value={pdv.id}>{pdv.name}</option>)}
-              </select>
-            </div>
-            <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Número da mesa *</label>
               <input name="number" type="number" min="1" required className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
             </div>
