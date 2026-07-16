@@ -27,7 +27,6 @@ interface StockRow {
 interface StockManagerProps {
   stocks: StockRow[]
   products: Array<{ id: string; name: string }>
-  pdvs: Array<{ id: string; name: string }>
 }
 
 function stockStatus(stock: StockRow): 'out' | 'low' | 'ok' {
@@ -36,7 +35,7 @@ function stockStatus(stock: StockRow): 'out' | 'low' | 'ok' {
   return 'ok'
 }
 
-export function StockManager({ stocks, products, pdvs }: StockManagerProps) {
+export function StockManager({ stocks, products }: StockManagerProps) {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'low' | 'out'>('all')
   const [showCreate, setShowCreate] = useState(false)
@@ -96,7 +95,7 @@ export function StockManager({ stocks, products, pdvs }: StockManagerProps) {
           onClick={() => setShowCreate(true)}
           disabled={productsWithoutStock.length === 0 && products.length > 0}
           className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium text-sm rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          title={productsWithoutStock.length === 0 ? 'Todos os produtos já têm estoque cadastrado em todos os PDVs' : undefined}
+          title={productsWithoutStock.length === 0 ? 'Todos os produtos já têm estoque cadastrado' : undefined}
         >
           <Plus className="h-4 w-4" />
           Cadastrar estoque
@@ -109,7 +108,6 @@ export function StockManager({ stocks, products, pdvs }: StockManagerProps) {
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted-foreground">
               <th className="px-4 py-3 font-medium">Produto</th>
-              <th className="px-4 py-3 font-medium">PDV</th>
               <th className="px-4 py-3 font-medium text-right">Quantidade</th>
               <th className="px-4 py-3 font-medium text-right">Alerta mínimo</th>
               <th className="px-4 py-3 font-medium">Status</th>
@@ -135,7 +133,6 @@ export function StockManager({ stocks, products, pdvs }: StockManagerProps) {
                       </span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{stock.pdv.name}</td>
                   <td className="px-4 py-3 text-right font-semibold text-foreground">
                     {stock.quantity} {stock.unit}
                   </td>
@@ -199,7 +196,6 @@ export function StockManager({ stocks, products, pdvs }: StockManagerProps) {
       {showCreate && (
         <CreateStockModal
           products={productsWithoutStock}
-          pdvs={pdvs}
           onClose={() => setShowCreate(false)}
         />
       )}
@@ -218,10 +214,9 @@ export function StockManager({ stocks, products, pdvs }: StockManagerProps) {
 // ── Modal: cadastrar novo controle de estoque ─────────────────────────────
 
 function CreateStockModal({
-  products, pdvs, onClose,
+  products, onClose,
 }: {
   products: Array<{ id: string; name: string }>
-  pdvs: Array<{ id: string; name: string }>
   onClose: () => void
 }) {
   const [state, formAction, isPending] = useActionState<StockFormState, FormData>(
@@ -249,7 +244,7 @@ function CreateStockModal({
 
         {products.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Todos os produtos ativos já têm estoque cadastrado em todos os PDVs.
+            Todos os produtos ativos já têm estoque cadastrado.
           </p>
         ) : (
           <form action={formAction} className="space-y-3">
@@ -261,13 +256,6 @@ function CreateStockModal({
               <label className="text-xs font-medium text-foreground">Produto</label>
               <select name="productId" required className="w-full mt-1 px-3 py-2 text-sm border border-input rounded-lg bg-background">
                 {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs font-medium text-foreground">PDV</label>
-              <select name="pdvId" required className="w-full mt-1 px-3 py-2 text-sm border border-input rounded-lg bg-background">
-                {pdvs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
 
@@ -344,7 +332,7 @@ function AdjustStockModal({ stock, onClose }: { stock: StockRow; onClose: () => 
           </button>
         </div>
         <p className="text-xs text-muted-foreground mb-4">
-          {stock.product.name} · {stock.pdv.name} · saldo atual: <strong className="text-foreground">{stock.quantity} {stock.unit}</strong>
+          {stock.product.name} · saldo atual: <strong className="text-foreground">{stock.quantity} {stock.unit}</strong>
         </p>
 
         <form action={formAction} className="space-y-3">
