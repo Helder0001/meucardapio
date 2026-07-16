@@ -11,12 +11,14 @@
 // 2. tenant.settings.mercadoPagoAccessToken — token colado manualmente
 //    (fluxo legado, mantido só para não quebrar tenants que configuraram
 //    assim antes do OAuth existir). NÃO exibido mais como opção na tela.
-// 3. process.env.MERCADOPAGO_ACCESS_TOKEN — credencial da plataforma, usada
-//    historicamente como fallback de desenvolvimento/demo.
 //
-// Mantemos os 3 níveis para não quebrar ninguém em produção durante a
-// migração — quando todos os tenants tiverem migrado para OAuth, os níveis
-// 2 e 3 podem ser removidos.
+// REMOVIDO: havia um 3º nível, process.env.MERCADOPAGO_ACCESS_TOKEN (conta
+// da PLATAFORMA), usado como fallback quando o tenant não tinha conectado
+// nada. Isso fazia qualquer tenant sem conexão própria "vazar" silenciosamente
+// pra conta pessoal do dono da plataforma — sem erro nenhum, sem aviso.
+// Agora um tenant sem MercadoPagoConnection nem token legado simplesmente
+// não consegue gerar PIX/cartão (retorna null, e quem chama trata isso como
+// "esse tenant não tem meio de pagamento configurado").
 
 import { prisma } from '@/lib/db/client'
 import { getValidMpAccessToken } from './token-manager'
@@ -36,7 +38,7 @@ export async function resolveTenantMpAccessToken(tenantId: string): Promise<stri
   const legacyToken = (tenant?.settings as any)?.mercadoPagoAccessToken
   if (legacyToken) return legacyToken
 
-  return process.env.MERCADOPAGO_ACCESS_TOKEN ?? null
+  return null
 }
 
 // BUG: a public key (usada no BROWSER pra tokenizar o cartão) e o access
@@ -46,7 +48,8 @@ export async function resolveTenantMpAccessToken(tenantId: string): Promise<stri
 // carregar o formulário" / "Ocorreu um erro"). O código que resolvia a
 // public key pulava o nível 2 (token legado colado manualmente) e ia direto
 // pro fallback da plataforma — só a resolveTenantMpAccessToken() tinha a
-// cascata completa. Agora as duas seguem exatamente a mesma ordem.
+// cascata completa. Agora as duas seguem exatamente a mesma ordem (sem o
+// fallback da plataforma, pelo mesmo motivo explicado acima).
 export async function resolveTenantMpPublicKey(tenantId: string): Promise<string | null> {
   const connection = await prisma.mercadoPagoConnection.findFirst({
     where: { tenantId, revokedAt: null },
@@ -61,5 +64,5 @@ export async function resolveTenantMpPublicKey(tenantId: string): Promise<string
   const legacyPublicKey = (tenant?.settings as any)?.mercadoPagoPublicKey
   if (legacyPublicKey) return legacyPublicKey
 
-  return process.env.NEXT_PUBLIC_MP_PUBLIC_KEY ?? null
+  return null
 }
