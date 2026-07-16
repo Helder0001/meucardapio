@@ -186,7 +186,7 @@ const SelectFilter = ({
 export function ReportsClient({
   revenueChart, revenueChartPrev = [], topProducts, salesByType, salesByPayment,
   salesByHour, summary, startDate, endDate,
-  pdvList, productList, userList,
+  productList, userList,
   filterPdv, filterPayment, filterProduct, filterSaleType, filterUser,
 }: ReportsClientProps) {
   const router = useRouter()
@@ -472,19 +472,13 @@ export function ReportsClient({
             Filtros avançados
             {hasActiveFilters && (
               <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold bg-primary text-primary-foreground rounded-full leading-none">
-                {[pdv, payment, product, saleType].filter(Boolean).length}
+                {[payment, product, saleType].filter(Boolean).length}
               </span>
             )}
             {showAdvanced ? <ChevronUp className="h-3.5 w-3.5 ml-1" /> : <ChevronDown className="h-3.5 w-3.5 ml-1" />}
           </button>
           {showAdvanced && (
             <div className="mt-3 flex flex-wrap gap-4 items-end">
-              <SelectFilter label="PDV" value={pdv} onChange={setPdv}
-                options={[
-                  { value: '', label: 'Todos os PDVs' },
-                  { value: 'null', label: '🌐 Online (sem PDV)' },
-                  ...pdvList.map((p) => ({ value: p.id, label: p.name })),
-                ]} />
               <SelectFilter label="Forma de pagamento" value={payment} onChange={setPayment} options={METHOD_OPTIONS} />
               <SelectFilter label="Produto" value={product} onChange={setProduct}
                 options={[
