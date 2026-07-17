@@ -17,6 +17,7 @@ export async function GET() {
       sandbox: true,
       connectedAt: true,
       revokedAt: true,
+      pixKey: true,
     },
   })
 
@@ -26,5 +27,6 @@ export async function GET() {
     connected: isConnected,
     sandbox: connection?.sandbox ?? null,
     connectedAt: connection?.connectedAt ?? null,
+    pixEnabled: !!connection?.pixKey,
   })
 }

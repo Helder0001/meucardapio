@@ -790,6 +790,17 @@ model EfiConnection {
 
   sandbox             Boolean   @default(true)
 
+  // Certificado .p12 exigido em TODA requisição da API Pix da Efí (regra
+  // do Banco Central, mTLS) — API diferente da API de Cobranças usada pro
+  // cartão. Guardado como base64, criptografado em repouso.
+  pixCertificateEnc          String?
+  pixCertificatePassphraseEnc String?
+  // Chave Pix cadastrada na conta Efí que vai receber os pagamentos —
+  // exigida no corpo de toda cobrança criada. Não é uma credencial de
+  // acesso (é só o identificador da conta recebedora), então não é
+  // criptografada, igual accountIdentifier.
+  pixKey                     String?
+
   connectedAt         DateTime  @default(now())
   connectedByUserId   String?
   revokedAt           DateTime?
@@ -886,6 +897,13 @@ model Payment {
   status            PaymentStatus @default(PENDING)
   amount            Decimal       @db.Decimal(10, 2)
 
+  // Qual provedor processou este pagamento — default MERCADOPAGO porque
+  // é o único usado até aqui. providerReference é o id genérico do lado
+  // de fora (Stripe: payment_intent id; Efí Pix: txid; Efí cartão:
+  // charge_id) — pra MP, mercadoPagoId abaixo já cumpre esse papel.
+  provider          PaymentProvider @default(MERCADOPAGO)
+  providerReference String?
+
   // Mercado Pago — PIX
   mercadoPagoId     String?       @unique
   mercadoPagoStatus String?
@@ -930,6 +948,7 @@ model Payment {
   @@index([tenantId])
   @@index([orderId])
   @@index([mercadoPagoId])
+  @@index([providerReference])
   @@index([status])
 }
 

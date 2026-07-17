@@ -101,6 +101,7 @@ interface EfiStatus {
   connected: boolean
   sandbox: boolean | null
   connectedAt: string | null
+  pixEnabled: boolean
 }
 
 // Card de conexão do Stripe Connect — mesmo padrão visual do Mercado Pago
@@ -247,6 +248,20 @@ function EfiConnectionCard() {
   const [clientSecret, setClientSecret] = useState('')
   const [accountIdentifier, setAccountIdentifier] = useState('')
   const [sandbox, setSandbox] = useState(true)
+  const [enablePix, setEnablePix] = useState(false)
+  const [pixCertificateBase64, setPixCertificateBase64] = useState('')
+  const [pixCertificateFileName, setPixCertificateFileName] = useState('')
+  const [pixCertificatePassphrase, setPixCertificatePassphrase] = useState('')
+  const [pixKey, setPixKey] = useState('')
+
+  async function handleCertificateFile(e: { target: HTMLInputElement }) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPixCertificateFileName(file.name)
+    const buffer = await file.arrayBuffer()
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)))
+    setPixCertificateBase64(base64)
+  }
 
   async function loadStatus() {
     try {
@@ -263,13 +278,23 @@ function EfiConnectionCard() {
   useEffect(() => { loadStatus() }, [])
 
   async function handleSave() {
+    if (enablePix && (!pixCertificateBase64 || !pixKey)) {
+      setError('Pra habilitar Pix, envie o certificado .p12 e a chave Pix.')
+      return
+    }
     setSaving(true)
     setError(null)
     try {
       const res = await fetch('/api/efi/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId, clientSecret, accountIdentifier, sandbox }),
+        body: JSON.stringify({
+          clientId,
+          clientSecret,
+          accountIdentifier,
+          sandbox,
+          ...(enablePix ? { pixCertificateBase64, pixCertificatePassphrase, pixKey } : {}),
+        }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -279,6 +304,10 @@ function EfiConnectionCard() {
       setClientId('')
       setClientSecret('')
       setAccountIdentifier('')
+      setPixCertificateBase64('')
+      setPixCertificateFileName('')
+      setPixCertificatePassphrase('')
+      setPixKey('')
       setShowForm(false)
       await loadStatus()
     } finally {
@@ -331,19 +360,28 @@ function EfiConnectionCard() {
       </div>
 
       {!loading && status?.connected && (
-        <div className="flex items-center justify-between pt-1 border-t border-border text-xs text-muted-foreground pt-3">
-          <span>
-            {status.sandbox ? '⚠️ Modo sandbox (teste)' : '✅ Modo produção'}
-            {status.connectedAt ? ` — cadastrado em ${new Date(status.connectedAt).toLocaleDateString('pt-BR')}` : ''}
-          </span>
-          <button
-            onClick={handleDisconnect}
-            disabled={disconnecting}
-            className="flex items-center gap-1 text-destructive hover:text-destructive/80 transition-colors disabled:opacity-50"
-          >
-            {disconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unplug className="h-3.5 w-3.5" />}
-            Remover
-          </button>
+        <div className="space-y-2 pt-1">
+          <div className="flex items-center gap-1.5 text-xs">
+            {status.pixEnabled ? (
+              <span className="text-emerald-600 font-medium">✅ Pix habilitado (certificado configurado)</span>
+            ) : (
+              <span className="text-muted-foreground">Pix não habilitado — só cartão configurado por enquanto</span>
+            )}
+          </div>
+          <div className="flex items-center justify-between pt-2 border-t border-border text-xs text-muted-foreground">
+            <span>
+              {status.sandbox ? '⚠️ Modo sandbox (teste)' : '✅ Modo produção'}
+              {status.connectedAt ? ` — cadastrado em ${new Date(status.connectedAt).toLocaleDateString('pt-BR')}` : ''}
+            </span>
+            <button
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              className="flex items-center gap-1 text-destructive hover:text-destructive/80 transition-colors disabled:opacity-50"
+            >
+              {disconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unplug className="h-3.5 w-3.5" />}
+              Remover
+            </button>
+          </div>
         </div>
       )}
 
@@ -399,11 +437,62 @@ function EfiConnectionCard() {
               <input type="checkbox" checked={sandbox} onChange={(e) => setSandbox(e.target.checked)} />
               Usar ambiente sandbox (teste)
             </label>
+
+            <div className="border-t border-border pt-3 space-y-3">
+              <label className="flex items-center gap-2 text-sm cursor-pointer font-medium text-foreground">
+                <input type="checkbox" checked={enablePix} onChange={(e) => setEnablePix(e.target.checked)} />
+                Habilitar Pix via Efí
+              </label>
+
+              {enablePix && (
+                <div className="space-y-3 pl-1">
+                  <p className="text-xs text-muted-foreground">
+                    A API de Pix da Efí exige um certificado próprio (.p12), diferente do cartão.
+                    Gere um em sua conta Efí em API → Meus Certificados.
+                  </p>
+                  <div>
+                    <label className="block text-xs font-medium text-foreground mb-1">Certificado .p12</label>
+                    <input
+                      type="file"
+                      accept=".p12,.pfx"
+                      onChange={handleCertificateFile}
+                      className="w-full text-sm text-muted-foreground file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-muted file:text-foreground file:text-xs"
+                    />
+                    {pixCertificateFileName && (
+                      <p className="text-xs text-emerald-600 mt-1">✓ {pixCertificateFileName}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-foreground mb-1">
+                      Senha do certificado{' '}
+                      <span className="font-normal text-muted-foreground">— deixe em branco se não tiver</span>
+                    </label>
+                    <input
+                      value={pixCertificatePassphrase}
+                      onChange={(e) => setPixCertificatePassphrase(e.target.value)}
+                      type="password"
+                      className="w-full px-3 py-2 border border-input rounded-lg bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-foreground mb-1">Chave Pix cadastrada na Efí</label>
+                    <input
+                      value={pixKey}
+                      onChange={(e) => setPixKey(e.target.value)}
+                      placeholder="CPF/CNPJ, e-mail, telefone ou chave aleatória"
+                      className="w-full px-3 py-2 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      autoComplete="off"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleSave}
-              disabled={saving || !clientId || !clientSecret}
+              disabled={saving || !clientId || !clientSecret || (enablePix && (!pixCertificateBase64 || !pixKey))}
               className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 disabled:opacity-60 transition-colors text-sm"
             >
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
