@@ -20,7 +20,7 @@ export default async function MasterDashboard() {
     activeTenants,
     trialTenants,
     suspendedTenants,
-    subscriptions,
+    activeSubscriptionsForMrr,
     recentTenants,
     ordersToday,
   ] = await Promise.all([
@@ -29,10 +29,11 @@ export default async function MasterDashboard() {
     prisma.tenant.count({ where: { subscriptionStatus: 'TRIAL' } }),
     prisma.tenant.count({ where: { subscriptionStatus: 'SUSPENDED' } }),
 
-    // MRR: soma das assinaturas ativas
-    prisma.subscription.aggregate({
+    // MRR: soma das assinaturas ativas, normalizando anuais (÷12) — sem
+    // isso, um plano anual infla o MRR com o valor do ano inteiro de uma vez.
+    prisma.subscription.findMany({
       where: { status: 'ACTIVE' },
-      _sum: { amount: true },
+      select: { amount: true, billingCycle: true },
     }),
 
     // Últimos 10 tenants
@@ -51,7 +52,10 @@ export default async function MasterDashboard() {
     }),
   ])
 
-  const mrr = Number(subscriptions._sum.amount ?? 0)
+  const mrr = activeSubscriptionsForMrr.reduce(
+    (sum, s) => sum + (s.billingCycle === 'ANNUAL' ? Number(s.amount) / 12 : Number(s.amount)),
+    0
+  )
 
   return (
     <div className="space-y-6">
