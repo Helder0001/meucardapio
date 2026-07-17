@@ -2,11 +2,9 @@
 // app/(dashboard)/dashboard/settings/profile/profile-form.tsx
 
 import { useState, useTransition } from 'react'
-import { Loader2, Eye, EyeOff, Save, LogOut, XCircle } from 'lucide-react'
+import { Loader2, Eye, EyeOff, Save, LogOut } from 'lucide-react'
 import { signOut } from 'next-auth/react'
 import { toast } from 'sonner'
-import { formatDate } from '@/lib/utils/format'
-import { cancelSubscriptionAction } from '@/actions/billing/cancel-subscription'
 
 const ROLE_LABELS: Record<string, string> = {
   MASTER_ADMIN: 'Master Admin',
@@ -15,20 +13,6 @@ const ROLE_LABELS: Record<string, string> = {
   ATTENDANT: 'Atendente',
   STAFF: 'Operador',
   DELIVERY_PERSON: 'Entregador',
-}
-
-const BILLING_CYCLE_LABELS: Record<string, string> = {
-  MONTHLY: 'Mensal',
-  ANNUAL: 'Anual',
-}
-
-interface SubscriptionInfo {
-  status: string
-  plan: string
-  billingCycle: string
-  amount: number
-  currentPeriodEnd: string
-  cancelledAt: string | null
 }
 
 interface ProfileFormProps {
@@ -41,15 +25,12 @@ interface ProfileFormProps {
     createdAt: Date
     lastLoginAt: Date | null
   }
-  subscription?: SubscriptionInfo | null
 }
 
-export function ProfileForm({ user, subscription }: ProfileFormProps) {
+export function ProfileForm({ user }: ProfileFormProps) {
   const [isPending, start] = useTransition()
-  const [isCancelling, startCancel] = useTransition()
   const [showPassword, setShowPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
-  const [sub, setSub] = useState(subscription ?? null)
 
   // Form fields
   const [name, setName] = useState(user.name)
@@ -98,25 +79,6 @@ export function ProfileForm({ user, subscription }: ProfileFormProps) {
       } catch {
         toast.error('Erro ao alterar senha')
       }
-    })
-  }
-
-  const handleCancelSubscription = () => {
-    if (!sub) return
-    const accessUntilLabel = new Date(sub.currentPeriodEnd).toLocaleDateString('pt-BR')
-    const confirmed = window.confirm(
-      `Cancelar sua assinatura do Plano PRO?\n\nSeu acesso continua normal até ${accessUntilLabel} (fim do período já pago). Depois disso, o dashboard fica bloqueado e nenhuma nova cobrança será feita no cartão.`
-    )
-    if (!confirmed) return
-
-    startCancel(async () => {
-      const result = await cancelSubscriptionAction()
-      if (result.error) {
-        toast.error(result.error)
-        return
-      }
-      setSub((prev) => (prev ? { ...prev, cancelledAt: new Date().toISOString() } : prev))
-      toast.success(`Assinatura cancelada. Acesso garantido até ${accessUntilLabel}.`)
     })
   }
 
@@ -244,51 +206,6 @@ export function ProfileForm({ user, subscription }: ProfileFormProps) {
           Alterar senha
         </button>
       </div>
-
-      {/* Assinatura */}
-      {sub && (
-        <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-          <h2 className="font-semibold text-foreground">Assinatura</h2>
-
-          <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
-            <div>
-              <span className="font-medium text-foreground block">Plano</span>
-              Meu Cardápio PRO — {BILLING_CYCLE_LABELS[sub.billingCycle] ?? sub.billingCycle}
-            </div>
-            <div>
-              <span className="font-medium text-foreground block">Valor</span>
-              {sub.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-              {sub.billingCycle === 'ANNUAL' ? '/ano' : '/mês'}
-            </div>
-            <div>
-              <span className="font-medium text-foreground block">
-                {sub.cancelledAt ? 'Acesso garantido até' : 'Próxima cobrança'}
-              </span>
-              {new Date(sub.currentPeriodEnd).toLocaleDateString('pt-BR')}
-            </div>
-          </div>
-
-          {sub.cancelledAt ? (
-            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-3 py-2.5">
-              <XCircle className="h-4 w-4 mt-0.5 shrink-0" />
-              <span>
-                Cancelamento solicitado. Você continua com acesso normal até{' '}
-                {new Date(sub.currentPeriodEnd).toLocaleDateString('pt-BR')} — depois disso o
-                acesso é bloqueado e não haverá nova cobrança no cartão.
-              </span>
-            </div>
-          ) : (
-            <button
-              onClick={handleCancelSubscription}
-              disabled={isCancelling}
-              className="flex items-center gap-2 px-4 py-2.5 bg-destructive/10 text-destructive text-sm font-medium rounded-lg hover:bg-destructive/20 disabled:opacity-60 transition-colors"
-            >
-              {isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
-              Cancelar assinatura
-            </button>
-          )}
-        </div>
-      )}
 
       {/* Sair */}
       <div className="bg-card border border-border rounded-xl p-5">
