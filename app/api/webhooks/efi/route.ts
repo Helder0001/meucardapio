@@ -92,6 +92,25 @@ export async function POST(req: NextRequest) {
             where: { id: subscription.tenantId },
             data: { subscriptionStatus: 'ACTIVE' },
           })
+          // Extrato/histórico de pagamentos (tela de assinatura) — uma
+          // linha por cobrança confirmada. efiChargeId é @unique em
+          // SubscriptionPayment, então reenvios da mesma notificação (que a
+          // Efí faz por até 3 dias se não conseguir confirmar a entrega)
+          // não duplicam a linha.
+          await tx.subscriptionPayment.upsert({
+            where: { efiChargeId: entry.identifiers.charge_id },
+            update: {},
+            create: {
+              subscriptionId: subscription.id,
+              tenantId: subscription.tenantId,
+              plan: subscription.plan,
+              billingCycle: subscription.billingCycle,
+              amount: subscription.amount,
+              cardLast4: subscription.cardLast4,
+              efiChargeId: entry.identifiers.charge_id,
+              paidAt: new Date(),
+            },
+          })
         })
 
         console.log('[webhook/efi] cobrança confirmada, assinatura ativa', {
