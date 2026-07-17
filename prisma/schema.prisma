@@ -176,8 +176,6 @@ model Tenant {
   cashbackConfig     CashbackConfig?
   whatsappConfig     WhatsappConfig?
   mercadoPagoConnection MercadoPagoConnection?
-  stripeConnection      StripeConnection?
-  efiConnection         EfiConnection?
   whatsappChats      WhatsappChat[]
   reportSchedules    ReportSchedule[]
   notifications      Notification[]
@@ -212,6 +210,10 @@ model Subscription {
   status             SubscriptionStatus
   amount             Decimal            @db.Decimal(10, 2)
   currency           String             @default("BRL")
+  // 4 últimos dígitos do cartão salvo (extraídos no próprio navegador antes
+  // da tokenização — nunca guardamos o número completo). Exibido na tela de
+  // assinatura pro tenant reconhecer qual cartão está sendo cobrado.
+  cardLast4          String?
   currentPeriodStart DateTime @map("billingCycleStart")
   currentPeriodEnd   DateTime @map("billingCycleEnd")
   cancelledAt        DateTime?
@@ -220,6 +222,29 @@ model Subscription {
   updatedAt          DateTime           @updatedAt
 
   tenant             Tenant             @relation(fields: [tenantId], references: [id])
+  payments           SubscriptionPayment[]
+}
+
+// Histórico de cobranças CONFIRMADAS (paid) da assinatura — cada linha é um
+// mês (ou ano) efetivamente pago, usado pra listar o extrato na tela de
+// assinatura ("Nubank-like": data, plano, cartão, valor). Criado pelo
+// webhook da Efí (app/api/webhooks/efi/route.ts) toda vez que uma cobrança
+// é confirmada como paga — nunca otimista, só depois da confirmação real.
+model SubscriptionPayment {
+  id             String       @id @default(cuid())
+  subscriptionId String
+  tenantId       String
+  plan           Plan
+  billingCycle   BillingCycle
+  amount         Decimal      @db.Decimal(10, 2)
+  cardLast4      String?
+  efiChargeId    Int?         @unique
+  paidAt         DateTime
+  createdAt      DateTime     @default(now())
+
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@index([tenantId])
 }
 
 // Cache do plan_id criado na Efí pra cada ciclo de cobrança (mensal/anual).
@@ -744,75 +769,6 @@ model OrderStatusHistory {
 // Substitui o modelo de colar access_token manualmente.
 // ══════════════════════════════════════════════════════════
 
-// Conexão do tenant com o Stripe Connect (OAuth padrão, igual ao MP).
-model StripeConnection {
-  id                String    @id @default(cuid())
-  tenantId          String    @unique
-
-  stripeUserId      String    // acct_xxx — a conta conectada do tenant
-  publishableKey    String?   // chave pública, se vier no token exchange
-
-  // Sensível — criptografado em repouso (AES-256-GCM)
-  accessTokenEnc    String
-  refreshTokenEnc   String?
-
-  scope             String?
-  livemode          Boolean   @default(true)
-
-  connectedAt       DateTime  @default(now())
-  connectedByUserId String?
-  revokedAt         DateTime?
-
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-
-  tenant            Tenant    @relation(fields: [tenantId], references: [id])
-
-  @@index([tenantId])
-  @@index([stripeUserId])
-}
-
-// Cadastro do tenant na Efí Bank. Diferente do MP/Stripe, a Efí não tem
-// fluxo de OAuth pra plataformas terceiras — o tenant precisa abrir a
-// própria conta Efí, criar uma aplicação lá, e colar aqui o Client ID e
-// Client Secret dela (ver lib/efi/tenant-client.ts).
-model EfiConnection {
-  id                  String    @id @default(cuid())
-  tenantId            String    @unique
-
-  // Sensível — criptografado em repouso (AES-256-GCM)
-  clientIdEnc         String
-  clientSecretEnc     String
-
-  // Identificador da conta pro Efí.js (tokenização de cartão no
-  // navegador) — não é sensível, é um valor público.
-  accountIdentifier   String?
-
-  sandbox             Boolean   @default(true)
-
-  // Certificado .p12 exigido em TODA requisição da API Pix da Efí (regra
-  // do Banco Central, mTLS) — API diferente da API de Cobranças usada pro
-  // cartão. Guardado como base64, criptografado em repouso.
-  pixCertificateEnc          String?
-  pixCertificatePassphraseEnc String?
-  // Chave Pix cadastrada na conta Efí que vai receber os pagamentos —
-  // exigida no corpo de toda cobrança criada. Não é uma credencial de
-  // acesso (é só o identificador da conta recebedora), então não é
-  // criptografada, igual accountIdentifier.
-  pixKey                     String?
-
-  connectedAt         DateTime  @default(now())
-  connectedByUserId   String?
-  revokedAt           DateTime?
-
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-
-  tenant              Tenant    @relation(fields: [tenantId], references: [id])
-
-  @@index([tenantId])
-}
-
 model MercadoPagoConnection {
   id                String    @id @default(cuid())
   tenantId          String    @unique
@@ -897,13 +853,6 @@ model Payment {
   status            PaymentStatus @default(PENDING)
   amount            Decimal       @db.Decimal(10, 2)
 
-  // Qual provedor processou este pagamento — default MERCADOPAGO porque
-  // é o único usado até aqui. providerReference é o id genérico do lado
-  // de fora (Stripe: payment_intent id; Efí Pix: txid; Efí cartão:
-  // charge_id) — pra MP, mercadoPagoId abaixo já cumpre esse papel.
-  provider          PaymentProvider @default(MERCADOPAGO)
-  providerReference String?
-
   // Mercado Pago — PIX
   mercadoPagoId     String?       @unique
   mercadoPagoStatus String?
@@ -948,7 +897,6 @@ model Payment {
   @@index([tenantId])
   @@index([orderId])
   @@index([mercadoPagoId])
-  @@index([providerReference])
   @@index([status])
 }
 
