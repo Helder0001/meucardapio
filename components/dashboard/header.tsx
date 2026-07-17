@@ -2,7 +2,7 @@
 
 // components/dashboard/header.tsx
 
-import { Bell, ChevronDown, LogOut, Settings, User, ExternalLink, Sun, Moon, Monitor } from 'lucide-react'
+import { Bell, ChevronDown, LogOut, Settings, User, Receipt, ExternalLink, Sun, Moon, Monitor } from 'lucide-react'
 import { signOut } from 'next-auth/react'
 import { useState, useEffect } from 'react'
 import { useTheme } from 'next-themes'
@@ -215,6 +215,21 @@ export function Header({ user }: HeaderProps) {
                   >
                     <Settings className="h-4 w-4 text-muted-foreground" />
                     Configurações
+                  </Link>
+                )}
+
+                {/* Assinatura fica fora do "Meu perfil" — é assunto de
+                    billing do estabelecimento, não do usuário logado, e
+                    quem administra manager/staff também não deve ver isso
+                    (só TENANT_ADMIN, o dono do estabelecimento). */}
+                {user.role === 'TENANT_ADMIN' && (
+                  <Link
+                    href="/dashboard/settings/subscription"
+                    className="flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    <Receipt className="h-4 w-4 text-muted-foreground" />
+                    Assinatura
                   </Link>
                 )}
 
