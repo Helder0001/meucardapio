@@ -30,6 +30,7 @@ export interface ReactivateCardInput {
   payerCpf: string
   payerPhone: string // Efí retorna 500 "required_property" (/payment/credit_card/customer) sem isso
   cardholderName: string
+  cardLast4: string // 4 últimos dígitos, extraídos no navegador antes da tokenização — só pra exibir no extrato
   billingCycle?: 'MONTHLY' | 'ANNUAL'
 }
 
@@ -41,7 +42,7 @@ export async function reactivateSubscriptionAction(
     return { error: 'Sessão inválida.' }
   }
 
-  const { cardToken, payerEmail, payerCpf, payerPhone, cardholderName } = input
+  const { cardToken, payerEmail, payerCpf, payerPhone, cardholderName, cardLast4 } = input
   const billingCycle = input.billingCycle ?? 'MONTHLY'
 
   if (!cardToken || !payerEmail || !payerCpf || !payerPhone) {
@@ -53,6 +54,11 @@ export async function reactivateSubscriptionAction(
     select: { id: true, name: true },
   })
   if (!tenant) return { error: 'Estabelecimento não encontrado.' }
+
+  // DEBUG TEMPORÁRIO — remover depois de confirmar a causa do erro
+  // "Recebedor e cliente não podem ser a mesma pessoa". Só loga os 2
+  // últimos dígitos, não expõe o CPF inteiro no log.
+  console.log('[reactivate-subscription][debug] CPF recebido termina em:', onlyDigits(payerCpf).slice(-2))
 
   if (!process.env.EFI_CLIENT_ID || !process.env.EFI_CLIENT_SECRET) {
     return { error: 'Pagamento não configurado no servidor. Contate o suporte.' }
@@ -75,6 +81,9 @@ export async function reactivateSubscriptionAction(
       // sem trial_days aqui: reativação cobra imediatamente, o período
       // grátis já foi usado no cadastro.
     })
+    // DEBUG TEMPORÁRIO — remover depois de confirmar a causa do sumiço da
+    // assinatura no painel da Efí.
+    console.log('[reactivate-subscription][debug] SUCESSO na Efi:', JSON.stringify(efiResult))
   } catch (err) {
     console.error('[reactivate-subscription][efi] erro ao criar assinatura:', err)
     return { error: 'Pagamento não autorizado. Verifique os dados do cartão.' }
@@ -106,6 +115,7 @@ export async function reactivateSubscriptionAction(
       mercadoPagoSubId: null,
       billingCycle: billingCycle as any,
       amount,
+      cardLast4,
       currentPeriodStart: now,
       currentPeriodEnd: periodEnd,
       cancelledAt: null,
@@ -117,6 +127,7 @@ export async function reactivateSubscriptionAction(
       provider: 'EFI',
       billingCycle: billingCycle as any,
       status: 'PAST_DUE',
+      cardLast4,
       efiPlanId: efiResult.efiPlanId,
       efiSubscriptionId: efiResult.efiSubscriptionId,
       efiChargeId: efiResult.efiChargeId,
