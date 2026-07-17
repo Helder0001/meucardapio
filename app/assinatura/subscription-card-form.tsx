@@ -229,6 +229,7 @@ export function SubscriptionCardForm({ amount, accountIdentifier, sandbox }: Sub
         payerPhone: phoneDigits,
         payerCpf,
         cardholderName: cardholderName.trim(),
+        cardLast4: digits.slice(-4),
       })
 
       if (result.error) {
