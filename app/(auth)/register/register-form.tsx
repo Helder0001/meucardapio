@@ -215,6 +215,7 @@ export function RegisterForm({ efiAccountIdentifier, efiSandbox }: RegisterFormP
     fd.set('password', password)
     fd.set('billingCycle', billingCycle)
     fd.set('cardToken', paymentToken)
+    fd.set('cardLast4', cardDigits.slice(-4))
     fd.set('cardholderName', cardholderName.trim())
     fd.set('payerCpf', payerCpf)
     fd.set('payerPhone', phoneDigits)
