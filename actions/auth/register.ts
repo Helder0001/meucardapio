@@ -21,6 +21,7 @@ const registerSchema = z.object({
   // se ele é cobrado em 7 dias (trial) ou imediatamente.
   cardToken:      z.string().min(1, 'Dados do cartão são obrigatórios.'),
   cardholderName: z.string().min(2, 'Informe o nome impresso no cartão.'),
+  cardLast4:      z.string().length(4).optional(),
   payerCpf:       z.string().min(11, 'CPF inválido.'),
   payerPhone:     z.string().min(10, 'Telefone inválido, informe com DDD.'),
   // 'true'  -> cobra na hora, sem trial, acesso liberado assim que o
@@ -62,6 +63,7 @@ export async function registerAction(
     billingCycle:     formData.get('billingCycle') || 'MONTHLY',
     cardToken:        formData.get('cardToken'),
     cardholderName:   formData.get('cardholderName'),
+    cardLast4:        formData.get('cardLast4') || undefined,
     payerCpf:         formData.get('payerCpf'),
     payerPhone:       formData.get('payerPhone'),
     startImmediately: formData.get('startImmediately') || 'false',
@@ -73,7 +75,7 @@ export async function registerAction(
 
   const {
     tenantName, slug: rawSlug, name, email, password, billingCycle,
-    cardToken, cardholderName, payerCpf, payerPhone, startImmediately,
+    cardToken, cardholderName, cardLast4, payerCpf, payerPhone, startImmediately,
   } = parsed.data
   const wantsImmediateAccess = startImmediately === 'true'
 
@@ -122,14 +124,7 @@ export async function registerAction(
   // vira ACTIVE quando o webhook confirmar 'paid' (por isso PAST_DUE aqui,
   // não ACTIVE otimista). Se é trial, o acesso já é liberado (status
   // TRIAL), a cobrança de verdade só acontece daqui a 7 dias.
-  //
-  // first_execution é o campo que a própria Efí devolve com a data REAL
-  // da primeira cobrança agendada (confirmado com o suporte deles) — usar
-  // esse valor em vez de só somar 7 dias na mão evita qualquer divergência
-  // entre o que a gente mostra e o que a Efí vai cobrar de verdade.
-  const trialEndsAt = efiResult.firstExecution
-    ? new Date(`${efiResult.firstExecution}T00:00:00`)
-    : new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+  const trialEndsAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
   const periodEnd = wantsImmediateAccess
     ? (() => {
         const d = new Date(now)
@@ -173,6 +168,7 @@ export async function registerAction(
           provider:           'EFI',
           billingCycle:       billingCycle as any,
           status:             initialStatus,
+          cardLast4:          cardLast4 ?? null,
           efiPlanId:          efiResult.efiPlanId,
           efiSubscriptionId:  efiResult.efiSubscriptionId,
           efiChargeId:        efiResult.efiChargeId,
