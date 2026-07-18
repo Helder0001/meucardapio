@@ -10,6 +10,8 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
 import { createCardPayment } from '@/lib/mercadopago/checkout-client'
+import { getPaymentProvider } from '@/lib/payments/provider-router'
+import { createTenantCardCharge } from '@/lib/efi/tenant-payments'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { applyCashback, applyLoyaltyPoints } from '@/lib/loyalty/apply-rewards'
 import type { PrismaClient } from '@prisma/client'
@@ -111,6 +113,90 @@ export async function POST(
   )
   if (stillOwed <= 0) {
     return NextResponse.json({ error: 'Não há saldo restante a cobrar neste pedido' }, { status: 400 })
+  }
+
+  const cardProvider = await getPaymentProvider(order.tenantId, 'card')
+
+  if (cardProvider === 'EFI') {
+    try {
+      const chargeResult = await createTenantCardCharge({
+        tenantId: order.tenantId,
+        orderId: order.id,
+        amount: stillOwed,
+        paymentToken: body.cardToken, // mesmo campo do form, mas aqui é o payment_token do Efí.js, não o card_token_id do MP
+        payerCpf: body.customerCpf,
+        payerName: body.customerName || 'Cliente',
+        payerEmail: body.customerEmail,
+        description: `Pedido #${String(order.orderNumber).padStart(4, '0')}`,
+      })
+
+      const isApproved = chargeResult.status === 'approved'
+      const isRejected = chargeResult.status === 'unpaid' || chargeResult.status === 'refunded' || chargeResult.status === 'canceled'
+
+      const existingEfiPayment = await prisma.payment.findFirst({
+        where: { orderId: order.id, provider: 'EFI', providerReference: String(chargeResult.chargeId) },
+      })
+
+      const efiPaymentData = {
+        tenantId: order.tenantId,
+        orderId: order.id,
+        method: 'CREDIT_CARD' as const,
+        status: (isApproved ? 'PAID' : isRejected ? 'FAILED' : 'PENDING') as 'PAID' | 'FAILED' | 'PENDING',
+        amount: stillOwed,
+        provider: 'EFI' as const,
+        providerReference: String(chargeResult.chargeId),
+        cardLastDigits: chargeResult.cardMask?.slice(-4),
+        paidAt: isApproved ? new Date() : undefined,
+        failedAt: isRejected ? new Date() : undefined,
+      }
+
+      const efiPayment = existingEfiPayment
+        ? await prisma.payment.update({ where: { id: existingEfiPayment.id }, data: efiPaymentData })
+        : await prisma.payment.create({ data: efiPaymentData })
+
+      if (isApproved) {
+        const isFullyPaid = await prisma.$transaction(async (tx: Tx) => {
+          const paidPayments = await tx.payment.findMany({
+            where: { orderId: order.id, status: 'PAID' },
+            select: { amount: true },
+          })
+          const totalPaid = paidPayments.reduce((s: number, p: { amount: any }) => s + Number(p.amount), 0)
+          const fullyPaid = Math.round(totalPaid * 100) >= Math.round(Number(order.total) * 100)
+
+          await tx.order.update({
+            where: { id: order.id },
+            data: fullyPaid
+              ? { paymentStatus: 'PAID', status: 'CONFIRMED', confirmedAt: new Date() }
+              : { paymentStatus: 'PARTIAL' },
+          })
+          if (fullyPaid && order.customerId) {
+            await applyCashback(tx, order.tenantId, order.customerId, order.id, Number(order.total))
+            await applyLoyaltyPoints(tx, order.tenantId, order.customerId, order.id, Number(order.total))
+          }
+          return fullyPaid
+        })
+
+        await publishOrderEvent(order.tenantId, {
+          type: 'ORDER_UPDATED',
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          status: isFullyPaid ? 'CONFIRMED' : order.status,
+          paymentStatus: isFullyPaid ? 'PAID' : 'PARTIAL',
+        })
+      }
+
+      return NextResponse.json({
+        status: isApproved ? 'approved' : isRejected ? 'rejected' : 'pending',
+        cardLastDigits: efiPayment.cardLastDigits,
+        paymentId: efiPayment.id,
+      })
+    } catch (err) {
+      console.error('[pay-card][efi]', err)
+      return NextResponse.json(
+        { error: 'Não foi possível processar o pagamento pela Efí. Verifique os dados do cartão e tente novamente.' },
+        { status: 500 }
+      )
+    }
   }
 
   try {

@@ -52,3 +52,57 @@ export async function validateEfiCredentials(params: ValidateParams): Promise<{ 
     return { ok: false, error: 'Erro ao conectar com a Efí. Tente novamente.' }
   }
 }
+
+interface RequestCredentials {
+  clientId: string
+  clientSecret: string
+  sandbox: boolean
+}
+
+/**
+ * Autentica e faz uma requisição contra a API de Cobranças da Efí usando
+ * as credenciais de um TENANT específico (não as da plataforma) — usado
+ * pra cobranças avulsas de cartão (lib/efi/tenant-payments.ts). Reautentica
+ * a cada chamada (sem cache de token entre requisições) porque cada
+ * requisição pode ser de um tenant diferente.
+ */
+export async function efiRequestWithCredentials<T = any>(
+  creds: RequestCredentials,
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  path: string,
+  body?: unknown
+): Promise<T> {
+  const baseUrl = creds.sandbox
+    ? 'https://cobrancas-h.api.efipay.com.br'
+    : 'https://cobrancas.api.efipay.com.br'
+
+  const basicAuth = Buffer.from(`${creds.clientId}:${creds.clientSecret}`).toString('base64')
+
+  const authRes = await fetch(`${baseUrl}/v1/authorize`, {
+    method: 'POST',
+    headers: { Authorization: `Basic ${basicAuth}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ grant_type: 'client_credentials' }),
+  })
+  const authData = await authRes.json()
+  if (!authRes.ok || !authData.access_token) {
+    throw new Error(`[efi][tenant] Falha ao autenticar: ${JSON.stringify(authData).slice(0, 300)}`)
+  }
+
+  const res = await fetch(`${baseUrl}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${authData.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+
+  const data = await res.json().catch(() => null)
+
+  if (!res.ok) {
+    console.error('[efi][tenant] erro na requisição', { path, status: res.status, data })
+    throw new Error(`[efi][tenant] Erro ${res.status}: ${JSON.stringify(data).slice(0, 500)}`)
+  }
+
+  return data as T
+}
