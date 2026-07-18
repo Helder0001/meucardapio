@@ -87,7 +87,12 @@ export default async function SubscriptionPage() {
           Gerencie sua assinatura do Meu Cardápio e veja o histórico de pagamentos
         </p>
       </div>
-      <SubscriptionClient subscription={subscriptionForClient} payments={paymentsForClient} />
+      <SubscriptionClient
+        subscription={subscriptionForClient}
+        payments={paymentsForClient}
+        efiAccountIdentifier={process.env.NEXT_PUBLIC_EFI_ACCOUNT_IDENTIFIER ?? ''}
+        efiSandbox={process.env.NEXT_PUBLIC_EFI_SANDBOX !== 'false'}
+      />
     </div>
   )
 }
