@@ -195,6 +195,7 @@ model Tenant {
 enum PaymentProvider {
   MERCADOPAGO
   EFI
+  STRIPE
 }
 
 model Subscription {
