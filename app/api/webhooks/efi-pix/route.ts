@@ -8,15 +8,11 @@
 // Registrado com x-skip-mtls-checking: true (ver lib/efi/tenant-pix-client.ts
 // configurePixWebhook), então chega como POST HTTPS normal, sem exigir
 // certificado cliente do nosso lado.
-//
-// AINDA NÃO LIGADO: o roteamento de criação de cobrança Pix via Efí
-// (create-order.ts etc.) ainda não existe, então nenhum Payment tem
-// provider=EFI/providerReference=txid pra este webhook encontrar. Esse
-// endpoint já fica pronto e registrado pra quando essa próxima etapa for
-// implementada.
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { prisma } from '@/lib/db/client'
+import { publishOrderEvent } from '@/lib/cache/redis'
+import { applyCashback, applyLoyaltyPoints } from '@/lib/loyalty/apply-rewards'
 
 interface PixWebhookEntry {
   endToEndId: string
@@ -39,29 +35,72 @@ export async function POST(request: NextRequest) {
     try {
       const payment = await prisma.payment.findFirst({
         where: { provider: 'EFI', providerReference: entry.txid, method: 'PIX' },
-        include: { order: { select: { id: true, tenantId: true, total: true, status: true } } },
+        include: { order: { select: { id: true, tenantId: true, total: true, status: true, customerId: true, orderNumber: true } } },
       })
 
       if (!payment) {
-        // Normal por enquanto (roteamento Efí Pix ainda não existe) — não
-        // é erro, só não tem nada pra fazer com essa notificação.
         console.log('[webhook/efi-pix] nenhum Payment correspondente ao txid', entry.txid)
         continue
       }
 
       if (payment.status === 'PAID') continue // idempotência — já processado
 
-      await prisma.payment.update({
-        where: { id: payment.id },
-        data: { status: 'PAID', paidAt: new Date(), webhookData: entry as any },
+      // Mesma lógica usada no webhook do MP (app/api/webhooks/mercadopago/route.ts):
+      // só marca o PEDIDO como pago/confirmado quando a soma de tudo que já
+      // foi pago (incluindo este) cobre o total — evita marcar PAID cedo
+      // demais em pedido com pagamento dividido (parte PIX, parte outro
+      // método).
+      const result = await prisma.$transaction(async (tx) => {
+        const updated = await tx.payment.updateMany({
+          where: { id: payment.id, status: { not: 'PAID' } },
+          data: { status: 'PAID', paidAt: new Date(), webhookData: entry as any },
+        })
+        if (updated.count === 0) return { processed: false as const }
+
+        const paidPayments = await tx.payment.findMany({
+          where: { orderId: payment.order.id, status: 'PAID' },
+          select: { amount: true },
+        })
+        const totalPaid = paidPayments.reduce((s, p) => s + Number(p.amount), 0)
+        const orderTotal = Number(payment.order.total)
+        const isFullyPaid = Math.round(totalPaid * 100) >= Math.round(orderTotal * 100)
+
+        await tx.order.update({
+          where: { id: payment.order.id },
+          data: isFullyPaid
+            ? { paymentStatus: 'PAID', status: 'CONFIRMED', confirmedAt: new Date() }
+            : { paymentStatus: 'PARTIAL' },
+        })
+
+        if (isFullyPaid && payment.order.customerId) {
+          await applyCashback(tx, payment.tenantId, payment.order.customerId, payment.order.id, orderTotal)
+          await applyLoyaltyPoints(tx, payment.tenantId, payment.order.customerId, payment.order.id, orderTotal)
+        }
+
+        return { processed: true as const, isFullyPaid }
       })
 
-      console.log('[webhook/efi-pix] pagamento confirmado', { paymentId: payment.id, txid: entry.txid })
+      if (result.processed) {
+        console.log('[webhook/efi-pix] pagamento confirmado', {
+          paymentId: payment.id,
+          txid: entry.txid,
+          isFullyPaid: result.isFullyPaid,
+        })
 
-      // A mesma lógica de "soma tudo que já foi PAID vs order.total" usada
-      // no webhook do MP (evita marcar pedido dividido como pago cedo
-      // demais) deve ser reaproveitada aqui quando o roteamento for
-      // implementado — por enquanto só marca o Payment.
+        after(async () => {
+          try {
+            await publishOrderEvent(payment.tenantId, {
+              type: 'ORDER_UPDATED',
+              orderId: payment.order.id,
+              orderNumber: payment.order.orderNumber,
+              status: result.isFullyPaid ? 'CONFIRMED' : payment.order.status,
+              paymentStatus: result.isFullyPaid ? 'PAID' : 'PARTIAL',
+            })
+          } catch (err) {
+            console.error('[webhook/efi-pix] erro em efeito colateral pós-resposta:', err)
+          }
+        })
+      }
     } catch (err) {
       console.error('[webhook/efi-pix] erro ao processar entrada', String(err))
     }

@@ -29,6 +29,8 @@ import { notifyOrderReceived } from '@/lib/messaging/evolution'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { queuePrintJob } from '@/lib/utils/print'
 import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
+import { getPaymentProvider } from '@/lib/payments/provider-router'
+import { createTenantPixCharge } from '@/lib/efi/tenant-pix-client'
 
 // VULN-NEW-03: gera um token HMAC de curta duração para autorizar
 // o polling público de status do pedido sem exigir login do cliente.
@@ -466,6 +468,45 @@ async function createPixPayment(params: {
   customerCpf?: string
   deviceId?: string
 }) {
+  const provider = await getPaymentProvider(params.tenantId, 'pix')
+
+  if (provider === 'EFI') {
+    // Efí exige nome do pagador (não é opcional como no MP) — usa um
+    // genérico se o cliente não informou nome no checkout.
+    const { txid, pixCopiaECola, pixQrCodeImage } = await createTenantPixCharge({
+      tenantId: params.tenantId,
+      orderId: params.orderId,
+      amount: params.amount,
+      payerCpf: onlyDigits(params.customerCpf ?? ''),
+      payerName: params.customerName?.trim() || 'Cliente',
+      description: `Pedido #${params.orderId.slice(-8).toUpperCase()}`,
+    })
+
+    console.log('[pix][create][efi]', { orderId: params.orderId, txid })
+
+    await prisma.payment.create({
+      data: {
+        tenantId: params.tenantId,
+        orderId: params.orderId,
+        method: 'PIX',
+        status: 'PENDING',
+        amount: params.amount,
+        provider: 'EFI',
+        providerReference: txid,
+        pixQrCode: pixCopiaECola,
+        pixQrCodeBase64: pixQrCodeImage ?? undefined,
+        pixExpiresAt: new Date(Date.now() + 60 * 60 * 1000), // expiracao configurada em 1h na criação da cobrança
+      },
+    })
+
+    return { pixQrCode: pixCopiaECola, pixQrCodeBase64: pixQrCodeImage ?? undefined }
+  }
+
+  // STRIPE não tem um equivalente de "QR inline" simples pra Pix nesse
+  // fluxo (usa Checkout hospedado, que é um redirect, não QR na hora) —
+  // por enquanto, se o tenant escolheu Stripe pro Pix, cai no Mercado
+  // Pago mesmo (evita quebrar o checkout; o redirect via Stripe fica pra
+  // quando o "Link de pagamento" ganhar suporte multi-provedor).
   const accessToken = await resolveTenantMpAccessToken(params.tenantId)
 
   if (!accessToken) {

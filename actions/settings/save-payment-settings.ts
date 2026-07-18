@@ -108,6 +108,62 @@ export async function togglePaymentOption(
   return { success: true, value: enabled }
 }
 
+export type ProviderChoice = 'MERCADOPAGO' | 'STRIPE' | 'EFI'
+
+// Escolhe qual provedor conectado processa cada método (Pix/Cartão). O
+// "Link de pagamento" (Checkout Pro) continua exclusivo do Mercado Pago
+// por enquanto — Stripe e Efí não têm um equivalente direto de link
+// hospedado avulso no mesmo formato.
+export async function setPaymentProvider(
+  method: 'pix' | 'card',
+  provider: ProviderChoice
+): Promise<ToggleState> {
+  const session = await auth()
+  if (!session?.user?.tenantId) return { error: 'Não autorizado' }
+
+  const role = session.user.role
+  if (!['TENANT_ADMIN', 'MASTER_ADMIN', 'MANAGER'].includes(role)) {
+    return { error: 'Você não tem permissão para alterar configurações de pagamento' }
+  }
+
+  const tenantId = session.user.tenantId
+
+  // Só permite escolher um provedor que o tenant realmente conectou —
+  // evita salvar uma escolha "fantasma" que nunca vai funcionar.
+  if (provider !== 'MERCADOPAGO') {
+    const isConnected =
+      provider === 'STRIPE'
+        ? await prisma.stripeConnection.findFirst({ where: { tenantId, revokedAt: null } })
+        : await prisma.efiConnection.findFirst({
+            where: {
+              tenantId,
+              revokedAt: null,
+              ...(method === 'pix' ? { pixKey: { not: null } } : {}),
+            },
+          })
+    if (!isConnected) {
+      return { error: `Conecte o ${provider === 'STRIPE' ? 'Stripe' : 'a Efí'} antes de escolher esse provedor.` }
+    }
+  }
+
+  const tenant = await prisma.tenant.findFirst({
+    where: { id: tenantId },
+    select: { settings: true, slug: true },
+  })
+  const currentSettings = (tenant?.settings as Record<string, any>) ?? {}
+  const paymentProviders = { ...(currentSettings.paymentProviders ?? {}), [method]: provider }
+
+  await prisma.tenant.update({
+    where: { id: tenantId },
+    data: { settings: { ...currentSettings, paymentProviders } },
+  })
+
+  revalidatePath('/dashboard/settings/payments')
+  if (tenant?.slug) revalidatePath(`/menu/${tenant.slug}`)
+
+  return { success: true }
+}
+
 // Action para remover o token LEGADO (colado manualmente antes do OAuth
 // existir) e o webhook secret manual. Não afeta a conexão OAuth — para
 // desconectar a conta MP via OAuth, use /api/mercadopago/disconnect.

@@ -7,7 +7,7 @@
 import { useFormState, useFormStatus } from 'react-dom'
 import { useEffect, useState, useTransition } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { savePaymentSettings, removePaymentCredentials, togglePaymentOption } from '@/actions/settings/save-payment-settings'
+import { savePaymentSettings, removePaymentCredentials, togglePaymentOption, setPaymentProvider, type ProviderChoice } from '@/actions/settings/save-payment-settings'
 import {
   Loader2, Eye, EyeOff, CheckCircle2, AlertCircle, ExternalLink,
   Trash2, ShieldCheck, QrCode, Unplug, AlertTriangle, CreditCard,
@@ -519,6 +519,112 @@ interface PaymentSettingsFormProps {
   linkEnabled: boolean
 }
 
+
+// Seletor de qual provedor conectado processa Pix e Cartão. Só oferece
+// como opção o que está realmente conectado — evita escolher algo que
+// nunca vai funcionar.
+function ProviderSelector() {
+  const [mpConnected, setMpConnected] = useState(false)
+  const [stripeConnected, setStripeConnected] = useState(false)
+  const [efiCardConnected, setEfiCardConnected] = useState(false)
+  const [efiPixConnected, setEfiPixConnected] = useState(false)
+  const [pixProvider, setPixProviderState] = useState<ProviderChoice>('MERCADOPAGO')
+  const [cardProvider, setCardProviderState] = useState<ProviderChoice>('MERCADOPAGO')
+  const [loading, setLoading] = useState(true)
+  const [savingMethod, setSavingMethod] = useState<'pix' | 'card' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [mpRes, stripeRes, efiRes, tenantRes] = await Promise.all([
+          fetch('/api/mercadopago/status').then((r) => r.json()).catch(() => ({ connected: false })),
+          fetch('/api/stripe/status').then((r) => r.json()).catch(() => ({ connected: false })),
+          fetch('/api/efi/status').then((r) => r.json()).catch(() => ({ connected: false, pixEnabled: false })),
+          fetch('/api/settings/payment-providers').then((r) => r.json()).catch(() => ({})),
+        ])
+        setMpConnected(!!mpRes.connected)
+        setStripeConnected(!!stripeRes.connected)
+        setEfiCardConnected(!!efiRes.connected)
+        setEfiPixConnected(!!efiRes.connected && !!efiRes.pixEnabled)
+        if (tenantRes.pix) setPixProviderState(tenantRes.pix)
+        if (tenantRes.card) setCardProviderState(tenantRes.card)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  async function handleChange(method: 'pix' | 'card', provider: ProviderChoice) {
+    setSavingMethod(method)
+    setError(null)
+    const result = await setPaymentProvider(method, provider)
+    if (result.error) {
+      setError(result.error)
+    } else if (method === 'pix') {
+      setPixProviderState(provider)
+    } else {
+      setCardProviderState(provider)
+    }
+    setSavingMethod(null)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+        <Loader2 className="h-4 w-4 animate-spin" /> Carregando provedores...
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 space-y-4">
+      <div>
+        <h3 className="font-semibold text-foreground">Qual provedor usar</h3>
+        <p className="text-xs text-muted-foreground">Escolha qual conta processa cada forma de pagamento</p>
+      </div>
+
+      {error && (
+        <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2.5 text-xs text-destructive">
+          <AlertCircle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+          {error}
+        </div>
+      )}
+
+      <div className="grid gap-4">
+        <div>
+          <label className="block text-xs font-medium text-foreground mb-1.5">PIX</label>
+          <select
+            value={pixProvider}
+            onChange={(e) => handleChange('pix', e.target.value as ProviderChoice)}
+            disabled={savingMethod === 'pix'}
+            className="w-full px-3 py-2 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+          >
+            <option value="MERCADOPAGO" disabled={!mpConnected}>Mercado Pago{!mpConnected ? ' (não conectado)' : ''}</option>
+            <option value="EFI" disabled={!efiPixConnected}>Efí Bank{!efiPixConnected ? ' (Pix não habilitado)' : ''}</option>
+          </select>
+          <p className="text-[11px] text-muted-foreground mt-1">Stripe ainda não tem Pix inline neste checkout.</p>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-foreground mb-1.5">Cartão</label>
+          <select
+            value={cardProvider}
+            onChange={(e) => handleChange('card', e.target.value as ProviderChoice)}
+            disabled={savingMethod === 'card'}
+            className="w-full px-3 py-2 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60"
+          >
+            <option value="MERCADOPAGO" disabled={!mpConnected}>Mercado Pago{!mpConnected ? ' (não conectado)' : ''}</option>
+            <option value="STRIPE" disabled={!stripeConnected}>Stripe{!stripeConnected ? ' (não conectado)' : ''}</option>
+            <option value="EFI" disabled={!efiCardConnected}>Efí Bank{!efiCardConnected ? ' (não conectado)' : ''}</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function PaymentSettingsForm({ hasSecret, pixEnabled, cardEnabled, linkEnabled }: PaymentSettingsFormProps) {
   const [state, formAction] = useFormState(savePaymentSettings, {})
   const [showSecret, setShowSecret] = useState(false)
@@ -699,6 +805,9 @@ export function PaymentSettingsForm({ hasSecret, pixEnabled, cardEnabled, linkEn
           <EfiConnectionCard />
         </div>
       </div>
+
+      {/* Qual provedor processa cada método */}
+      <ProviderSelector />
 
       {/* Toggles — salvam na hora, independentes do formulário abaixo */}
       <PaymentToggle

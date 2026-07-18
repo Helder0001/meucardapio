@@ -11,6 +11,70 @@
 // Docs: https://dev.efipay.com.br/en/docs/api-pix/credenciais/
 
 import https from 'https'
+import { prisma } from '@/lib/db/client'
+import { decrypt } from '@/lib/security/crypto'
+
+interface TenantPixChargeParams {
+  tenantId: string
+  orderId: string
+  amount: number
+  payerCpf: string
+  payerName: string
+  description: string
+}
+
+export interface TenantPixChargeResult {
+  txid: string
+  pixCopiaECola: string
+  pixQrCodeImage: string | null
+}
+
+/**
+ * Busca as credenciais da Efí do tenant no banco (descriptografadas),
+ * autentica e cria a cobrança — usado por actions/orders/create-order.ts
+ * quando o tenant escolheu Efí como provedor de Pix.
+ */
+export async function createTenantPixCharge(params: TenantPixChargeParams): Promise<TenantPixChargeResult> {
+  const connection = await prisma.efiConnection.findFirst({
+    where: { tenantId: params.tenantId, revokedAt: null, pixKey: { not: null } },
+  })
+
+  if (!connection || !connection.pixCertificateEnc || !connection.pixKey) {
+    throw new Error('Efí Pix não configurado para este estabelecimento')
+  }
+
+  const clientId = decrypt(connection.clientIdEnc)
+  const clientSecret = decrypt(connection.clientSecretEnc)
+  const pfx = Buffer.from(decrypt(connection.pixCertificateEnc), 'base64')
+  const passphrase = connection.pixCertificatePassphraseEnc ? decrypt(connection.pixCertificatePassphraseEnc) : ''
+
+  const creds = { clientId, clientSecret, pfx, passphrase, sandbox: connection.sandbox }
+
+  const auth = await authorizePixApi(creds)
+  if (!auth.ok) {
+    throw new Error(`Efí Pix: ${auth.error}`)
+  }
+
+  const charge = await createImmediatePixCharge({
+    ...creds,
+    accessToken: auth.accessToken,
+    pixKey: connection.pixKey,
+    amount: params.amount,
+    payerCpf: params.payerCpf,
+    payerName: params.payerName,
+    description: params.description,
+  })
+
+  const pixQrCodeImage = charge.locationId
+    ? await getPixQrCodeImage({ ...creds, accessToken: auth.accessToken }, String(charge.locationId))
+    : null
+
+  return {
+    txid: charge.txid,
+    pixCopiaECola: charge.pixCopiaECola,
+    pixQrCodeImage,
+  }
+}
 
 interface PixMtlsCredentials {
   clientId: string
@@ -110,6 +174,7 @@ export async function createImmediatePixCharge(params: CreateChargeParams): Prom
   txid: string
   pixCopiaECola: string
   location: string
+  locationId: number | null
   status: string
 }> {
   const body = JSON.stringify({
@@ -136,7 +201,31 @@ export async function createImmediatePixCharge(params: CreateChargeParams): Prom
     txid: data.txid,
     pixCopiaECola: data.pixCopiaECola,
     location: data.location ?? data.loc?.location,
+    locationId: data.loc?.id ?? null,
     status: data.status,
+  }
+}
+
+/** Busca a imagem do QR code (base64) a partir do location retornado na criação da cobrança. */
+export async function getPixQrCodeImage(
+  creds: PixMtlsCredentials & { accessToken: string },
+  locationId: string
+): Promise<string | null> {
+  try {
+    const { status, data } = await mtlsRequest(creds, {
+      method: 'GET',
+      path: `/v2/loc/${locationId}/qrcode`,
+      headers: { Authorization: `Bearer ${creds.accessToken}` },
+    })
+    if (status !== 200) return null
+    // imagemQrcode vem como data URL completo ("data:image/png;base64,...")
+    // — o frontend (order-tracking.tsx, order-detail.tsx) já monta esse
+    // prefixo sozinho a partir do base64 puro, igual faz com o do MP.
+    const dataUrl: string | undefined = data?.imagemQrcode
+    return dataUrl?.includes(',') ? dataUrl.split(',')[1] : dataUrl ?? null
+  } catch (err) {
+    console.error('[efi][pix] erro ao buscar QR code', String(err))
+    return null
   }
 }
 
