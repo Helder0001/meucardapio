@@ -176,6 +176,8 @@ model Tenant {
   cashbackConfig     CashbackConfig?
   whatsappConfig     WhatsappConfig?
   mercadoPagoConnection MercadoPagoConnection?
+  efiConnection      EfiConnection?
+  stripeConnection   StripeConnection?
   whatsappChats      WhatsappChat[]
   reportSchedules    ReportSchedule[]
   notifications      Notification[]
@@ -800,6 +802,65 @@ model MercadoPagoConnection {
   @@index([mpUserId])
 }
 
+// Conexão da Efí por tenant (API Cobranças, cartão) — NÃO é OAuth de
+// verdade (a Efí não oferece autorização delegada pra plataformas
+// terceiras, diferente do MP Connect). O tenant cola aqui o próprio
+// Client ID/Secret + Identificador de Conta, gerados na conta Efí dele.
+// Client ID/Secret sempre criptografados em repouso (AES-256-GCM, ver
+// lib/security/crypto.ts).
+model EfiConnection {
+  id                String    @id @default(cuid())
+  tenantId          String    @unique
+
+  clientIdEnc       String
+  clientSecretEnc   String
+  accountIdentifier String?
+  sandbox           Boolean   @default(true)
+
+  // Certificado .p12 (mTLS) + chave Pix — API Pix da Efí, separada da API
+  // de Cobranças acima (só preenchido se o tenant também habilitar Pix).
+  pixCertificateEnc           String?
+  pixCertificatePassphraseEnc String?
+  pixKey                      String?
+
+  connectedAt       DateTime  @default(now())
+  connectedByUserId String?
+  revokedAt         DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenant            Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+// Conexão Stripe por tenant (OAuth de verdade, Stripe Connect) — ao lado
+// do MercadoPagoConnection e do EfiConnection.
+model StripeConnection {
+  id                String    @id @default(cuid())
+  tenantId          String    @unique
+
+  stripeUserId      String
+  publishableKey    String?
+  accessTokenEnc    String
+  refreshTokenEnc   String?
+  scope             String?
+  livemode          Boolean   @default(true)
+
+  connectedAt       DateTime  @default(now())
+  connectedByUserId String?
+  revokedAt         DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenant            Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([stripeUserId])
+}
+
 // ── WhatsApp Chat ──────────────────────────────────────────────────────────────
 model WhatsappChat {
   id          String   @id @default(cuid())
@@ -853,6 +914,12 @@ model Payment {
   status            PaymentStatus @default(PENDING)
   amount            Decimal       @db.Decimal(10, 2)
 
+  // Roteamento genérico de provedor (Stripe/Efí), preparando pra quando o
+  // tenant conectar outro provedor além do MP — ainda default MERCADOPAGO,
+  // sem mudar nenhum comportamento atual.
+  provider          PaymentProvider @default(MERCADOPAGO)
+  providerReference String?       // ID da cobrança no provedor (charge_id da Efí, PaymentIntent do Stripe, etc.)
+
   // Mercado Pago — PIX
   mercadoPagoId     String?       @unique
   mercadoPagoStatus String?
@@ -897,6 +964,7 @@ model Payment {
   @@index([tenantId])
   @@index([orderId])
   @@index([mercadoPagoId])
+  @@index([providerReference])
   @@index([status])
 }
 
