@@ -16,6 +16,9 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/client'
 import { createPaymentPreference } from '@/lib/mercadopago/checkout-client'
+import { getPaymentProvider } from '@/lib/payments/provider-router'
+import { createStripeCheckoutSession } from '@/lib/stripe/tenant-payments'
+import { decrypt } from '@/lib/security/crypto'
 import crypto from 'crypto'
 
 function validateStatusToken(orderId: string, token: string): boolean {
@@ -97,6 +100,68 @@ export async function POST(
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
   const slug = order.tenant.slug
+
+  // O "Link de pagamento" é conceitualmente um checkout hospedado que
+  // aceita qualquer método — isso mapeia direto pro Stripe Checkout
+  // (que também cobre Pix + cartão num único link). Se o tenant escolheu
+  // Stripe como provedor de cartão, usamos o Stripe aqui; senão, MP.
+  const cardProvider = await getPaymentProvider(order.tenantId, 'card')
+
+  if (cardProvider === 'STRIPE') {
+    const stripeConnection = await prisma.stripeConnection.findFirst({
+      where: { tenantId: order.tenantId, revokedAt: null },
+    })
+    if (!stripeConnection) {
+      return NextResponse.json({ error: 'Stripe não conectado para este estabelecimento.' }, { status: 400 })
+    }
+
+    try {
+      const session = await createStripeCheckoutSession({
+        accessToken: decrypt(stripeConnection.accessTokenEnc),
+        amount: stillOwed,
+        description: `Pedido #${String(order.orderNumber).padStart(4, '0')}`,
+        orderId: order.id,
+        successUrl: `${appUrl}/menu/${slug}/pedido/${order.id}?status=success`,
+        cancelUrl: `${appUrl}/menu/${slug}/pedido/${order.id}?status=failure`,
+        methods: ['card', 'pix'],
+      })
+
+      const existingLinkPayment = order.payments.find((p) => p.status === 'PENDING' && p.preferenceId)
+
+      if (existingLinkPayment) {
+        await prisma.payment.update({
+          where: { id: existingLinkPayment.id },
+          data: {
+            amount: stillOwed,
+            provider: 'STRIPE',
+            providerReference: session.sessionId,
+            checkoutUrl: session.checkoutUrl,
+          },
+        })
+      } else {
+        await prisma.payment.create({
+          data: {
+            tenantId: order.tenantId,
+            orderId: order.id,
+            method: 'CREDIT_CARD',
+            status: 'PENDING',
+            amount: stillOwed,
+            provider: 'STRIPE',
+            providerReference: session.sessionId,
+            checkoutUrl: session.checkoutUrl,
+          },
+        })
+      }
+
+      return NextResponse.json({ checkoutUrl: session.checkoutUrl, preferenceId: session.sessionId })
+    } catch (err) {
+      console.error('[payment-link][stripe]', err)
+      return NextResponse.json(
+        { error: 'Não foi possível gerar o link de pagamento pelo Stripe. Tente novamente.' },
+        { status: 500 }
+      )
+    }
+  }
 
   try {
     const preference = await createPaymentPreference({
