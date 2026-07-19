@@ -81,6 +81,11 @@ export async function GET(
           take: 1,
           select: {
             status: true,
+            method: true, // BUG CORRIGIDO: sem isso, o frontend (order-tracking.tsx)
+                           // perde a referência de que é um pagamento PIX assim que o
+                           // primeiro poll substitui o array de payments — a checagem
+                           // `pendingPayment?.method === 'PIX'` vira false e o
+                           // QR/copia-e-cola some da tela em ~5s (1º ciclo de polling).
             pixQrCode: true,
             pixQrCodeBase64: true,
             pixExpiresAt: true,
@@ -169,6 +174,7 @@ export async function GET(
     const now = new Date()
     const payments = order.payments.map((p) => ({
       status: p.status,
+      method: p.method,
       amount: Number(p.amount),
       pixExpiresAt: p.pixExpiresAt,
       // QR Code só é retornado enquanto válido e o pagamento está pendente
