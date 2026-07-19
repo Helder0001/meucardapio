@@ -229,6 +229,33 @@ export async function getPixQrCodeImage(
   }
 }
 
+/**
+ * Consulta na própria Efí qual URL de webhook está registrada pra essa
+ * chave Pix agora — usado só como diagnóstico (GET /v2/webhook/:chave),
+ * pra confirmar se o registro feito em configurePixWebhook realmente
+ * "colou" do lado da Efí, sem precisar confiar cegamente no retorno 200
+ * da chamada de registro.
+ */
+export async function getPixWebhookConfig(
+  params: PixMtlsCredentials & { accessToken: string; pixKey: string }
+): Promise<{ webhookUrl: string | null; raw: any }> {
+  const { status, data } = await mtlsRequest(params, {
+    method: 'GET',
+    path: `/v2/webhook/${encodeURIComponent(params.pixKey)}`,
+    headers: {
+      Authorization: `Bearer ${params.accessToken}`,
+      'x-skip-mtls-checking': 'true',
+    },
+  })
+
+  if (status === 404) return { webhookUrl: null, raw: data } // nenhum webhook registrado
+  if (status !== 200) {
+    throw new Error(`[efi][pix] Falha ao consultar webhook: ${JSON.stringify(data).slice(0, 500)}`)
+  }
+
+  return { webhookUrl: data?.webhookUrl ?? null, raw: data }
+}
+
 interface ConfigureWebhookParams extends PixMtlsCredentials {
   accessToken: string
   pixKey: string
