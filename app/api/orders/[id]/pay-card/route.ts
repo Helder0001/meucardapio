@@ -36,6 +36,7 @@ const payCardSchema = z.object({
     .transform((v) => v.replace(/\D/g, ''))
     .refine((v) => v.length === 11 || v.length === 14, 'Documento deve ter 11 (CPF) ou 14 (CNPJ) dígitos'),
   customerName: z.string().max(200).optional(),
+  customerPhone: z.string().max(20).optional(),
 })
 
 // Mesmo mecanismo do /status e /regenerate-pix — token HMAC curto pra
@@ -127,6 +128,7 @@ export async function POST(
         payerCpf: body.customerCpf,
         payerName: body.customerName || 'Cliente',
         payerEmail: body.customerEmail,
+        payerPhone: body.customerPhone || '',
         description: `Pedido #${String(order.orderNumber).padStart(4, '0')}`,
       })
 

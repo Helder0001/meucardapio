@@ -64,6 +64,7 @@ export function EfiCardPaymentForm({
   const [cardholderName, setCardholderName] = useState('')
   const [cpf, setCpf] = useState('')
   const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
 
   useEffect(() => {
     cancelledRef.current = false
@@ -116,6 +117,7 @@ export function EfiCardPaymentForm({
     if (!cvv || cvv.length < 3) return setErrorMessage('CVV inválido.')
     if (!cardholderName.trim()) return setErrorMessage('Informe o nome impresso no cartão.')
     if (!isValidCpf(cpf)) return setErrorMessage('CPF inválido.')
+    if (onlyDigits(phone).length < 10) return setErrorMessage('Informe um telefone válido, com DDD.')
     if (!email.includes('@')) return setErrorMessage('E-mail inválido.')
 
     if (!window.EfiPay?.CreditCard) {
@@ -154,6 +156,7 @@ export function EfiCardPaymentForm({
           paymentMethodId: 'efi', // não usado pela Efí, só satisfaz a validação compartilhada com o fluxo do MP
           customerEmail: email,
           customerCpf: onlyDigits(cpf),
+          customerPhone: onlyDigits(phone),
           customerName: cardholderName.trim(),
         }),
       })
@@ -280,6 +283,18 @@ export function EfiCardPaymentForm({
                   disabled={state === 'submitting'}
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Telefone (com DDD)</label>
+              <input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                inputMode="numeric"
+                placeholder="(00) 00000-0000"
+                className="w-full px-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2"
+                disabled={state === 'submitting'}
+              />
             </div>
 
             <button

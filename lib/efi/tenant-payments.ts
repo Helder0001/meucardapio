@@ -18,6 +18,7 @@ interface TenantCardChargeParams {
   payerCpf: string
   payerName: string
   payerEmail: string
+  payerPhone: string // só dígitos, com DDD — obrigatório pela Efí (customer.phone_number)
   description: string
 }
 
@@ -62,6 +63,7 @@ export async function createTenantCardCharge(params: TenantCardChargeParams): Pr
             name: params.payerName,
             cpf: params.payerCpf,
             email: params.payerEmail,
+            phone_number: params.payerPhone,
           },
           payment_token: params.paymentToken,
           installments: 1,
