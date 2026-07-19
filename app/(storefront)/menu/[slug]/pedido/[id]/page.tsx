@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db/client'
 import { OrderTracking } from '@/components/storefront/order-tracking'
 import { generateStatusToken } from '@/app/api/orders/[id]/status/route'
 import { resolveTenantMpPublicKey } from '@/lib/mercadopago/resolve-token'
+import { getPaymentProvider } from '@/lib/payments/provider-router'
 import type { Metadata } from 'next'
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -91,9 +92,27 @@ export default async function OrderPage({ params }: PageProps) {
   // Public Key do MP do tenant — só é buscada quando existe pagamento
   // pendente de cartão, para não fazer essa query sem necessidade.
   let mpPublicKey: string | null = null
+  let cardProvider: 'MERCADOPAGO' | 'STRIPE' | 'EFI' = 'MERCADOPAGO'
+  let efiAccountIdentifier: string | null = null
+  let efiSandbox = false
   const hasPendingCardPayment = order.payments[0]?.method === 'CREDIT_CARD' && order.paymentStatus !== 'PAID'
   if (hasPendingCardPayment) {
-    mpPublicKey = await resolveTenantMpPublicKey(order.tenantId)
+    cardProvider = await getPaymentProvider(order.tenantId, 'card')
+    if (cardProvider === 'EFI') {
+      const efiConnection = await prisma.efiConnection.findFirst({
+        where: { tenantId: order.tenantId, revokedAt: null },
+        select: { accountIdentifier: true, sandbox: true },
+      })
+      efiAccountIdentifier = efiConnection?.accountIdentifier ?? null
+      efiSandbox = efiConnection?.sandbox ?? false
+      // Sem identificador de conta cadastrado, não dá pra tokenizar — cai
+      // pro MP como se nada tivesse sido escolhido (mpPublicKey abaixo
+      // decide se mostra alguma coisa).
+      if (!efiAccountIdentifier) cardProvider = 'MERCADOPAGO'
+    }
+    if (cardProvider !== 'EFI') {
+      mpPublicKey = await resolveTenantMpPublicKey(order.tenantId)
+    }
   }
 
   const { tenantId, ...orderWithoutTenantId } = order
@@ -120,5 +139,14 @@ export default async function OrderPage({ params }: PageProps) {
     })),
   }
 
-  return <OrderTracking order={serialized} statusToken={statusToken} mpPublicKey={mpPublicKey} />
+  return (
+    <OrderTracking
+      order={serialized}
+      statusToken={statusToken}
+      mpPublicKey={mpPublicKey}
+      cardProvider={cardProvider}
+      efiAccountIdentifier={efiAccountIdentifier}
+      efiSandbox={efiSandbox}
+    />
+  )
 }

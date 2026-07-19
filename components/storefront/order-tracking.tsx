@@ -10,6 +10,7 @@ import { formatCurrency, formatOrderNumber } from '@/lib/utils/format'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { CardPaymentForm } from './card-payment-form'
+import { EfiCardPaymentForm } from './efi-card-payment-form'
 
 const STATUS_STEPS = [
   { key: 'PENDING',          label: 'Recebido',    icon: Clock,        desc: 'Aguardando confirmação' },
@@ -69,6 +70,11 @@ interface OrderTrackingProps {
   // pendente com cartão (Checkout Transparente). Null se o tenant não tem
   // MP conectado ou se o pagamento é PIX/dinheiro.
   mpPublicKey?: string | null
+  // Qual provedor o tenant escolheu pra cartão — decide qual formulário
+  // renderizar (Brick do MP ou campos manuais + Efí.js).
+  cardProvider?: 'MERCADOPAGO' | 'STRIPE' | 'EFI'
+  efiAccountIdentifier?: string | null
+  efiSandbox?: boolean
 }
 
 // ─── Componente countdown PIX ────────────────────────────────────────────────
@@ -283,14 +289,18 @@ function PixSection({
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey }: OrderTrackingProps) {
+export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey, cardProvider, efiAccountIdentifier, efiSandbox }: OrderTrackingProps) {
   const [order, setOrder] = useState(initialOrder)
   const [isRefreshingPix, setIsRefreshingPix] = useState(false)
 
   const color = order.tenant.primaryColor ?? '#f97316'
   const pendingPayment = order.payments[0] ?? null
   const needsPixPayment = pendingPayment?.method === 'PIX' && order.paymentStatus !== 'PAID'
-  const needsCardPayment = pendingPayment?.method === 'CREDIT_CARD' && order.paymentStatus !== 'PAID' && !!mpPublicKey
+  const isEfiCard = cardProvider === 'EFI' && !!efiAccountIdentifier
+  const needsCardPayment =
+    pendingPayment?.method === 'CREDIT_CARD' &&
+    order.paymentStatus !== 'PAID' &&
+    (isEfiCard || !!mpPublicKey)
   const pixPayment = pendingPayment
   const isDelivery = order.type === 'DELIVERY'
   const steps = STATUS_STEPS.filter((s) => isDelivery ? true : s.key !== 'OUT_FOR_DELIVERY')
@@ -391,20 +401,38 @@ export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey }:
         )}
 
         {needsCardPayment && order.status !== 'CANCELLED' && (
-          <CardPaymentForm
-            orderId={order.id}
-            amount={Number(order.total)}
-            publicKey={mpPublicKey!}
-            color={color}
-            statusToken={statusToken}
-            onSuccess={() => {
-              setOrder((prev) => ({
-                ...prev,
-                paymentStatus: 'PAID',
-                status: prev.status === 'PENDING' ? 'CONFIRMED' : prev.status,
-              }))
-            }}
-          />
+          isEfiCard ? (
+            <EfiCardPaymentForm
+              orderId={order.id}
+              amount={Number(order.total)}
+              accountIdentifier={efiAccountIdentifier!}
+              sandbox={!!efiSandbox}
+              color={color}
+              statusToken={statusToken}
+              onSuccess={() => {
+                setOrder((prev) => ({
+                  ...prev,
+                  paymentStatus: 'PAID',
+                  status: prev.status === 'PENDING' ? 'CONFIRMED' : prev.status,
+                }))
+              }}
+            />
+          ) : (
+            <CardPaymentForm
+              orderId={order.id}
+              amount={Number(order.total)}
+              publicKey={mpPublicKey!}
+              color={color}
+              statusToken={statusToken}
+              onSuccess={() => {
+                setOrder((prev) => ({
+                  ...prev,
+                  paymentStatus: 'PAID',
+                  status: prev.status === 'PENDING' ? 'CONFIRMED' : prev.status,
+                }))
+              }}
+            />
+          )
         )}
 
         {/* ── STATUS HERO CARD ── */}
