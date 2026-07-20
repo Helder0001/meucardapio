@@ -78,3 +78,67 @@ export async function createTenantCardCharge(params: TenantCardChargeParams): Pr
     cardMask: response.data.payment?.credit_card?.mask,
   }
 }
+
+interface TenantPaymentLinkParams {
+  tenantId: string
+  orderId: string
+  amount: number // em reais
+  description: string
+  expireAt?: string // 'YYYY-MM-DD', padrão: Efí usa um prazo default se omitido
+}
+
+interface TenantPaymentLinkResult {
+  chargeId: number
+  paymentUrl: string
+}
+
+/**
+ * Gera um "Link de Pagamento" da Efí (POST /v1/charge/one-step/link) —
+ * cria a cobrança e devolve uma URL hospedada pela própria Efí, pro
+ * cliente escolher e inserir os dados do cartão sem sair do link (nada de
+ * formulário nosso). Diferente de createTenantCardCharge acima, que já
+ * exige o payment_token (checkout embutido no nosso form).
+ *
+ * Só oferecemos "credit_card" aqui (não "all"/boleto): pedido de
+ * restaurante é same-day, boleto demora dias pra compensar — não faz
+ * sentido pro caso de uso. Pix não é opção nesse produto específico da
+ * Efí (Link de Pagamento só cobre boleto/cartão); pra Pix já temos a
+ * cobrança direta em lib/efi/tenant-pix-client.ts.
+ */
+export async function createEfiPaymentLink(params: TenantPaymentLinkParams): Promise<TenantPaymentLinkResult> {
+  const connection = await prisma.efiConnection.findFirst({
+    where: { tenantId: params.tenantId, revokedAt: null },
+  })
+  if (!connection) {
+    throw new Error('Efí não configurado para este estabelecimento')
+  }
+
+  const clientId = decrypt(connection.clientIdEnc)
+  const clientSecret = decrypt(connection.clientSecretEnc)
+
+  const response = await efiRequestWithCredentials<{
+    data: { charge_id: number; payment_url: string }
+  }>(
+    { clientId, clientSecret, sandbox: connection.sandbox },
+    'POST',
+    '/v1/charge/one-step/link',
+    {
+      items: [
+        {
+          name: params.description.slice(0, 250),
+          value: Math.round(params.amount * 100),
+          amount: 1,
+        },
+      ],
+      settings: {
+        payment_method: 'credit_card',
+        ...(params.expireAt ? { expire_at: params.expireAt } : {}),
+      },
+    }
+  )
+
+  return {
+    chargeId: response.data.charge_id,
+    paymentUrl: response.data.payment_url,
+  }
+}
