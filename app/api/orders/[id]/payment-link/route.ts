@@ -18,6 +18,7 @@ import { prisma } from '@/lib/db/client'
 import { createPaymentPreference } from '@/lib/mercadopago/checkout-client'
 import { getPaymentProvider } from '@/lib/payments/provider-router'
 import { createStripeCheckoutSession } from '@/lib/stripe/tenant-payments'
+import { createEfiPaymentLink } from '@/lib/efi/tenant-payments'
 import { decrypt } from '@/lib/security/crypto'
 import crypto from 'crypto'
 
@@ -59,7 +60,7 @@ export async function POST(
       paymentStatus: true,
       customer: { select: { name: true, phone: true } },
       tenant: { select: { slug: true } },
-      payments: { select: { id: true, status: true, amount: true, preferenceId: true } },
+      payments: { select: { id: true, status: true, amount: true, preferenceId: true, provider: true, providerReference: true, method: true } },
       items: {
         select: { productName: true, quantity: true, unitPrice: true },
       },
@@ -163,6 +164,52 @@ export async function POST(
     }
   }
 
+  if (cardProvider === 'EFI') {
+    try {
+      const link = await createEfiPaymentLink({
+        tenantId: order.tenantId,
+        orderId: order.id,
+        amount: stillOwed,
+        description: `Pedido #${String(order.orderNumber).padStart(4, '0')}`,
+      })
+
+      // Mesmo cuidado do pay-card (commit a5bb98f): todo pedido não-PIX já
+      // nasce com um Payment placeholder (PENDING, sem provider nem
+      // referência nenhuma) — reaproveita esse registro em vez de criar um
+      // novo, senão o pedido acumula 2 linhas de pagamento.
+      const existingLinkPayment = order.payments.find(
+        (p) => p.status === 'PENDING' && (p.preferenceId || (p.provider === 'EFI' && p.providerReference))
+      )
+      const placeholderPayment = !existingLinkPayment
+        ? order.payments.find((p) => p.status === 'PENDING' && p.method === 'CREDIT_CARD' && !p.preferenceId && !p.providerReference)
+        : null
+
+      const efiLinkData = {
+        amount: stillOwed,
+        provider: 'EFI' as const,
+        providerReference: String(link.chargeId),
+        checkoutUrl: link.paymentUrl,
+      }
+
+      const targetId = existingLinkPayment?.id ?? placeholderPayment?.id
+      if (targetId) {
+        await prisma.payment.update({ where: { id: targetId }, data: efiLinkData })
+      } else {
+        await prisma.payment.create({
+          data: { tenantId: order.tenantId, orderId: order.id, method: 'CREDIT_CARD', status: 'PENDING', ...efiLinkData },
+        })
+      }
+
+      return NextResponse.json({ checkoutUrl: link.paymentUrl, preferenceId: String(link.chargeId) })
+    } catch (err) {
+      console.error('[payment-link][efi]', err)
+      return NextResponse.json(
+        { error: 'Não foi possível gerar o link de pagamento pela Efí. Tente novamente.' },
+        { status: 500 }
+      )
+    }
+  }
+
   try {
     const preference = await createPaymentPreference({
       tenantId: order.tenantId,
@@ -194,15 +241,19 @@ export async function POST(
     })
 
     // Salvar o link no banco — se já existia um Payment PENDING gerado por
-    // um link anterior (tem preferenceId), atualiza; senão cria um novo.
-    // Importante: só reaproveita um pagamento pendente que JÁ é um link
-    // (tem preferenceId) — nunca um pagamento manual pendente (ex.: dinheiro
-    // registrado como parte de um pagamento dividido), que é outra coisa.
+    // um link anterior (tem preferenceId), atualiza; senão reaproveita o
+    // placeholder criado na criação do pedido (mesmo cuidado do commit
+    // a5bb98f); só cria um novo se nenhum dos dois existir.
     const existingLinkPayment = order.payments.find((p) => p.status === 'PENDING' && p.preferenceId)
+    const placeholderPayment = !existingLinkPayment
+      ? order.payments.find((p) => p.status === 'PENDING' && p.method === 'CREDIT_CARD' && !p.preferenceId && !p.providerReference)
+      : null
 
-    if (existingLinkPayment) {
+    const targetId = existingLinkPayment?.id ?? placeholderPayment?.id
+
+    if (targetId) {
       await prisma.payment.update({
-        where: { id: existingLinkPayment.id },
+        where: { id: targetId },
         data: {
           amount: stillOwed,
           preferenceId: preference.preferenceId,
