@@ -127,11 +127,17 @@ export async function POST(
         methods: ['card', 'pix'],
       })
 
-      const existingLinkPayment = order.payments.find((p) => p.status === 'PENDING' && p.preferenceId)
+      const existingLinkPayment = order.payments.find(
+        (p) => p.status === 'PENDING' && (p.preferenceId || (p.provider === 'STRIPE' && p.providerReference))
+      )
+      const placeholderPayment = !existingLinkPayment
+        ? order.payments.find((p) => p.status === 'PENDING' && p.method === 'CREDIT_CARD' && !p.preferenceId && !p.providerReference)
+        : null
+      const stripeTargetId = existingLinkPayment?.id ?? placeholderPayment?.id
 
-      if (existingLinkPayment) {
+      if (stripeTargetId) {
         await prisma.payment.update({
-          where: { id: existingLinkPayment.id },
+          where: { id: stripeTargetId },
           data: {
             amount: stillOwed,
             provider: 'STRIPE',
