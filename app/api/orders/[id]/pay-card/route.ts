@@ -139,6 +139,22 @@ export async function POST(
         where: { orderId: order.id, provider: 'EFI', providerReference: String(chargeResult.chargeId) },
       })
 
+      // BUG CORRIGIDO: todo pedido não-PIX já nasce com um Payment
+      // "placeholder" (status PENDING, sem provider/providerReference —
+      // ver actions/orders/create-order.ts) usado pelo dashboard pra
+      // mostrar "Confirmar"/"Trocar forma de pagamento" em pedidos de
+      // balcão. Sem checar por ele aqui, essa rota sempre criava um
+      // Payment NOVO pro resultado real da cobrança, deixando o
+      // placeholder original órfão pra sempre — por isso o pedido
+      // aparecia com 2 linhas de pagamento (uma paga, uma pendente pra
+      // sempre) em vez de 1.
+      const placeholderPayment = !existingEfiPayment
+        ? await prisma.payment.findFirst({
+            where: { orderId: order.id, method: 'CREDIT_CARD', status: 'PENDING', providerReference: null },
+            orderBy: { createdAt: 'asc' },
+          })
+        : null
+
       const efiPaymentData = {
         tenantId: order.tenantId,
         orderId: order.id,
@@ -152,8 +168,9 @@ export async function POST(
         failedAt: isRejected ? new Date() : undefined,
       }
 
-      const efiPayment = existingEfiPayment
-        ? await prisma.payment.update({ where: { id: existingEfiPayment.id }, data: efiPaymentData })
+      const targetPaymentId = existingEfiPayment?.id ?? placeholderPayment?.id
+      const efiPayment = targetPaymentId
+        ? await prisma.payment.update({ where: { id: targetPaymentId }, data: efiPaymentData })
         : await prisma.payment.create({ data: efiPaymentData })
 
       if (isApproved) {
@@ -219,37 +236,44 @@ export async function POST(
       customerName: body.customerName,
     })
 
-    // Criar ou atualizar o registro de pagamento
-    const payment = await prisma.payment.upsert({
-      where: { mercadoPagoId: result.mercadoPagoId },
-      update: {
-        mercadoPagoStatus: result.status,
-        cardLastDigits: result.cardLastDigits,
-        cardBrand: result.cardBrand,
-        installments: result.installments,
-        status: result.status === 'approved' ? 'PAID'
-          : result.status === 'rejected' ? 'FAILED'
-          : 'PENDING',
-        paidAt: result.status === 'approved' ? new Date() : undefined,
-        failedAt: result.status === 'rejected' ? new Date() : undefined,
-      },
-      create: {
-        tenantId: order.tenantId,
-        orderId: order.id,
-        method: 'CREDIT_CARD',
-        status: result.status === 'approved' ? 'PAID'
-          : result.status === 'rejected' ? 'FAILED'
-          : 'PENDING',
-        amount: stillOwed,
-        mercadoPagoId: result.mercadoPagoId,
-        mercadoPagoStatus: result.status,
-        cardLastDigits: result.cardLastDigits,
-        cardBrand: result.cardBrand,
-        installments: result.installments,
-        paidAt: result.status === 'approved' ? new Date() : undefined,
-        failedAt: result.status === 'rejected' ? new Date() : undefined,
-      },
+    // Mesmo bug corrigido acima no branch EFI: reaproveita o Payment
+    // placeholder (criado em actions/orders/create-order.ts) em vez de
+    // deixar o upsert por mercadoPagoId sempre criar um registro novo.
+    const placeholderPayment = await prisma.payment.findFirst({
+      where: { orderId: order.id, method: 'CREDIT_CARD', status: 'PENDING', mercadoPagoId: null },
+      orderBy: { createdAt: 'asc' },
     })
+
+    const mpPaymentData = {
+      mercadoPagoStatus: result.status,
+      cardLastDigits: result.cardLastDigits,
+      cardBrand: result.cardBrand,
+      installments: result.installments,
+      status: result.status === 'approved' ? 'PAID' as const
+        : result.status === 'rejected' ? 'FAILED' as const
+        : 'PENDING' as const,
+      paidAt: result.status === 'approved' ? new Date() : undefined,
+      failedAt: result.status === 'rejected' ? new Date() : undefined,
+    }
+
+    // Criar ou atualizar o registro de pagamento
+    const payment = placeholderPayment
+      ? await prisma.payment.update({
+          where: { id: placeholderPayment.id },
+          data: { ...mpPaymentData, mercadoPagoId: result.mercadoPagoId },
+        })
+      : await prisma.payment.upsert({
+          where: { mercadoPagoId: result.mercadoPagoId },
+          update: mpPaymentData,
+          create: {
+            tenantId: order.tenantId,
+            orderId: order.id,
+            method: 'CREDIT_CARD',
+            amount: stillOwed,
+            mercadoPagoId: result.mercadoPagoId,
+            ...mpPaymentData,
+          },
+        })
 
     // Aprovado imediatamente — confirmar o pedido (se cobrir o total) e
     // aplicar rewards. Mesma lógica do webhook: só marca PAID/CONFIRMED
