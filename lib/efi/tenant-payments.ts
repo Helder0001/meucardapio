@@ -132,12 +132,13 @@ export async function createEfiPaymentLink(params: TenantPaymentLinkParams): Pro
       ],
       settings: {
         payment_method: 'credit_card',
-        // Obrigatório pra Efí (erro 3500034 sem isso) — false porque o
-        // endereço de entrega, quando existe, já é coletado no nosso
-        // próprio checkout antes de chegar aqui; não precisamos que a
-        // tela da Efí peça de novo.
+        // Ambos obrigatórios pra Efí (erro 3500034 sem eles):
+        // - request_delivery_address: false porque o endereço, quando
+        //   existe, já foi coletado no nosso checkout antes de chegar aqui.
+        // - expire_at: prazo pro cliente pagar o link; 2 dias por padrão
+        //   se quem chamou não passar um prazo específico.
         request_delivery_address: false,
-        ...(params.expireAt ? { expire_at: params.expireAt } : {}),
+        expire_at: params.expireAt ?? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
       },
     }
   )
