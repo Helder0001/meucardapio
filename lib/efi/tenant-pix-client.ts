@@ -282,3 +282,53 @@ export async function configurePixWebhook(params: ConfigureWebhookParams): Promi
     throw new Error(`[efi][pix] Falha ao configurar webhook: ${JSON.stringify(data).slice(0, 500)}`)
   }
 }
+
+interface RefundTenantPixParams {
+  tenantId: string
+  e2eId: string
+  amount: number // em reais
+  devolutionId?: string // opcional — gerado por nós se não vier
+}
+
+/**
+ * Estorna (devolve) um Pix recebido — PUT /v2/pix/:e2eId/devolucao/:id.
+ * Diferente do refund de cartão, aqui o "id" da devolução é gerado por
+ * NÓS (não pela Efí) e precisa ser único por e2eId; usamos um cuid curto
+ * se quem chamou não passar um. `valor` vai como string decimal em reais
+ * (não centavos — diferente do resto da API de Cobranças).
+ */
+export async function refundTenantPixPayment(params: RefundTenantPixParams): Promise<{ status: string; rtrId?: string }> {
+  const connection = await prisma.efiConnection.findFirst({
+    where: { tenantId: params.tenantId, revokedAt: null, pixKey: { not: null } },
+  })
+  if (!connection || !connection.pixCertificateEnc || !connection.pixKey) {
+    throw new Error('Efí Pix não configurado para este estabelecimento')
+  }
+
+  const clientId = decrypt(connection.clientIdEnc)
+  const clientSecret = decrypt(connection.clientSecretEnc)
+  const pfx = Buffer.from(decrypt(connection.pixCertificateEnc), 'base64')
+  const passphrase = connection.pixCertificatePassphraseEnc ? decrypt(connection.pixCertificatePassphraseEnc) : ''
+  const creds = { clientId, clientSecret, pfx, passphrase, sandbox: connection.sandbox }
+
+  const auth = await authorizePixApi(creds)
+  if (!auth.ok) {
+    throw new Error(`Efí Pix: ${auth.error}`)
+  }
+
+  const devolutionId = params.devolutionId ?? Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+
+  const { status, data } = await mtlsRequest(creds, {
+    method: 'PUT',
+    path: `/v2/pix/${encodeURIComponent(params.e2eId)}/devolucao/${encodeURIComponent(devolutionId)}`,
+    headers: { Authorization: `Bearer ${auth.accessToken}` },
+    body: JSON.stringify({ valor: params.amount.toFixed(2) }),
+  })
+
+  if (status !== 200 && status !== 201) {
+    console.error('[efi][pix] erro ao estornar', { status, data })
+    throw new Error(`[efi][pix] Falha ao solicitar devolução: ${JSON.stringify(data).slice(0, 500)}`)
+  }
+
+  return { status: data?.status ?? 'EM_PROCESSAMENTO', rtrId: data?.rtrId }
+}
