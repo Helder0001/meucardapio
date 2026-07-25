@@ -3,11 +3,12 @@
 // components/dashboard/order-detail.tsx
 
 import { useState, useTransition } from 'react'
+import { refundPaymentAction } from '@/actions/orders/refund-payment'
 import { useRouter } from 'next/navigation'
 import { formatCurrency, formatDate, formatPhone, formatOrderNumber } from '@/lib/utils/format'
 import { OrderStatusBadge } from './order-status-badge'
 import { cn } from '@/lib/utils'
-import { Loader2, CheckCircle2, XCircle, CreditCard, Plus, X, Pencil, Minus, Trash2, Search } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, CreditCard, Plus, X, Pencil, Minus, Trash2, Search, RotateCcw } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatCpf, isValidCpf } from '@/lib/utils/cpf'
 import { paymentMethodLabel } from '@/lib/utils/payment-labels'
@@ -377,7 +378,30 @@ export function OrderDetail({
     })
   }
 
-  // ── Editar itens do pedido ──────────────────────────────────────────────────
+  // Estorna o pagamento (Pix/cartão via Efí, por enquanto) — botão aparece
+  // pra todo mundo, mas a permissão de verdade é checada no servidor
+  // (refundPaymentAction só deixa TENANT_ADMIN/MANAGER passar).
+  const [isRefunding, startRefund] = useTransition()
+  const refundPayment = (paymentId: string, amount: number) => {
+    const confirmed = window.confirm(
+      `Estornar ${formatCurrency(amount)}? Isso vai cancelar o pedido e devolver o valor pro cliente — não dá pra desfazer.`
+    )
+    if (!confirmed) return
+
+    startRefund(async () => {
+      const result = await refundPaymentAction(order.id)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      setPayments((prev) =>
+        prev.map((p) => (p.id === paymentId ? { ...p, status: 'REFUNDED' } : p))
+      )
+      toast.success('Pagamento estornado e pedido cancelado.')
+    })
+  }
+
+
   // Permitido para qualquer pedido que ainda não foi cancelado/estornado.
   // Pedidos de balcão/mesa (PDV/TABLE) também podem ser editados mesmo já
   // ENTREGUES — nesse caso o pedido reabre no Kanban como PENDING (o backend
@@ -945,6 +969,25 @@ export function OrderDetail({
                               : <CreditCard className="h-3 w-3" />
                             }
                             Confirmar
+                          </button>
+                        )}
+                        {/* Estornar pagamento — botão aparece pra todo
+                            mundo (staff não fica se perguntando onde
+                            sumiu), mas só TENANT_ADMIN/MANAGER conseguem
+                            de verdade (checado no servidor). Só pra
+                            pagamentos já confirmados. */}
+                        {isPaid && (
+                          <button
+                            onClick={() => refundPayment(p.id, p.amount)}
+                            disabled={isRefunding}
+                            title="Estornar pagamento"
+                            className="flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 bg-destructive/10 text-destructive text-xs font-medium rounded-lg hover:bg-destructive/20 disabled:opacity-60 transition-colors"
+                          >
+                            {isRefunding
+                              ? <Loader2 className="h-3 w-3 animate-spin" />
+                              : <RotateCcw className="h-3 w-3" />
+                            }
+                            Estornar
                           </button>
                         )}
                       </div>
