@@ -61,7 +61,15 @@ export async function POST(request: NextRequest) {
       const result = await prisma.$transaction(async (tx) => {
         const updated = await tx.payment.updateMany({
           where: { id: payment.id, status: { not: 'PAID' } },
-          data: { status: 'PAID', paidAt: new Date(), webhookData: entry as any },
+          data: {
+            status: 'PAID',
+            paidAt: new Date(),
+            webhookData: entry as any,
+            // Guardado agora porque é a ÚNICA vez que a Efí nos manda o
+            // e2eId — precisa dele depois pra solicitar estorno
+            // (PUT /v2/pix/:e2eId/devolucao/:id).
+            pixEndToEndId: entry.endToEndId,
+          },
         })
         if (updated.count === 0) return { processed: false as const }
 
