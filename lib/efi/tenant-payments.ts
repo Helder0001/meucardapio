@@ -148,3 +148,35 @@ export async function createEfiPaymentLink(params: TenantPaymentLinkParams): Pro
     paymentUrl: response.data.payment_url,
   }
 }
+
+interface RefundEfiCardParams {
+  tenantId: string
+  chargeId: string | number
+  amount?: number // em reais; se omitido, a Efí faz o estorno TOTAL
+}
+
+/**
+ * Estorna um pagamento de cartão feito via Efí (POST /v1/charge/card/:id/refund).
+ * Regras da própria Efí (não são nossas): a cobrança precisa estar `paid`;
+ * não pode ter outro estorno em andamento pra mesma cobrança; só 1 estorno
+ * parcial por dia por cobrança; parcial até 90 dias após confirmação, total
+ * até 360 dias; não disponível pra vendas de marketplace/split.
+ */
+export async function refundEfiCardCharge(params: RefundEfiCardParams): Promise<void> {
+  const connection = await prisma.efiConnection.findFirst({
+    where: { tenantId: params.tenantId, revokedAt: null },
+  })
+  if (!connection) {
+    throw new Error('Efí não configurado para este estabelecimento')
+  }
+
+  const clientId = decrypt(connection.clientIdEnc)
+  const clientSecret = decrypt(connection.clientSecretEnc)
+
+  await efiRequestWithCredentials(
+    { clientId, clientSecret, sandbox: connection.sandbox },
+    'POST',
+    `/v1/charge/card/${params.chargeId}/refund`,
+    params.amount !== undefined ? { amount: Math.round(params.amount * 100) } : {}
+  )
+}
