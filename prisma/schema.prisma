@@ -927,6 +927,11 @@ model Payment {
   pixQrCode         String?       // código copia-e-cola
   pixQrCodeBase64   String?       // imagem base64 do QR Code
   pixExpiresAt      DateTime?
+  // e2eId do Pix (End-to-End ID) — vem no webhook de confirmação
+  // (app/api/webhooks/efi-pix/pix/route.ts). Obrigatório pra solicitar
+  // estorno na Efí (PUT /v2/pix/:e2eId/devolucao/:id); sem ele guardado
+  // no momento da confirmação, não dá pra estornar depois.
+  pixEndToEndId     String?
 
   // Mercado Pago — Checkout Pro (link de pagamento)
   // Usado tanto para o link enviado via WhatsApp (dashboard) quanto para
@@ -955,6 +960,7 @@ model Payment {
   refundedAt        DateTime?
   refundAmount      Decimal?      @db.Decimal(10, 2)
   refundReason      String?
+  refundedByUserId  String?       // quem clicou em "Estornar pagamento" (auditoria)
 
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
