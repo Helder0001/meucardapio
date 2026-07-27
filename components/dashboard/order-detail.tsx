@@ -2,7 +2,7 @@
 
 // components/dashboard/order-detail.tsx
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { refundPaymentAction } from '@/actions/orders/refund-payment'
 import { useRouter } from 'next/navigation'
 import { formatCurrency, formatDate, formatPhone, formatOrderNumber } from '@/lib/utils/format'
@@ -140,6 +140,53 @@ export function OrderDetail({
 }: { order: any; userRole: string; catalog?: CatalogCategory[]; pixEnabled?: boolean; cardEnabled?: boolean }) {
   const [status,   setStatus]   = useState(order.status)
   const [payments, setPayments] = useState<any[]>(order.payments)
+
+  // BUG CORRIGIDO: essa tela nunca atualizava sozinha — só quando o staff
+  // clicava em algo manualmente (ex.: "Concluído"). No balcão, quando o
+  // cliente paga um Pix, a confirmação chega via webhook em segundo plano
+  // e nada aqui refletia isso até um reload manual da página. Mesmo padrão
+  // de polling já usado no cardápio digital (order-tracking.tsx): só fica
+  // ativo enquanto existir pagamento PIX/CREDIT_CARD ainda PENDING, e para
+  // sozinho assim que confirmar (ou depois de ~3min, pra não ficar
+  // batendo pra sempre num pagamento abandonado).
+  useEffect(() => {
+    const hasPendingGatewayPayment = payments.some(
+      (p) => p.status === 'PENDING' && (p.method === 'PIX' || p.method === 'CREDIT_CARD') && (p.pixQrCode || p.checkoutUrl)
+    )
+    if (!hasPendingGatewayPayment) return
+
+    let attempts = 0
+    const maxAttempts = 36 // ~3min a 5s por tentativa
+    const interval = setInterval(async () => {
+      attempts++
+      try {
+        const res = await fetch(`/api/orders/${order.id}/status`, { cache: 'no-store' })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.payments?.length) {
+            setPayments((prev) =>
+              prev.map((p) => {
+                const updated = data.payments.find((dp: any) => dp.id === p.id)
+                return updated ? { ...p, ...updated } : p
+              })
+            )
+            const stillPending = data.payments.some((p: any) => p.status === 'PENDING')
+            if (!stillPending) {
+              clearInterval(interval)
+              router.refresh() // pega o status do pedido tb (PENDING → CONFIRMED, etc.)
+            }
+          }
+        }
+      } catch {
+        // silencioso — só tenta de novo no próximo ciclo
+      }
+      if (attempts >= maxAttempts) clearInterval(interval)
+    }, 5000)
+
+    return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order.id])
+
   const [isPending, start]      = useTransition()
   const router = useRouter()
 
@@ -971,12 +1018,17 @@ export function OrderDetail({
                             Confirmar
                           </button>
                         )}
-                        {/* Estornar pagamento — botão aparece pra todo
-                            mundo (staff não fica se perguntando onde
-                            sumiu), mas só TENANT_ADMIN/MANAGER conseguem
-                            de verdade (checado no servidor). Só pra
-                            pagamentos já confirmados. */}
-                        {isPaid && (
+                        {/* Estornar pagamento — só pra Pix/Cartão que
+                            passaram por gateway de verdade (Efí/MP/Stripe:
+                            têm providerReference ou pixEndToEndId
+                            preenchido). Pagamento manual (CASH,
+                            CREDIT_CARD_MANUAL, cartão de máquina anotado à
+                            mão etc.) nunca tem isso, então nunca mostra o
+                            botão — não tem API nenhuma pra estornar algo
+                            que não passou por gateway nenhum. Aparece pra
+                            qualquer papel; permissão de verdade é checada
+                            no servidor. */}
+                        {isPaid && (p.method === 'PIX' || p.method === 'CREDIT_CARD') && (p.providerReference || p.pixEndToEndId) && (
                           <button
                             onClick={() => refundPayment(p.id, p.amount)}
                             disabled={isRefunding}
