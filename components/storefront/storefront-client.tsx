@@ -42,6 +42,7 @@ interface StorefrontClientProps {
     }>
   }
   tableInfo: { id: string; number: number; sector: string } | null
+  viewOnly?: boolean
   isOpen: boolean
   closedMessage?: string
 }
@@ -482,7 +483,7 @@ function CustomerOrdersSection({
   )
 }
 
-export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: StorefrontClientProps) {
+export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, viewOnly = false }: StorefrontClientProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -637,15 +638,17 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
                 <Info className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Mais info</span>
               </button>
-              <button
-                onClick={() => setCartOpen(true)}
-                className="relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-white font-bold text-xs flex-shrink-0 transition-all active:scale-95"
-                style={{ background: `linear-gradient(135deg, ${color}, ${color}bb)` }}
-              >
-                <ShoppingBag className="w-3.5 h-3.5" />
-                {cartCount > 0 && <span>{cartCount} itens · {formatCurrency(cartTotal)}</span>}
-                {cartCount === 0 && <span>Carrinho</span>}
-              </button>
+              {!viewOnly && (
+                <button
+                  onClick={() => setCartOpen(true)}
+                  className="relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-white font-bold text-xs flex-shrink-0 transition-all active:scale-95"
+                  style={{ background: `linear-gradient(135deg, ${color}, ${color}bb)` }}
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" />
+                  {cartCount > 0 && <span>{cartCount} itens · {formatCurrency(cartTotal)}</span>}
+                  {cartCount === 0 && <span>Carrinho</span>}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -709,6 +712,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
             {tableInfo && (
               <span className="flex items-center justify-center gap-1 mt-1">
                 <MapPin className="w-3.5 h-3.5" /> Mesa {tableInfo.number}
+                {viewOnly && ' · Cardápio somente para consulta — peça com a equipe'}
               </span>
             )}
           </div>
@@ -752,12 +756,14 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
               }
               {theme === 'dark' ? 'Claro' : 'Escuro'}
             </button>
-            <button onClick={() => setCartOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90"
-              style={{ background: `linear-gradient(135deg, ${color}, ${color}bb)` }}>
-              <ShoppingBag className="w-3.5 h-3.5" />
-              {cartCount > 0 ? `Carrinho · ${formatCurrency(cartTotal)}` : 'Carrinho'}
-            </button>
+            {!viewOnly && (
+              <button onClick={() => setCartOpen(true)}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90"
+                style={{ background: `linear-gradient(135deg, ${color}, ${color}bb)` }}>
+                <ShoppingBag className="w-3.5 h-3.5" />
+                {cartCount > 0 ? `Carrinho · ${formatCurrency(cartTotal)}` : 'Carrinho'}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -819,7 +825,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
                     key={product.id}
                     product={product}
                     onSelect={() => setSelectedProduct(product)}
-                    disabled={!isOpen || product.isOutOfStock}
+                    disabled={!isOpen || product.isOutOfStock || viewOnly}
                     primaryColor={color}
                   />
                 ))}
@@ -867,7 +873,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
                       key={product.id}
                       product={product}
                       onSelect={() => setSelectedProduct(product)}
-                      disabled={!isOpen || product.isOutOfStock}
+                      disabled={!isOpen || product.isOutOfStock || viewOnly}
                       color={color}
                     />
                   ))}
@@ -890,7 +896,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
                       key={product.id}
                       product={product}
                       onSelect={() => setSelectedProduct(product)}
-                      disabled={!isOpen || product.isOutOfStock}
+                      disabled={!isOpen || product.isOutOfStock || viewOnly}
                       primaryColor={color}
                     />
                   ))}
@@ -922,7 +928,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
                       key={product.id}
                       product={product}
                       onSelect={() => setSelectedProduct(product)}
-                      disabled={!isOpen || product.isOutOfStock}
+                      disabled={!isOpen || product.isOutOfStock || viewOnly}
                       primaryColor={color}
                     />
                   ))}
@@ -972,10 +978,13 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
               <span className="text-[10px] font-semibold">Ofertas</span>
             </button>
 
-            {/* Carrinho — botão central destaque */}
+            {/* Carrinho — botão central destaque (nunca abre nada em modo
+                somente-consulta; nem precisaria, já que não dá pra
+                adicionar item nenhum, mas evita confusão de abrir um
+                carrinho vazio) */}
             <button
-              onClick={() => setCartOpen(true)}
-              className="relative flex flex-col items-center -mt-5"
+              onClick={() => !viewOnly && setCartOpen(true)}
+              className={`relative flex flex-col items-center -mt-5 ${viewOnly ? 'opacity-40' : ''}`}
             >
               <div className="w-14 h-14 rounded-2xl shadow-lg flex items-center justify-center text-white transition-all active:scale-90"
                 style={{ background: `linear-gradient(135deg, ${color}, ${color}bb)`, boxShadow: `0 8px 20px ${color}55` }}>
@@ -1061,7 +1070,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage }: S
         <ProductModal
           product={selectedProduct}
           onClose={() => setSelectedProduct(null)}
-          disabled={!isOpen || selectedProduct.isOutOfStock}
+          disabled={!isOpen || selectedProduct.isOutOfStock || viewOnly}
           primaryColor={color}
         />
       )}
