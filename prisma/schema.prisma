@@ -134,6 +134,11 @@ model Tenant {
   // Identidade visual
   logo               String?
   primaryColor       String?            @default("#f97316")
+  // Se true, o QR Code da mesa (URL /menu/[slug]?table=...) vira só
+  // consulta ao cardápio — some o carrinho e desabilita "adicionar" nos
+  // produtos. NÃO afeta o cardápio web normal (sem ?table=), que continua
+  // permitindo pedido normalmente.
+  tableQrViewOnly    Boolean            @default(false)
   secondaryColor     String?
 
   // Dados do estabelecimento
