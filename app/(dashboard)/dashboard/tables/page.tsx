@@ -37,7 +37,7 @@ export default async function TablesPage() {
     }),
     prisma.tenant.findFirst({
       where: { id: tenantId },
-      select: { slug: true },
+      select: { slug: true, tableQrViewOnly: true },
     }),
   ])
 
@@ -56,6 +56,7 @@ export default async function TablesPage() {
         tables={tables}
         pdvs={pdvs}
         tenantSlug={tenant?.slug ?? ''}
+        tableQrViewOnly={tenant?.tableQrViewOnly ?? false}
       />
     </div>
   )
