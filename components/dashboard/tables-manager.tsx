@@ -5,8 +5,9 @@
 import { useState, useTransition, useEffect } from 'react'
 import { createTableAction } from '@/actions/tables/create-table'
 import { deleteTableAction } from '@/actions/tables/delete-table'
+import { updateTableQrViewOnlyAction } from '@/actions/tables/update-qr-settings'
 import { cn } from '@/lib/utils'
-import { Plus, QrCode, Table2, Users, Loader2, Download, X, Trash2, Store } from 'lucide-react'
+import { Plus, QrCode, Table2, Users, Loader2, Download, X, Trash2, Store, Eye } from 'lucide-react'
 import { toast } from 'sonner'
 import QRCodeLib from 'qrcode'
 
@@ -26,6 +27,7 @@ interface TablesManagerProps {
   tables: Table[]
   pdvs: Array<{ id: string; name: string }>
   tenantSlug: string
+  tableQrViewOnly: boolean
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -35,11 +37,25 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   CLEANING:  { label: 'Limpeza',    color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
 }
 
-export function TablesManager({ tables, pdvs, tenantSlug }: TablesManagerProps) {
+export function TablesManager({ tables, pdvs, tenantSlug, tableQrViewOnly }: TablesManagerProps) {
   const [showForm, setShowForm] = useState(false)
   const [selectedTable, setSelectedTable] = useState<Table | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [viewOnly, setViewOnly] = useState(tableQrViewOnly)
+  const [isSavingQrMode, startSavingQrMode] = useTransition()
+
+  const toggleQrViewOnly = () => {
+    const next = !viewOnly
+    setViewOnly(next) // otimista — é só uma preferência, baixo risco
+    startSavingQrMode(async () => {
+      const result = await updateTableQrViewOnlyAction(next)
+      if (result.error) {
+        setViewOnly(!next) // reverte se der erro
+        toast.error(result.error)
+      }
+    })
+  }
 
   // MELHORIA: agrupar primeiro por PDV, depois por setor
   const pdvGroups = pdvs.map((pdv) => {
@@ -152,6 +168,41 @@ export function TablesManager({ tables, pdvs, tenantSlug }: TablesManagerProps) 
 
   return (
     <div className="space-y-6">
+      {/* Configuração do QR Code da mesa — só afeta o link com ?table=,
+          nunca o cardápio web normal (link/QR geral do estabelecimento). */}
+      <div className="bg-card border border-border rounded-xl p-4 flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-lg bg-muted text-muted-foreground shrink-0">
+            <Eye className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-foreground">QR Code da mesa — somente consulta</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Quando ativado, o QR Code de cada mesa vira só um cardápio pra consulta — o cliente não
+              consegue adicionar itens nem fazer pedido pelo celular, precisa chamar a equipe. O
+              cardápio web normal (link/QR geral do estabelecimento) não é afetado.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={toggleQrViewOnly}
+          disabled={isSavingQrMode}
+          role="switch"
+          aria-checked={viewOnly}
+          className={cn(
+            'relative shrink-0 w-11 h-6 rounded-full transition-colors disabled:opacity-60',
+            viewOnly ? 'bg-primary' : 'bg-muted-foreground/30'
+          )}
+        >
+          <span
+            className={cn(
+              'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
+              viewOnly && 'translate-x-5'
+            )}
+          />
+        </button>
+      </div>
+
       {/* Botão criar mesa */}
       <div className="flex justify-end">
         <button
