@@ -229,6 +229,70 @@ export async function getPixQrCodeImage(
   }
 }
 
+export interface TenantPixChargeStatus {
+  status: string // 'ATIVA' | 'CONCLUIDA' | 'REMOVIDA_PELO_USUARIO_RECEBEDOR' | 'REMOVIDA_PELO_PSP'
+  valorOriginal: string
+  pix: Array<{ endToEndId: string; valor: string; horario: string }>
+}
+
+/**
+ * VULN-CRIT-01 CORRIGIDO: os handlers de webhook (app/api/webhooks/efi-pix/*)
+ * marcavam o Payment como PAID confiando cegamente no corpo do POST
+ * recebido — sem nenhuma validação de assinatura/mTLS (o próprio endpoint
+ * é registrado com x-skip-mtls-checking: true). Como o txid de cada
+ * cobrança é devolvido ao próprio cliente no checkout (dentro do
+ * pixCopiaECola), isso permitia forjar a confirmação de pagamento.
+ *
+ * Esta função consulta a cobrança diretamente na Efí (GET /v2/cob/:txid,
+ * autenticado com o client credentials + certificado mTLS do tenant) para
+ * confirmar a existência e o status real do pagamento antes de qualquer
+ * webhook recebido ser usado para liberar um pedido — o corpo do webhook
+ * passa a servir só de "sinal" pra saber qual txid consultar, nunca como
+ * fonte de verdade.
+ */
+export async function getTenantPixChargeStatus(tenantId: string, txid: string): Promise<TenantPixChargeStatus> {
+  const connection = await prisma.efiConnection.findFirst({
+    where: { tenantId, revokedAt: null, pixKey: { not: null } },
+  })
+
+  if (!connection || !connection.pixCertificateEnc || !connection.pixKey) {
+    throw new Error('Efí Pix não configurado para este estabelecimento')
+  }
+
+  const clientId = decrypt(connection.clientIdEnc)
+  const clientSecret = decrypt(connection.clientSecretEnc)
+  const pfx = Buffer.from(decrypt(connection.pixCertificateEnc), 'base64')
+  const passphrase = connection.pixCertificatePassphraseEnc ? decrypt(connection.pixCertificatePassphraseEnc) : ''
+  const creds = { clientId, clientSecret, pfx, passphrase, sandbox: connection.sandbox }
+
+  const auth = await authorizePixApi(creds)
+  if (!auth.ok) {
+    throw new Error(`Efí Pix: ${auth.error}`)
+  }
+
+  const { status, data } = await mtlsRequest(creds, {
+    method: 'GET',
+    path: `/v2/cob/${encodeURIComponent(txid)}`,
+    headers: { Authorization: `Bearer ${auth.accessToken}` },
+  })
+
+  if (status !== 200) {
+    throw new Error(`[efi][pix] Falha ao consultar cobrança ${txid} na Efí (status ${status}): ${JSON.stringify(data).slice(0, 500)}`)
+  }
+
+  return {
+    status: data?.status ?? 'DESCONHECIDO',
+    valorOriginal: data?.valor?.original ?? '0',
+    pix: Array.isArray(data?.pix)
+      ? data.pix.map((p: any) => ({
+          endToEndId: p.endToEndId,
+          valor: p.valor,
+          horario: p.horario,
+        }))
+      : [],
+  }
+}
+
 /**
  * Consulta na própria Efí qual URL de webhook está registrada pra essa
  * chave Pix agora — usado só como diagnóstico (GET /v2/webhook/:chave),
