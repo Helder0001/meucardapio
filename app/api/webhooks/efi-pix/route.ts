@@ -5,105 +5,32 @@
 // assinatura da plataforma): aqui a Efí manda o conteúdo direto no corpo
 // do POST, sem token pra consultar depois.
 //
+// Na prática, a Efí sempre notifica em "{url_cadastrada}/pix" (ver
+// comentário em app/api/webhooks/efi-pix/pix/route.ts), então esse
+// endpoint aqui (sem o sufixo) não deveria receber tráfego real da Efí —
+// mas ele fica registrado e publicamente acessível de qualquer forma, e
+// por isso recebe exatamente a mesma correção de segurança do outro.
+//
 // Registrado com x-skip-mtls-checking: true (ver lib/efi/tenant-pix-client.ts
 // configurePixWebhook), então chega como POST HTTPS normal, sem exigir
-// certificado cliente do nosso lado.
+// certificado cliente do nosso lado — ou seja, o corpo do POST recebido
+// aqui NÃO é autenticado de forma alguma.
+//
+// VULN-CRIT-01 CORRIGIDO: como o corpo do POST não é autenticado, ele
+// nunca é usado como fonte de verdade pra marcar um pagamento como PAID
+// — serve só de sinal pra saber qual txid consultar. A confirmação real
+// (status + valor pago) é sempre buscada com uma chamada autenticada à
+// API da Efí. Ver lib/efi/pix-webhook-handler.ts.
 
-import { NextRequest, NextResponse, after } from 'next/server'
-import { prisma } from '@/lib/db/client'
-import { publishOrderEvent } from '@/lib/cache/redis'
-import { applyCashback, applyLoyaltyPoints } from '@/lib/loyalty/apply-rewards'
-
-interface PixWebhookEntry {
-  endToEndId: string
-  txid: string
-  valor: string
-  horario: string
-}
+import { NextRequest, NextResponse } from 'next/server'
+import { processEfiPixWebhookEntries, type PixWebhookEntry } from '@/lib/efi/pix-webhook-handler'
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null)
   const entries: PixWebhookEntry[] = body?.pix ?? []
 
-  if (!entries.length) {
-    return NextResponse.json({ ok: true })
-  }
-
-  for (const entry of entries) {
-    if (!entry.txid) continue
-
-    try {
-      const payment = await prisma.payment.findFirst({
-        where: { provider: 'EFI', providerReference: entry.txid, method: 'PIX' },
-        include: { order: { select: { id: true, tenantId: true, total: true, status: true, customerId: true, orderNumber: true } } },
-      })
-
-      if (!payment) {
-        console.log('[webhook/efi-pix] nenhum Payment correspondente ao txid', entry.txid)
-        continue
-      }
-
-      if (payment.status === 'PAID') continue // idempotência — já processado
-
-      // Mesma lógica usada no webhook do MP (app/api/webhooks/mercadopago/route.ts):
-      // só marca o PEDIDO como pago/confirmado quando a soma de tudo que já
-      // foi pago (incluindo este) cobre o total — evita marcar PAID cedo
-      // demais em pedido com pagamento dividido (parte PIX, parte outro
-      // método).
-      const result = await prisma.$transaction(async (tx) => {
-        const updated = await tx.payment.updateMany({
-          where: { id: payment.id, status: { not: 'PAID' } },
-          data: { status: 'PAID', paidAt: new Date(), webhookData: entry as any },
-        })
-        if (updated.count === 0) return { processed: false as const }
-
-        const paidPayments = await tx.payment.findMany({
-          where: { orderId: payment.order.id, status: 'PAID' },
-          select: { amount: true },
-        })
-        const totalPaid = paidPayments.reduce((s, p) => s + Number(p.amount), 0)
-        const orderTotal = Number(payment.order.total)
-        const isFullyPaid = Math.round(totalPaid * 100) >= Math.round(orderTotal * 100)
-
-        await tx.order.update({
-          where: { id: payment.order.id },
-          data: isFullyPaid
-            ? { paymentStatus: 'PAID', status: 'CONFIRMED', confirmedAt: new Date() }
-            : { paymentStatus: 'PARTIAL' },
-        })
-
-        if (isFullyPaid && payment.order.customerId) {
-          await applyCashback(tx, payment.tenantId, payment.order.customerId, payment.order.id, orderTotal)
-          await applyLoyaltyPoints(tx, payment.tenantId, payment.order.customerId, payment.order.id, orderTotal)
-        }
-
-        return { processed: true as const, isFullyPaid }
-      })
-
-      if (result.processed) {
-        console.log('[webhook/efi-pix] pagamento confirmado', {
-          paymentId: payment.id,
-          txid: entry.txid,
-          isFullyPaid: result.isFullyPaid,
-        })
-
-        after(async () => {
-          try {
-            await publishOrderEvent(payment.tenantId, {
-              type: 'ORDER_UPDATED',
-              orderId: payment.order.id,
-              orderNumber: payment.order.orderNumber,
-              status: result.isFullyPaid ? 'CONFIRMED' : payment.order.status,
-              paymentStatus: result.isFullyPaid ? 'PAID' : 'PARTIAL',
-            })
-          } catch (err) {
-            console.error('[webhook/efi-pix] erro em efeito colateral pós-resposta:', err)
-          }
-        })
-      }
-    } catch (err) {
-      console.error('[webhook/efi-pix] erro ao processar entrada', String(err))
-    }
+  if (entries.length) {
+    await processEfiPixWebhookEntries(entries)
   }
 
   return NextResponse.json({ ok: true })
