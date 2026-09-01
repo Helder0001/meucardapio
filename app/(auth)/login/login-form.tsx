@@ -1,16 +1,19 @@
 'use client'
 
 // app/(auth)/login/login-form.tsx
+// VULN-CRIT-05 CORRIGIDO: adicionada a 2ª etapa de login (código
+// TOTP/backup) para contas com MFA ativado — antes o formulário só
+// existia com email+senha e o backend nunca pedia o código.
 
 import { useFormState, useFormStatus } from 'react-dom'
-import { loginAction } from '@/actions/auth/login'
+import { loginAction, mfaLoginAction } from '@/actions/auth/login'
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
 
 // Botão que desabilita automaticamente enquanto o form está enviando
-function SubmitButton() {
+function SubmitButton({ label = 'Entrar' }: { label?: string }) {
   const { pending } = useFormStatus()
   return (
     <button
@@ -24,7 +27,7 @@ function SubmitButton() {
           Entrando...
         </>
       ) : (
-        'Entrar'
+        label
       )}
     </button>
   )
@@ -41,18 +44,72 @@ export function LoginForm({ callbackUrl, urlError }: LoginFormProps) {
   const cadastroOk = searchParams.get('cadastro') === 'ok'
   const [showPassword, setShowPassword] = useState(false)
   const [state, formAction] = useFormState(loginAction, {})
+  const [mfaState, mfaFormAction] = useFormState(mfaLoginAction, {})
 
   // Fallback: se o signIn retornar success mas não redirecionar (ex: AUTH_TRUST_HOST ausente),
   // forçamos a navegação pelo cliente.
   useEffect(() => {
-    if (state.success) {
+    if (state.success || mfaState.success) {
       router.push(callbackUrl || '/dashboard')
       router.refresh()
     }
-  }, [state.success, callbackUrl, router])
+  }, [state.success, mfaState.success, callbackUrl, router])
+
+  const showMfaStep = Boolean(state.mfaRequired || mfaState.mfaRequired)
+  const mfaToken = mfaState.mfaToken ?? state.mfaToken
 
   const generalError = state.errors?.general?.[0] ?? urlError
 
+  // ── Etapa 2: pedir o código TOTP/backup ──────────────────────────
+  if (showMfaStep && mfaToken) {
+    return (
+      <form action={mfaFormAction} className="space-y-4">
+        {callbackUrl && (
+          <input type="hidden" name="callbackUrl" value={callbackUrl} />
+        )}
+        <input type="hidden" name="mfaToken" value={mfaToken} />
+
+        <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/20 px-4 py-3 text-sm text-foreground">
+          <ShieldCheck className="h-4 w-4 shrink-0 text-primary" />
+          <span>Digite o código do seu app autenticador (ou um código de backup).</span>
+        </div>
+
+        {mfaState.errors?.code && (
+          <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+            {mfaState.errors.code[0]}
+          </div>
+        )}
+
+        <div>
+          <label htmlFor="code" className="block text-sm font-medium text-foreground mb-1.5">
+            Código de verificação
+          </label>
+          <input
+            id="code"
+            name="code"
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            autoFocus
+            placeholder="000000"
+            className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm tracking-widest placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-shadow"
+          />
+        </div>
+
+        <SubmitButton label="Verificar" />
+
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="w-full text-center text-xs text-muted-foreground hover:text-foreground hover:underline"
+        >
+          Voltar para o login
+        </button>
+      </form>
+    )
+  }
+
+  // ── Etapa 1: email + senha ──────────────────────────────────────
   return (
     <form action={formAction} className="space-y-4">
       {/* Campo escondido para redirecionar após login */}
