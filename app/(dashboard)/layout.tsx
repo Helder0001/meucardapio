@@ -17,6 +17,7 @@ import { prisma } from '@/lib/db/client'
 import { Sidebar } from '@/components/dashboard/sidebar'
 import { Header } from '@/components/dashboard/header'
 import { InactivityWarning } from '@/components/shared/inactivity-warning'
+import { CourierLocationTracker } from '@/components/dashboard/courier-location-tracker'
 import Script from 'next/script'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -82,6 +83,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </main>
       </div>
       <InactivityWarning />
+      <CourierLocationTracker />
     </div>
   )
 }
