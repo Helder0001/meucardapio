@@ -24,6 +24,8 @@ export default async function SettingsPage() {
       cnpj: true,
       logo: true,
       primaryColor: true,
+      latitude: true,
+      longitude: true,
       settings: true,
       businessHours: { orderBy: { dayOfWeek: 'asc' } },
     },
