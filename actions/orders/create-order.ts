@@ -33,6 +33,7 @@ import { getPaymentProvider } from '@/lib/payments/provider-router'
 import { createTenantPixCharge } from '@/lib/efi/tenant-pix-client'
 import { createAsaasPixCharge } from '@/lib/asaas/tenant-payments'
 import { buildPixPayload, generatePixQrCodeBase64, type PixKeyType } from '@/lib/pix/manual-pix'
+import { sanitizeText } from '@/lib/security/sanitize'
 
 // VULN-NEW-03: gera um token HMAC de curta duração para autorizar
 // o polling público de status do pedido sem exigir login do cliente.
@@ -159,6 +160,16 @@ export async function createOrderAction(
   }
 
   // 3. Buscar ou criar cliente
+  // VULN-ALTA-06 CORRIGIDO: customerName só era validado com
+  // z.string().max(100) — sem remover HTML/JS. Como esse nome depois é
+  // interpolado em relatórios exportados como HTML e em e-mails de
+  // relatório, um payload malicioso aqui virava XSS armazenado contra
+  // quem exportasse/recebesse o relatório. sanitizeText() já existia
+  // pra isso e simplesmente não era usada aqui.
+  const sanitizedCustomerName = data.customerName
+    ? sanitizeText(data.customerName) || undefined
+    : undefined
+
   let customer = null
   if (data.customerPhone) {
     const phone = data.customerPhone.replace(/\D/g, '')
@@ -173,17 +184,17 @@ export async function createOrderAction(
         data: {
           tenantId: data.tenantId,
           phone: fullPhone,
-          name: data.customerName,
+          name: sanitizedCustomerName,
           cpf: data.customerCpf ? onlyDigits(data.customerCpf) : undefined,
           lgpdConsent: true,
           lgpdConsentAt: new Date(),
         },
       })
-    } else if ((data.customerName && !customer.name) || (data.customerCpf && !customer.cpf)) {
+    } else if ((sanitizedCustomerName && !customer.name) || (data.customerCpf && !customer.cpf)) {
       customer = await prisma.customer.update({
         where: { id: customer.id },
         data: {
-          ...(data.customerName && !customer.name ? { name: data.customerName } : {}),
+          ...(sanitizedCustomerName && !customer.name ? { name: sanitizedCustomerName } : {}),
           ...(data.customerCpf && !customer.cpf ? { cpf: onlyDigits(data.customerCpf) } : {}),
         },
       })
@@ -375,7 +386,7 @@ export async function createOrderAction(
           orderId: order.id,
           amount: payment.amount,
           customerPhone: data.customerPhone,
-          customerName: data.customerName,
+          customerName: sanitizedCustomerName,
           customerCpf: effectiveCpf,
           deviceId: data.deviceId,
         })
