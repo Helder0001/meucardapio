@@ -71,6 +71,7 @@ enum PaymentStatus {
 
 enum PaymentMethod {
   PIX
+  PIX_MANUAL
   CREDIT_CARD
   CREDIT_CARD_MANUAL
   DEBIT_CARD
@@ -147,6 +148,12 @@ model Tenant {
   cnpj               String?
   address            Json?              // { street, number, district, city, state, zip }
 
+  // Coordenadas do estabelecimento — usadas como ponto de partida no mapa
+  // de rastreamento ao vivo do entregador (ver components/storefront/delivery-live-map.tsx).
+  // Preenchidas manualmente em Configurações Gerais ("usar minha localização atual").
+  latitude           Float?
+  longitude          Float?
+
   // Configurações gerais (JSON flexível para evitar migrations frequentes)
   settings           Json               @default("{}")
   // Exemplo de settings:
@@ -180,9 +187,12 @@ model Tenant {
   loyaltyConfig      LoyaltyConfig?
   cashbackConfig     CashbackConfig?
   whatsappConfig     WhatsappConfig?
+  chatbotSettings    ChatbotSettings?
+  orderStatusMessages OrderStatusMessage[]
   mercadoPagoConnection MercadoPagoConnection?
   efiConnection      EfiConnection?
   stripeConnection   StripeConnection?
+  asaasConnection    AsaasConnection?
   whatsappChats      WhatsappChat[]
   reportSchedules    ReportSchedule[]
   notifications      Notification[]
@@ -201,6 +211,8 @@ enum PaymentProvider {
   MERCADOPAGO
   EFI
   STRIPE
+  MANUAL
+  ASAAS
 }
 
 model Subscription {
@@ -311,6 +323,7 @@ model User {
   pdvAccess         PDVUser[]
   ordersCreated     Order[]   @relation("CreatedBy")
   ordersAsWaiter    Order[]   @relation("AssignedWaiter")
+  ordersAsCourier   Order[]   @relation("CourierOrders")
   statusHistoryEntries OrderStatusHistory[] @relation("StatusHistoryUser")
   sentMessages         WhatsappMessage[]    @relation("SentMessages")
   createdSchedules     ReportSchedule[]     @relation("CreatedSchedules")
@@ -679,6 +692,21 @@ model Order {
   deliveryBairro  String?
   estimatedDeliveryAt DateTime?
 
+  // Coordenadas do endereço de entrega (geocodificadas de forma best-effort
+  // a partir de deliveryAddress — ver lib/utils/geocode.ts). Podem ficar
+  // nulas se a geocodificação falhar; o mapa ao vivo funciona mesmo assim,
+  // só sem o marcador de destino.
+  deliveryLat     Float?
+  deliveryLng     Float?
+
+  // ── Rastreamento ao vivo do entregador ────────────────────────────────
+  // courierId: quem assumiu a entrega (setado automaticamente quando o
+  // pedido vai para OUT_FOR_DELIVERY — ver app/api/orders/[id]/update-status).
+  courierId         String?
+  courierLat        Float?
+  courierLng        Float?
+  courierUpdatedAt  DateTime?
+
   // Pagamento em dinheiro
   changeFor      Decimal?      @db.Decimal(10, 2) // troco para quanto
 
@@ -700,6 +728,7 @@ model Order {
   customer       Customer?     @relation(fields: [customerId], references: [id])
   waiter         User?         @relation("AssignedWaiter", fields: [waiterId], references: [id])
   createdBy      User?         @relation("CreatedBy", fields: [createdById], references: [id])
+  courier        User?         @relation("CourierOrders", fields: [courierId], references: [id])
   coupon         Coupon?       @relation(fields: [couponId], references: [id])
   items          OrderItem[]
   payments       Payment[]
@@ -715,6 +744,7 @@ model Order {
   @@index([status])
   @@index([paymentStatus])
   @@index([createdAt])
+  @@index([courierId])
 }
 
 model OrderItem {
@@ -867,6 +897,35 @@ model StripeConnection {
   @@index([stripeUserId])
 }
 
+model AsaasConnection {
+  id                String    @id @default(cuid())
+  tenantId          String    @unique
+
+  // Asaas não usa OAuth — é uma API Key gerada pelo próprio lojista no
+  // painel dele (Integrações → Chaves de API), enviada aqui só uma vez e
+  // guardada criptografada. Nada de client_id/secret/scope como Stripe.
+  apiKeyEnc         String
+  asaasAccountId    String?   // "id" da conta Asaas, devolvido por /v3/myAccount — só pra exibir/depurar
+  environment       String    @default("production") // "production" | "sandbox"
+
+  // Token secreto que geramos e mandamos pro Asaas registrar no webhook
+  // (header "asaas-access-token") — usado pra validar que a chamada
+  // recebida em /api/webhooks/asaas realmente veio do Asaas.
+  webhookTokenEnc   String?
+  webhookId         String?   // id do webhook registrado via API, pra permitir remover/atualizar depois
+
+  connectedAt       DateTime  @default(now())
+  connectedByUserId String?
+  revokedAt         DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenant            Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
 // ── WhatsApp Chat ──────────────────────────────────────────────────────────────
 model WhatsappChat {
   id          String   @id @default(cuid())
@@ -877,6 +936,23 @@ model WhatsappChat {
   lastMessageAt DateTime?
   unreadCount Int      @default(0)
   isOpen      Boolean  @default(true)
+
+  // ── Controle do robô de atendimento ──────────────────────
+  // botActive: false = conversa está sob controle de um operador humano
+  // (manual ou porque o cliente pediu atendente) — o robô fica em silêncio
+  // até ser reativado (manualmente ou via comando de encerramento).
+  botActive         Boolean  @default(true)
+  // awaitingAttendant: true = cliente pediu para falar com atendente e
+  // ainda não foi reativado o robô. Usado para destacar a conversa na UI.
+  awaitingAttendant Boolean  @default(false)
+  // botState: null (nunca conversou com o robô nesta "sessão") |
+  // 'MENU_SENT' (já recebeu boas-vindas/menu, aguardando opção) |
+  // 'HANDED_OFF' (transferido para atendente)
+  botState          String?
+  // Quantas vezes seguidas o robô não entendeu a mensagem do cliente —
+  // zera a cada mensagem entendida; usado para decidir quando escalar.
+  botFallbackCount  Int      @default(0)
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -1202,6 +1278,82 @@ model WhatsappConfig {
   updatedAt       DateTime @updatedAt
 
   tenant          Tenant   @relation(fields: [tenantId], references: [id])
+}
+
+// ══════════════════════════════════════════════════════════
+// ROBÔ DE ATENDIMENTO (Automações do Chat)
+// ══════════════════════════════════════════════════════════
+
+// Configuração única por tenant do robô conversacional do WhatsApp.
+// Todo o texto suporta variáveis dinâmicas ({nome_cliente}, {link_cardapio},
+// etc.) substituídas em tempo de envio — ver lib/messaging/chatbot-engine.ts.
+model ChatbotSettings {
+  id       String @id @default(cuid())
+  tenantId String @unique
+
+  // Chave-mestra: se false, o robô nunca responde (só o operador manual)
+  enabled  Boolean @default(false)
+
+  // Mensagem de boas-vindas
+  welcomeActive  Boolean @default(true)
+  welcomeMode    String  @default("ALWAYS") // ALWAYS | NEW_CUSTOMERS_ONLY
+  welcomeMessage String  @default("Olá, tudo bem? Bem-vindo(a) à {nome_loja}. Como posso te ajudar hoje? 😊")
+
+  // Envio automático do link do cardápio (logo após a saudação)
+  menuAutoSendActive  Boolean @default(true)
+  menuAutoSendMessage String  @default("📋 Confira nosso cardápio completo aqui:\n{link_cardapio}")
+
+  // Mensagem com o menu de opções (1. Ver cardápio / 2. Acompanhar pedido / 3. Falar com atendente)
+  optionsMessage String @default("Você pode escolher uma opção:\n\n1️⃣ Ver cardápio\n2️⃣ Acompanhar pedido\n3️⃣ Falar com atendente\n\nDigite 1, 2 ou 3.")
+
+  // Mensagem quando o robô não entende o cliente
+  fallbackActive  Boolean @default(true)
+  fallbackMessage String  @default("Não entendi muito bem 🤔\n\nVocê pode escolher uma opção:\n\n1️⃣ Ver cardápio\n2️⃣ Acompanhar pedido\n3️⃣ Falar com atendente\n\nDigite 1, 2 ou 3.")
+
+  // Mensagem enviada quando o cliente pede para falar com atendente (opção 3)
+  attendantMessage String @default("Um atendente irá te atender em breve! 😊")
+
+  // Se true, o robô NUNCA transfere automaticamente para atendente após
+  // repetidas falhas de entendimento — continua tentando ajudar sozinho.
+  // A opção manual "3 - Falar com atendente" continua funcionando sempre.
+  blockAutoTransferToAttendant Boolean @default(false)
+
+  // Comando de encerramento: palavra que o cliente pode enviar a qualquer
+  // momento (mesmo com um atendente humano na conversa) para reativar o
+  // robô e reiniciar o atendimento automático.
+  closingCommandActive  Boolean @default(true)
+  closingKeyword        String  @default("encerrar")
+  closingMessage        String  @default("Atendimento encerrado! Se precisar de algo, estou por aqui. 😊")
+
+  // Mensagem fora do horário de funcionamento
+  outOfHoursActive  Boolean @default(true)
+  outOfHoursMessage String  @default("Olá! No momento estamos fora do nosso horário de atendimento.\n\nNosso horário é de {horario_abertura} às {horario_fechamento}.\n\nAssim que abrirmos, teremos prazer em te atender! 😊\nSe preferir, pode enviar sua mensagem que respondemos assim que estivermos online.")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+}
+
+// Mensagens automáticas enviadas ao cliente em cada mudança de status do
+// pedido. Uma linha por evento/tenant — se não houver linha (ou active=false)
+// o sistema usa o texto padrão embutido em lib/messaging/evolution.ts.
+model OrderStatusMessage {
+  id       String @id @default(cuid())
+  tenantId String
+
+  // CONFIRMED | PREPARING | READY | OUT_FOR_DELIVERY | DELIVERED | CANCELLED
+  event   String
+  active  Boolean @default(true)
+  message String  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, event])
+  @@index([tenantId])
 }
 
 // ══════════════════════════════════════════════════════════

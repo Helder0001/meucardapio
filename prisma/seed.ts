@@ -5,7 +5,7 @@
 //
 // Cria:
 // - 1 tenant de exemplo (Pizzaria do José)
-// - 1 usuário admin
+// - 1 usuário admin (senha gerada aleatoriamente e exibida no console)
 // - Categorias e produtos
 // - Horários de funcionamento
 // - PDV padrão
@@ -14,6 +14,13 @@ import { PrismaClient } from '@prisma/client'
 import { hashPassword } from '../lib/auth/password'
 
 const prisma = new PrismaClient()
+
+function generateSecurePassword(length = 16): string {
+  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*'
+  const array = new Uint8Array(length)
+  crypto.getRandomValues(array)
+  return Array.from(array, (byte) => charset[byte % charset.length]).join('')
+}
 
 async function main() {
   console.log('🌱 Iniciando seed...')
@@ -34,8 +41,9 @@ async function main() {
   })
   console.log('✅ Tenant criado:', tenant.name)
 
-  // 2. Criar usuário admin
-  const adminHash = await hashPassword('Admin@123')
+  // 2. Criar usuário admin com senha aleatória
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD || generateSecurePassword()
+  const adminHash = await hashPassword(adminPassword)
   const admin = await prisma.user.upsert({
     where: { email_tenantId: { email: 'admin@pizzariadojose.com', tenantId: tenant.id } },
     update: {},
@@ -49,9 +57,10 @@ async function main() {
   })
   console.log('✅ Admin criado:', admin.email)
 
-  // 3. Criar operador de exemplo
-  const staffUserHash = await hashPassword('Garcom@123')
-  await prisma.user.upsert({
+  // 3. Criar operador de exemplo com senha aleatória
+  const staffPassword = process.env.SEED_STAFF_PASSWORD || generateSecurePassword()
+  const staffUserHash = await hashPassword(staffPassword)
+  const staff = await prisma.user.upsert({
     where: { email_tenantId: { email: 'staff@pizzariadojose.com', tenantId: tenant.id } },
     update: {},
     create: {
@@ -62,6 +71,7 @@ async function main() {
       role: 'STAFF',
     },
   })
+  console.log('✅ Staff criado:', staff.email)
 
   // 4. Criar PDV
   const pdv = await prisma.pDV.upsert({
@@ -78,12 +88,12 @@ async function main() {
   // 5. Horários de funcionamento
   const hours = [
     { dayOfWeek: 0, isOpen: false, openTime: '11:00', closeTime: '22:00' }, // Dom
-    { dayOfWeek: 1, isOpen: true,  openTime: '11:00', closeTime: '23:00' }, // Seg
-    { dayOfWeek: 2, isOpen: true,  openTime: '11:00', closeTime: '23:00' }, // Ter
-    { dayOfWeek: 3, isOpen: true,  openTime: '11:00', closeTime: '23:00' }, // Qua
-    { dayOfWeek: 4, isOpen: true,  openTime: '11:00', closeTime: '23:00' }, // Qui
-    { dayOfWeek: 5, isOpen: true,  openTime: '11:00', closeTime: '00:00' }, // Sex
-    { dayOfWeek: 6, isOpen: true,  openTime: '11:00', closeTime: '00:00' }, // Sáb
+    { dayOfWeek: 1, isOpen: true, openTime: '11:00', closeTime: '23:00' },  // Seg
+    { dayOfWeek: 2, isOpen: true, openTime: '11:00', closeTime: '23:00' },  // Ter
+    { dayOfWeek: 3, isOpen: true, openTime: '11:00', closeTime: '23:00' },  // Qua
+    { dayOfWeek: 4, isOpen: true, openTime: '11:00', closeTime: '23:00' },  // Qui
+    { dayOfWeek: 5, isOpen: true, openTime: '11:00', closeTime: '00:00' },  // Sex
+    { dayOfWeek: 6, isOpen: true, openTime: '11:00', closeTime: '00:00' },  // Sáb
   ]
   for (const h of hours) {
     await prisma.businessHour.upsert({
@@ -127,7 +137,6 @@ async function main() {
     })
   }
 
-  // Bebidas
   const drinks = [
     { name: 'Coca-Cola 350ml', price: 6.00 },
     { name: 'Água Mineral 500ml', price: 3.50 },
@@ -186,9 +195,13 @@ async function main() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   console.log('🔑 Acesse o painel em: http://localhost:3000/login')
   console.log('📧 Email: admin@pizzariadojose.com')
-  console.log('🔐 Senha: Admin@123')
+  console.log(`🔐 Senha admin: ${adminPassword}`)
+  console.log(`🔐 Senha staff:  ${staffPassword}`)
   console.log('🍕 Cardápio: http://localhost:3000/menu/pizzaria-do-jose')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+  console.log('')
+  console.log('💡 Dica: defina SEED_ADMIN_PASSWORD e SEED_STAFF_PASSWORD no .env')
+  console.log('   para usar senhas fixas em desenvolvimento.')
 }
 
 main()
