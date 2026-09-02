@@ -11,7 +11,7 @@
 
 import { prisma } from '@/lib/db/client'
 
-export type PaymentProviderChoice = 'MERCADOPAGO' | 'STRIPE' | 'EFI'
+export type PaymentProviderChoice = 'MERCADOPAGO' | 'STRIPE' | 'EFI' | 'ASAAS'
 
 export async function getPaymentProvider(
   tenantId: string,
@@ -41,6 +41,11 @@ export async function getPaymentProvider(
       },
     })
     return connection ? 'EFI' : 'MERCADOPAGO'
+  }
+
+  if (configured === 'ASAAS') {
+    const connection = await prisma.asaasConnection.findFirst({ where: { tenantId, revokedAt: null } })
+    return connection ? 'ASAAS' : 'MERCADOPAGO'
   }
 
   return 'MERCADOPAGO'
