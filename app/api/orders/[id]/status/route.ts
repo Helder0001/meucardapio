@@ -75,6 +75,13 @@ export async function GET(
         confirmedAt: true,
         readyAt: true,
         deliveredAt: true,
+        type: true,
+        courierLat: true,
+        courierLng: true,
+        courierUpdatedAt: true,
+        deliveryLat: true,
+        deliveryLng: true,
+        tenant: { select: { latitude: true, longitude: true } },
         payments: {
           where: { method: 'PIX' },
           orderBy: { createdAt: 'desc' },
@@ -193,6 +200,23 @@ export async function GET(
       readyAt: order.readyAt,
       deliveredAt: order.deliveredAt,
       payments,
+      // Mapa de rastreamento ao vivo — só relevante para pedidos de entrega
+      // "a caminho". Qualquer um dos três pode vir null (loja sem
+      // localização cadastrada, endereço não geocodificado, ou entregador
+      // ainda não começou a compartilhar a posição).
+      ...(order.type === 'DELIVERY' ? {
+        tracking: {
+          store: (order.tenant.latitude != null && order.tenant.longitude != null)
+            ? { lat: order.tenant.latitude, lng: order.tenant.longitude }
+            : null,
+          destination: (order.deliveryLat != null && order.deliveryLng != null)
+            ? { lat: order.deliveryLat, lng: order.deliveryLng }
+            : null,
+          courier: (order.courierLat != null && order.courierLng != null)
+            ? { lat: order.courierLat, lng: order.courierLng, updatedAt: order.courierUpdatedAt }
+            : null,
+        },
+      } : {}),
     })
   } catch (error) {
     console.error('[orders/status] Erro interno:', error)
