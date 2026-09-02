@@ -47,6 +47,8 @@ interface SettingsProps {
     cnpj: string | null
     logo: string | null
     primaryColor: string | null
+    latitude: number | null
+    longitude: number | null
     settings: any
     businessHours: BusinessHour[]
   }
@@ -63,6 +65,31 @@ export function GeneralSettingsForm({ tenant }: SettingsProps) {
   // Upload state — imagens são submetidas como hidden inputs
   const [logoUrl,      setLogoUrl]      = useState<string>(tenant.logo ?? '')
   const [coverUrl,     setCoverUrl]     = useState<string>(settings?.coverImage ?? '')
+
+  // Coordenadas do estabelecimento (usadas no mapa de rastreamento ao vivo)
+  const [latitude,  setLatitude]  = useState<string>(tenant.latitude?.toString()  ?? '')
+  const [longitude, setLongitude] = useState<string>(tenant.longitude?.toString() ?? '')
+  const [locating,  setLocating]  = useState(false)
+
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert('Seu navegador não suporta geolocalização.')
+      return
+    }
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLatitude(pos.coords.latitude.toString())
+        setLongitude(pos.coords.longitude.toString())
+        setLocating(false)
+      },
+      () => {
+        alert('Não foi possível obter sua localização. Verifique a permissão do navegador.')
+        setLocating(false)
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    )
+  }
   const [instagramUrl, setInstagramUrl] = useState<string>(settings?.instagram ?? '')
 
   const hours: BusinessHour[] = DAYS.map((_, dayOfWeek) =>
@@ -277,6 +304,35 @@ export function GeneralSettingsForm({ tenant }: SettingsProps) {
             placeholder="Rua Exemplo, 123 - Bairro, Cidade - UF"
             className="w-full px-3 py-2.5 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-foreground mb-1.5 flex items-center gap-1.5">
+            <MapPin className="h-4 w-4" /> Localização da loja
+          </label>
+          <p className="text-xs text-muted-foreground mb-2">
+            Usada como ponto de partida no mapa de rastreamento ao vivo do entregador, mostrado ao cliente quando o pedido sai para entrega.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input type="hidden" name="latitude" value={latitude} />
+            <input type="hidden" name="longitude" value={longitude} />
+            <button
+              type="button"
+              onClick={useCurrentLocation}
+              disabled={locating}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-input bg-background hover:bg-muted transition-colors disabled:opacity-60"
+            >
+              {locating ? 'Obtendo localização...' : '📍 Usar minha localização atual'}
+            </button>
+            {latitude && longitude && (
+              <span className="text-xs text-muted-foreground">
+                Definida: {parseFloat(latitude).toFixed(5)}, {parseFloat(longitude).toFixed(5)}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            Clique estando fisicamente no estabelecimento (ou abra este link pelo celular) para capturar a posição correta.
+          </p>
         </div>
       </div>
 

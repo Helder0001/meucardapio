@@ -2,7 +2,7 @@
 // components/dashboard/whatsapp-chat-client.tsx
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Search, Send, MessageCircle, RefreshCw, Phone, Clock, Paperclip, X, FileText, Loader2 } from 'lucide-react'
+import { Search, Send, MessageCircle, RefreshCw, Phone, Clock, Paperclip, X, FileText, Loader2, Bot, BotOff, UserCheck } from 'lucide-react'
 import { formatDate, formatRelative } from '@/lib/utils/format'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -15,6 +15,8 @@ interface Chat {
   lastMessageAt: string | null
   unreadCount: number
   isOpen: boolean
+  botActive: boolean
+  awaitingAttendant: boolean
 }
 
 interface Message {
@@ -45,6 +47,7 @@ export function WhatsAppChatClient({ tenantId }: WhatsAppChatClientProps) {
   const [loadingMsgs, setLoadingMsgs]   = useState(false)
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
   const [sendingFile, setSendingFile]   = useState(false)
+  const [togglingBot, setTogglingBot]   = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef   = useRef<HTMLInputElement>(null)
 
@@ -71,8 +74,17 @@ export function WhatsAppChatClient({ tenantId }: WhatsAppChatClientProps) {
       const res  = await fetch(`/api/whatsapp/chats/${chatId}/messages`)
       const data = await res.json()
       setMessages(data.messages ?? [])
-      // Mark as read locally
-      setChats((prev) => prev.map((c) => c.id === chatId ? { ...c, unreadCount: 0 } : c))
+      // Mark as read locally + sincroniza estado do robô (pode ter mudado
+      // em segundo plano, ex.: cliente pediu atendente ou mandou "encerrar")
+      setChats((prev) => prev.map((c) => c.id === chatId ? {
+        ...c,
+        unreadCount: 0,
+        ...(data.chat ? { botActive: data.chat.botActive, awaitingAttendant: data.chat.awaitingAttendant } : {}),
+      } : c))
+      setSelectedChat((prev) => prev && prev.id === chatId && data.chat
+        ? { ...prev, botActive: data.chat.botActive, awaitingAttendant: data.chat.awaitingAttendant }
+        : prev
+      )
     } catch {}
     setLoadingMsgs(false)
   }, [])
@@ -88,6 +100,36 @@ export function WhatsAppChatClient({ tenantId }: WhatsAppChatClientProps) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Reflete localmente que o robô pausou (o backend faz isso automaticamente
+  // sempre que um operador manda mensagem manual — ver rotas send/send-media)
+  const pauseBotLocally = (chatId: string) => {
+    setSelectedChat((prev) => prev && prev.id === chatId ? { ...prev, botActive: false, awaitingAttendant: false } : prev)
+    setChats((prev) => prev.map((c) => c.id === chatId ? { ...c, botActive: false, awaitingAttendant: false } : c))
+  }
+
+  const toggleBot = async (active: boolean) => {
+    if (!selectedChat || togglingBot) return
+    setTogglingBot(true)
+    try {
+      const res  = await fetch(`/api/whatsapp/chats/${selectedChat.id}/toggle-bot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error ?? 'Erro ao atualizar o robô')
+        return
+      }
+      setSelectedChat((prev) => prev ? { ...prev, ...data.chat } : prev)
+      setChats((prev) => prev.map((c) => c.id === selectedChat.id ? { ...c, ...data.chat } : c))
+      toast.success(active ? 'Robô reativado nesta conversa' : 'Robô pausado — você está no controle')
+    } catch {
+      toast.error('Erro de conexão')
+    }
+    setTogglingBot(false)
+  }
 
   const sendMessage = async () => {
     if (!input.trim() || !selectedChat || sending) return
@@ -107,6 +149,7 @@ export function WhatsAppChatClient({ tenantId }: WhatsAppChatClientProps) {
         return
       }
       setMessages((prev) => [...prev, data.message])
+      pauseBotLocally(selectedChat.id)
     } catch {
       toast.error('Erro de conexão')
       setInput(text)
@@ -132,6 +175,7 @@ export function WhatsAppChatClient({ tenantId }: WhatsAppChatClientProps) {
         return
       }
       setMessages((prev) => [...prev, data.message])
+      pauseBotLocally(selectedChat.id)
       setAttachedFile(null)
       setInput('')
     } catch {
@@ -248,6 +292,16 @@ export function WhatsAppChatClient({ tenantId }: WhatsAppChatClientProps) {
                 {chat.lastMessage && (
                   <p className="text-xs text-muted-foreground truncate mt-0.5">{chat.lastMessage}</p>
                 )}
+                {chat.awaitingAttendant && (
+                  <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-medium text-orange-600 dark:text-orange-400">
+                    🟠 Aguardando atendente
+                  </span>
+                )}
+                {!chat.awaitingAttendant && !chat.botActive && (
+                  <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-medium text-muted-foreground">
+                    <UserCheck className="h-2.5 w-2.5" /> Você está atendendo
+                  </span>
+                )}
               </div>
             </button>
           ))}
@@ -289,7 +343,34 @@ export function WhatsAppChatClient({ tenantId }: WhatsAppChatClientProps) {
             >
               Abrir WA
             </a>
+
+            <button
+              onClick={() => toggleBot(!selectedChat.botActive)}
+              disabled={togglingBot}
+              title={selectedChat.botActive ? 'Pausar robô e assumir a conversa' : 'Reativar robô nesta conversa'}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50',
+                selectedChat.botActive
+                  ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400'
+                  : 'bg-orange-50 text-orange-700 hover:bg-orange-100 dark:bg-orange-950/40 dark:text-orange-400'
+              )}
+            >
+              {togglingBot ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : selectedChat.botActive ? (
+                <Bot className="h-3.5 w-3.5" />
+              ) : (
+                <BotOff className="h-3.5 w-3.5" />
+              )}
+              {selectedChat.botActive ? 'Robô ativo' : 'Você está atendendo'}
+            </button>
           </div>
+
+          {selectedChat.awaitingAttendant && (
+            <div className="px-4 py-2 bg-orange-50 dark:bg-orange-950/30 border-b border-orange-200 dark:border-orange-800 text-xs text-orange-700 dark:text-orange-400 flex items-center gap-2">
+              🟠 Este cliente pediu para falar com um atendente. O robô está pausado nesta conversa.
+            </div>
+          )}
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-muted/20">

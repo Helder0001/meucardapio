@@ -8,6 +8,7 @@ import { useFormState, useFormStatus } from 'react-dom'
 import { useEffect, useState, useTransition } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { savePaymentSettings, removePaymentCredentials, togglePaymentOption, setPaymentProvider, type ProviderChoice } from '@/actions/settings/save-payment-settings'
+import { AsaasConnectionCard } from '@/components/dashboard/asaas-connection-form'
 import {
   Loader2, Eye, EyeOff, CheckCircle2, AlertCircle, ExternalLink,
   Trash2, ShieldCheck, QrCode, Unplug, AlertTriangle, CreditCard,
@@ -19,7 +20,7 @@ import { cn } from '@/lib/utils'
 // tinha efeito). Estado otimista na hora do clique, com rollback se falhar.
 function PaymentToggle({
   field, label, description, initialValue,
-}: { field: 'pixEnabled' | 'cardEnabled' | 'linkEnabled'; label: string; description: string; initialValue: boolean }) {
+}: { field: 'pixEnabled' | 'cardEnabled' | 'linkEnabled' | 'manualPixEnabled'; label: string; description: string; initialValue: boolean }) {
   const [checked, setChecked] = useState(initialValue)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -528,6 +529,7 @@ function ProviderSelector() {
   const [stripeConnected, setStripeConnected] = useState(false)
   const [efiCardConnected, setEfiCardConnected] = useState(false)
   const [efiPixConnected, setEfiPixConnected] = useState(false)
+  const [asaasConnected, setAsaasConnected] = useState(false)
   const [pixProvider, setPixProviderState] = useState<ProviderChoice>('MERCADOPAGO')
   const [cardProvider, setCardProviderState] = useState<ProviderChoice>('MERCADOPAGO')
   const [loading, setLoading] = useState(true)
@@ -537,16 +539,18 @@ function ProviderSelector() {
   useEffect(() => {
     async function load() {
       try {
-        const [mpRes, stripeRes, efiRes, tenantRes] = await Promise.all([
+        const [mpRes, stripeRes, efiRes, asaasRes, tenantRes] = await Promise.all([
           fetch('/api/mercadopago/status').then((r) => r.json()).catch(() => ({ connected: false })),
           fetch('/api/stripe/status').then((r) => r.json()).catch(() => ({ connected: false })),
           fetch('/api/efi/status').then((r) => r.json()).catch(() => ({ connected: false, pixEnabled: false })),
+          fetch('/api/asaas/status').then((r) => r.json()).catch(() => ({ connected: false })),
           fetch('/api/settings/payment-providers').then((r) => r.json()).catch(() => ({})),
         ])
         setMpConnected(!!mpRes.connected)
         setStripeConnected(!!stripeRes.connected)
         setEfiCardConnected(!!efiRes.connected)
         setEfiPixConnected(!!efiRes.connected && !!efiRes.pixEnabled)
+        setAsaasConnected(!!asaasRes.connected)
         if (tenantRes.pix) setPixProviderState(tenantRes.pix)
         if (tenantRes.card) setCardProviderState(tenantRes.card)
       } finally {
@@ -603,6 +607,7 @@ function ProviderSelector() {
           >
             <option value="MERCADOPAGO" disabled={!mpConnected}>Mercado Pago{!mpConnected ? ' (não conectado)' : ''}</option>
             <option value="EFI" disabled={!efiPixConnected}>Efí Bank{!efiPixConnected ? ' (Pix não habilitado)' : ''}</option>
+            <option value="ASAAS" disabled={!asaasConnected}>Asaas{!asaasConnected ? ' (não conectado)' : ''}</option>
           </select>
           <p className="text-[11px] text-muted-foreground mt-1">Stripe ainda não tem Pix inline neste checkout.</p>
         </div>
@@ -618,6 +623,7 @@ function ProviderSelector() {
             <option value="MERCADOPAGO" disabled={!mpConnected}>Mercado Pago{!mpConnected ? ' (não conectado)' : ''}</option>
             <option value="STRIPE" disabled={!stripeConnected}>Stripe{!stripeConnected ? ' (não conectado)' : ''}</option>
             <option value="EFI" disabled={!efiCardConnected}>Efí Bank{!efiCardConnected ? ' (não conectado)' : ''}</option>
+            <option value="ASAAS" disabled={!asaasConnected}>Asaas{!asaasConnected ? ' (não conectado)' : ''}</option>
           </select>
         </div>
       </div>
@@ -803,6 +809,7 @@ export function PaymentSettingsForm({ hasSecret, pixEnabled, cardEnabled, linkEn
         <div className="space-y-4">
           <StripeConnectionCard />
           <EfiConnectionCard />
+          <AsaasConnectionCard />
         </div>
       </div>
 
@@ -824,8 +831,8 @@ export function PaymentSettingsForm({ hasSecret, pixEnabled, cardEnabled, linkEn
       />
       <PaymentToggle
         field="linkEnabled"
-        label="Habilitar link de pagamento"
-        description="Exibe a opção 'Link de pagamento' no checkout do cardápio digital — o cliente escolhe Pix ou cartão na própria página do Mercado Pago"
+        label="Habilitar link de pagamento (Mercado Pago)"
+        description="Exibe a opção 'Link de pagamento' apenas no PDV/balcão — o cliente escolhe Pix ou cartão na própria página do Mercado Pago. Não aparece mais no cardápio digital."
         initialValue={linkEnabled}
       />
 

@@ -9,7 +9,7 @@ import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Users, Table2,
   Truck, BarChart3, Settings, Tag, Star, MessageSquare, MessageCircle, Printer,
   QrCode, ShieldCheck, X, Menu,
-  Bell, ClipboardList, Boxes, Plug,
+  Bell, ClipboardList, Boxes, Plug, Bot,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
@@ -63,6 +63,7 @@ const navSections: NavSection[] = [
       { label: 'Fidelidade',  href: '/dashboard/loyalty',           icon: Star,           minPlan: 'PRO', allowedRoles: MANAGER_UP },
       { label: 'Avaliações',  href: '/dashboard/reviews',           icon: Star,           allowedRoles: MANAGER_UP },
       { label: 'WhatsApp',    href: '/dashboard/settings/whatsapp', icon: MessageSquare,  minPlan: 'PRO', allowedRoles: MANAGER_UP },
+      { label: 'Robô WhatsApp', href: '/dashboard/settings/whatsapp/automacoes', icon: Bot, minPlan: 'PRO', allowedRoles: MANAGER_UP },
       { label: 'WA Chat',     href: '/dashboard/whatsapp-chat',     icon: MessageCircle,  minPlan: 'PRO', allowedRoles: MANAGER_UP },
     ],
   },
