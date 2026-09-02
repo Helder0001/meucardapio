@@ -31,6 +31,9 @@ interface Props {
   tables?: TableOption[]
   pixEnabled?: boolean
   cardEnabled?: boolean
+  linkEnabled?: boolean
+  manualPixEnabled?: boolean
+  tenantWhatsapp?: string | null
 }
 
 interface OrderItem {
@@ -40,10 +43,10 @@ interface OrderItem {
   quantity: number
 }
 
-type PaymentMethodType = 'PIX' | 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'LINK'
+type PaymentMethodType = 'PIX' | 'PIX_MANUAL' | 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'LINK'
 interface PaymentEntry { method: PaymentMethodType; amount: number }
 
-interface PixData { qrCode: string; qrCodeBase64: string }
+interface PixData { qrCode: string; qrCodeBase64: string; isManual?: boolean }
 
 const TABLE_STATUS_COLOR: Record<string, string> = {
   AVAILABLE: 'text-emerald-600',
@@ -58,7 +61,7 @@ const TABLE_STATUS_LABEL: Record<string, string> = {
   CLEANING:  'Limpeza',
 }
 
-export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categories, tables = [], pixEnabled = true, cardEnabled = true }: Props) {
+export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categories, tables = [], pixEnabled = true, cardEnabled = true, linkEnabled = true, manualPixEnabled = false, tenantWhatsapp = null }: Props) {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<OrderItem[]>([])
   const [customerPhone, setCustomerPhone] = useState('')
@@ -197,8 +200,9 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
         // Se algum dos pagamentos for PIX, mostrar QR code + copia-e-cola
         // em vez de fechar direto — o caixa precisa exibir isso pro cliente.
         if (result.paymentData?.pixQrCode && result.paymentData?.pixQrCodeBase64) {
-          setPixData({ qrCode: result.paymentData.pixQrCode, qrCodeBase64: result.paymentData.pixQrCodeBase64 })
-          toast.success('Pedido criado! Aguardando pagamento PIX')
+          const isManual = finalPayments.some((p) => p.method === 'PIX_MANUAL')
+          setPixData({ qrCode: result.paymentData.pixQrCode, qrCodeBase64: result.paymentData.pixQrCodeBase64, isManual })
+          toast.success(isManual ? 'Pedido criado! Aguardando confirmação do PIX' : 'Pedido criado! Aguardando pagamento PIX')
           router.refresh()
           return
         }
@@ -365,9 +369,13 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
             ) : pixData ? (
               <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center text-center gap-4">
                 <div>
-                  <h3 className="font-bold text-foreground">Aguardando pagamento PIX</h3>
+                  <h3 className="font-bold text-foreground">
+                    {pixData.isManual ? 'Aguardando confirmação do PIX' : 'Aguardando pagamento PIX'}
+                  </h3>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Peça pro cliente escanear o QR Code ou usar o código copia e cola. Expira em 5 minutos.
+                    {pixData.isManual
+                      ? 'Peça pro cliente escanear o QR Code ou usar o código copia e cola, e mandar o comprovante por WhatsApp.'
+                      : 'Peça pro cliente escanear o QR Code ou usar o código copia e cola. Expira em 5 minutos.'}
                   </p>
                 </div>
                 <img
@@ -386,6 +394,18 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
                     </button>
                   </div>
                 </div>
+                {pixData.isManual && tenantWhatsapp && (
+                  <a
+                    href={`https://wa.me/${tenantWhatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(
+                      `Olá! Segue o comprovante do PIX do pedido no balcão (${formatCurrency(total)}):`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full px-4 py-3 bg-[#25D366] text-white font-semibold rounded-lg hover:opacity-90 transition-opacity"
+                  >
+                    📲 Enviar comprovante pelo WhatsApp
+                  </a>
+                )}
                 <button onClick={closeAndReset}
                   className="w-full mt-2 px-4 py-3 bg-muted text-foreground font-semibold rounded-lg hover:bg-muted/70 transition-colors">
                   Concluir
@@ -576,10 +596,11 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
                           className="flex-1 px-2.5 py-2 text-xs font-medium border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
                         >
                           {pixEnabled && <option value="PIX">⚡ PIX</option>}
+                          {manualPixEnabled && <option value="PIX_MANUAL">⚡ PIX (chave direta)</option>}
                           <option value="CASH">💵 Dinheiro</option>
                           <option value="CREDIT_CARD">💳 Crédito</option>
                           <option value="DEBIT_CARD">💳 Débito</option>
-                          {payments.length === 1 && cardEnabled && <option value="LINK">🔗 Link de pagamento</option>}
+                          {payments.length === 1 && linkEnabled && <option value="LINK">🔗 Link de pagamento</option>}
                         </select>
 
                         {payments.length > 1 && (
