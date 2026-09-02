@@ -7,6 +7,7 @@ import { formatCurrency, formatDate, formatPhone, formatRelative } from '@/lib/u
 import { Search, ChevronLeft, ChevronRight, CheckCircle2, Clock } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { CustomerDetailDrawer } from './customer-detail-drawer'
 
 interface Customer {
   id: string
@@ -34,6 +35,7 @@ export function CustomersTable({ customers, total, page, pageSize, query }: Cust
   const router   = useRouter()
   const pathname = usePathname()
   const [search, setSearch] = useState(query)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const totalPages = Math.ceil(total / pageSize)
 
   const go = (params: Record<string, string>) => {
@@ -98,7 +100,8 @@ export function CustomersTable({ customers, total, page, pageSize, query }: Cust
                 customers.map((c) => (
                   <tr
                     key={c.id}
-                    className="border-b border-border hover:bg-muted/20 transition-colors"
+                    onClick={() => setSelectedId(c.id)}
+                    className="border-b border-border hover:bg-muted/20 transition-colors cursor-pointer"
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -180,6 +183,10 @@ export function CustomersTable({ customers, total, page, pageSize, query }: Cust
           </div>
         )}
       </div>
+
+      {selectedId && (
+        <CustomerDetailDrawer customerId={selectedId} onClose={() => setSelectedId(null)} />
+      )}
     </div>
   )
 }
