@@ -200,7 +200,7 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
 
         // Se algum dos pagamentos for PIX, mostrar QR code + copia-e-cola
         // em vez de fechar direto — o caixa precisa exibir isso pro cliente.
-        if (result.paymentData?.pixQrCode && result.paymentData?.pixQrCodeBase64) {
+        if (result.paymentData?.pixQrCode && result.paymentData?.pixQrCodeBase64 && result.orderId) {
           const isManual = finalPayments.some((p) => p.method === 'PIX_MANUAL')
           setPixData({ qrCode: result.paymentData.pixQrCode, qrCodeBase64: result.paymentData.pixQrCodeBase64, isManual, orderId: result.orderId })
           toast.success(isManual ? 'Pedido criado! Aguardando confirmação do PIX' : 'Pedido criado! Aguardando pagamento PIX')
