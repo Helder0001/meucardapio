@@ -3,34 +3,13 @@
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
-import crypto from 'crypto'
+import { isValidCronSecretHeader } from '@/lib/security/cron-auth'
 
-function timingSafeEqualStr(expected: string, provided: string): boolean {
-  if (expected.length !== provided.length) return false
-  try {
-    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(provided))
-  } catch {
-    return false
-  }
-}
-
-// A Vercel envia o CRON_SECRET automaticamente como
-// "Authorization: Bearer <CRON_SECRET>" para crons definidos em vercel.json
-// — é assim que ela autentica execuções agendadas. Mantemos também o header
-// legado "x-cron-secret" para chamadas manuais (curl/monitoramento externo),
-// no mesmo padrão já usado em /api/internal/cron/cleanup.
-function isValidCronSecretHeader(request: Request): boolean {
-  const expected = process.env.CRON_SECRET
-  if (!expected) return false
-
-  const authHeader = request.headers.get('authorization')
-  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
-  const legacySecret = request.headers.get('x-cron-secret')
-
-  if (bearerToken && timingSafeEqualStr(expected, bearerToken)) return true
-  if (legacySecret && timingSafeEqualStr(expected, legacySecret)) return true
-  return false
-}
+// A implementação de isValidCronSecretHeader() (com crypto.timingSafeEqual)
+// que vivia só aqui foi extraída pra lib/security/cron-auth.ts e agora é
+// compartilhada pelos 4 endpoints de cron — os outros 3 usavam uma
+// comparação `!==` não constant-time (ver VULN-BAIXA-07 no relatório de
+// auditoria).
 
 export async function GET(request: Request) {
   if (!isValidCronSecretHeader(request)) {
