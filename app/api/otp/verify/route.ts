@@ -1,9 +1,14 @@
 // app/api/otp/verify/route.ts
+// VULN-ALTA-04 CORRIGIDO: além de confirmar o OTP, agora emite um cookie
+// httpOnly assinado (lib/security/customer-session.ts) que passa a ser a
+// única prova de identidade aceita nas rotas do storefront — antes disso,
+// nada vinculava a verificação a este navegador/dispositivo.
 
 import { NextResponse } from 'next/server'
 import { verifyOTP } from '@/lib/utils/otp'
 import { secureHandler } from '@/lib/security/api-handler'
 import { normalizePhone } from '@/lib/security/sanitize'
+import { setCustomerSessionCookie } from '@/lib/security/customer-session'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -29,6 +34,8 @@ export const POST = secureHandler(async (request) => {
   if (!result.valid) {
     return NextResponse.json({ error: result.error }, { status: 400 })
   }
+
+  await setCustomerSessionCookie(phone, parsed.data.tenantId)
 
   return NextResponse.json({ ok: true, verified: true })
 }, { requireJson: true })
