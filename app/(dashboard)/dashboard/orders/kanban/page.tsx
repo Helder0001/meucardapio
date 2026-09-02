@@ -40,10 +40,14 @@ export default async function KanbanPage() {
 
   const tenantSettings = await prisma.tenant.findFirst({
     where: { id: session.user.tenantId },
-    select: { settings: true },
+    select: { settings: true, phone: true },
   })
   const pixEnabled  = ((tenantSettings?.settings as any)?.pixEnabled  ?? true) === true
   const cardEnabled = ((tenantSettings?.settings as any)?.cardEnabled ?? true) === true
+  // Link de pagamento (Mercado Pago) — exclusivo do PDV/balcão agora,
+  // não aparece mais no cardápio digital (ver cart-drawer.tsx)
+  const linkEnabled = ((tenantSettings?.settings as any)?.linkEnabled ?? true) === true
+  const manualPixEnabled = (tenantSettings?.settings as any)?.manualPixEnabled === true
 
   // Buscar mesas ativas — em try/catch para não quebrar o kanban se falhar
   let tables: Array<{ id: string; number: number; sector: string; status: string; pdv: { id: string; name: string } }> = []
@@ -91,6 +95,9 @@ export default async function KanbanPage() {
               createdByUserId={session.user.id}
               pixEnabled={pixEnabled}
               cardEnabled={cardEnabled}
+              linkEnabled={linkEnabled}
+              manualPixEnabled={manualPixEnabled}
+              tenantWhatsapp={tenantSettings?.phone ?? null}
               categories={categories.map(c => ({
                 ...c,
                 products: c.products.map(p => ({
