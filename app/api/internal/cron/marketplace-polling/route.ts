@@ -6,18 +6,17 @@
 
 import { NextResponse } from 'next/server'
 import { pollAllConnections } from '@/lib/marketplace/poll-events'
+import { isValidCronSecretHeader } from '@/lib/security/cron-auth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization')
-  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
-  const legacySecret = request.headers.get('x-cron-secret')
-
-  const expected = process.env.CRON_SECRET
-  if (!expected || (bearerToken !== expected && legacySecret !== expected)) {
+  // VULN-BAIXA-07 CORRIGIDO: comparação direta (!==) trocada por
+  // isValidCronSecretHeader(), que usa crypto.timingSafeEqual — mesmo
+  // padrão agora usado nos 4 endpoints de cron.
+  if (!isValidCronSecretHeader(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
