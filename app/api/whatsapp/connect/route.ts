@@ -10,6 +10,25 @@ import { getEvolutionWebhookSecret } from '@/lib/messaging/evolution'
 const EVOLUTION_URL = process.env.EVOLUTION_API_URL!
 const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY!
 
+// Detecta se a Evolution API recusou a chamada por falta de ativação de
+// licença (obrigatória a partir da v2.4.0) — nesse caso queremos avisar
+// isso especificamente, em vez de um "erro genérico ao gerar QR Code",
+// pra não fazer o lojista ficar clicando em "Conectar" sem entender o motivo.
+async function isLicenseActivationError(res: Response): Promise<boolean> {
+  if (res.status !== 401 && res.status !== 403 && res.status !== 402) return false
+  try {
+    const text = (await res.clone().text()).toLowerCase()
+    return text.includes('license') || text.includes('licen\u00e7a') || text.includes('activat')
+  } catch {
+    return false
+  }
+}
+
+const LICENSE_ERROR_MESSAGE =
+  'O serviço de WhatsApp (Evolution API) está com a ativação de licença pendente. ' +
+  'Avise o responsável técnico para ativar a licença no painel da Evolution API (Manager) ' +
+  'ou fixar a instância na versão v2.3.7, que não exige ativação.'
+
 export async function POST() {
   const session = await auth()
   if (!session?.user?.tenantId) {
@@ -47,6 +66,11 @@ export async function POST() {
     let connected: boolean       = false
 
     if (!createRes.ok) {
+      if (await isLicenseActivationError(createRes)) {
+        console.error('[whatsapp/connect] Evolution API recusou instance/create — licença não ativada')
+        return NextResponse.json({ error: LICENSE_ERROR_MESSAGE }, { status: 503 })
+      }
+
       // Instância já existe — tentar conectar
       const connectRes = await fetch(
         `${EVOLUTION_URL}/instance/connect/${instanceName}`,
@@ -56,6 +80,10 @@ export async function POST() {
         }
       )
       if (!connectRes.ok) {
+        if (await isLicenseActivationError(connectRes)) {
+          console.error('[whatsapp/connect] Evolution API recusou instance/connect — licença não ativada')
+          return NextResponse.json({ error: LICENSE_ERROR_MESSAGE }, { status: 503 })
+        }
         return NextResponse.json({ error: 'Não foi possível gerar o QR Code' }, { status: 400 })
       }
       const connectData = await connectRes.json()
