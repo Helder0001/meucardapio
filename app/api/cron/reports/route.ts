@@ -5,6 +5,7 @@ export const maxDuration = 60
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
 import { Resend } from 'resend'
+import { isValidCronSecretHeader } from '@/lib/security/cron-auth'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 const TYPE_PT: Record<string, string> = { TABLE:'Mesa', DELIVERY:'Delivery', PICKUP:'Retirada', PDV:'Balcão' }
@@ -13,7 +14,10 @@ const fmtCurrency = (v: number) => v.toLocaleString('pt-BR', { style:'currency',
 const FREQ_LABEL: Record<string, string> = { DAILY:'Diário', WEEKLY:'Semanal', MONTHLY:'Mensal' }
 
 export async function GET(request: Request) {
-  if (request.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+  // VULN-BAIXA-07 CORRIGIDO: comparação direta (!==) trocada por
+  // isValidCronSecretHeader(), que usa crypto.timingSafeEqual — mesmo
+  // padrão agora usado nos 4 endpoints de cron.
+  if (!isValidCronSecretHeader(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
