@@ -7,6 +7,7 @@ import { restockCancelledOrder, revalidateStorefrontForTenant } from '@/lib/util
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { notifyOrderStatus } from '@/lib/messaging/evolution'
+import { isValidCronSecretHeader } from '@/lib/security/cron-auth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -14,18 +15,10 @@ export const dynamic = 'force-dynamic'
 const PENDING_PAYMENT_TIMEOUT_MS = 2 * 60 * 60 * 1000 // 2 horas
 
 export async function GET(request: Request) {
-  // Verificar segredo do cron.
-  // A Vercel envia o CRON_SECRET automaticamente como
-  // "Authorization: Bearer <CRON_SECRET>" — é assim que ela autentica
-  // os crons configurados em vercel.json. Mantemos também o header
-  // legado "x-cron-secret" para chamadas manuais (curl/monitoramento
-  // externo), como documentado em DEPLOY.md.
-  const authHeader = request.headers.get('authorization')
-  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
-  const legacySecret = request.headers.get('x-cron-secret')
-
-  const expected = process.env.CRON_SECRET
-  if (!expected || (bearerToken !== expected && legacySecret !== expected)) {
+  // VULN-BAIXA-07 CORRIGIDO: comparação direta (!==) trocada por
+  // isValidCronSecretHeader(), que usa crypto.timingSafeEqual — mesmo
+  // padrão agora usado nos 4 endpoints de cron.
+  if (!isValidCronSecretHeader(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
