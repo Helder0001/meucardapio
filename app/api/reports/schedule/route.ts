@@ -7,6 +7,7 @@ export const runtime = 'nodejs'
 
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth/session'
+import { hasPermission, type UserRole } from '@/lib/auth/permissions'
 import { prisma } from '@/lib/db/client'
 import { z } from 'zod'
 
@@ -22,6 +23,11 @@ export async function GET() {
   const session = await auth()
   if (!session?.user?.tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // VULN-ALTA-05 CORRIGIDO: ver mesma correção em reports/export/route.ts
+  if (!hasPermission(session.user.role as UserRole, 'reports:view')) {
+    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+  }
+
   const schedules = await (prisma as any).reportSchedule.findMany({
     where: { tenantId: session.user.tenantId, isActive: true },
     orderBy: { createdAt: 'desc' },
@@ -33,6 +39,11 @@ export async function GET() {
 export async function POST(request: Request) {
   const session = await auth()
   if (!session?.user?.tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // VULN-ALTA-05 CORRIGIDO: ver mesma correção em reports/export/route.ts
+  if (!hasPermission(session.user.role as UserRole, 'reports:export')) {
+    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+  }
 
   const body   = await request.json()
   const parsed = scheduleSchema.safeParse(body)
@@ -61,6 +72,11 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const session = await auth()
   if (!session?.user?.tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // VULN-ALTA-05 CORRIGIDO: ver mesma correção em reports/export/route.ts
+  if (!hasPermission(session.user.role as UserRole, 'reports:export')) {
+    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+  }
 
   const { id } = await request.json()
   await (prisma as any).reportSchedule.updateMany({
