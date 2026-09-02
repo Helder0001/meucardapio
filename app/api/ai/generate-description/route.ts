@@ -109,8 +109,10 @@ Responda APENAS com a descrição, sem aspas nem explicações.`
             },
             body: JSON.stringify({
               // llama3-8b-8192 foi descontinuado pelo Groq em 31/05/2025.
-              // Substituído pelo modelo recomendado: llama-3.1-8b-instant
-              model: 'llama-3.1-8b-instant',
+              // Substituído por llama-3.1-8b-instant, que por sua vez foi
+              // descontinuado em 17/06/2026 (anúncio oficial da Groq).
+              // Substituto recomendado pela própria Groq: openai/gpt-oss-20b.
+              model: 'openai/gpt-oss-20b',
               messages: [
                 {
                   role: 'user',
