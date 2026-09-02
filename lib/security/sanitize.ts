@@ -35,6 +35,24 @@ export function sanitizeNotes(input: string): string {
 }
 
 /**
+ * Escapa caracteres especiais de HTML pra uso seguro dentro de um
+ * documento HTML gerado no servidor (relatórios exportados, e-mails).
+ * Complementar a sanitizeText(): sanitizeText() limpa na entrada (o que
+ * fica salvo no banco), escapeHtml() protege na saída — inclusive dados
+ * que já existiam no banco antes de um campo passar a ser sanitizado na
+ * entrada, ou vindos de fontes que não passam por sanitizeText().
+ */
+export function escapeHtml(input: string | null | undefined): string {
+  if (!input) return ''
+  return String(input)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+/**
  * Valida e normaliza número de telefone.
  * Aceita apenas dígitos, retorna no formato internacional.
  */
