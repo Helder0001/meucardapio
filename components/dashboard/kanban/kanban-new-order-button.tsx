@@ -46,7 +46,7 @@ interface OrderItem {
 type PaymentMethodType = 'PIX' | 'PIX_MANUAL' | 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'LINK'
 interface PaymentEntry { method: PaymentMethodType; amount: number }
 
-interface PixData { qrCode: string; qrCodeBase64: string; isManual?: boolean }
+interface PixData { qrCode: string; qrCodeBase64: string; isManual?: boolean; orderId: string }
 
 const TABLE_STATUS_COLOR: Record<string, string> = {
   AVAILABLE: 'text-emerald-600',
@@ -77,6 +77,7 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
   const [payNow, setPayNow] = useState(true)   // pagar agora ou deixar pendente (pagar no final)
   const [isPending, start] = useTransition()
   const [pixData, setPixData] = useState<PixData | null>(null)
+  const [pixPaymentConfirmed, setPixPaymentConfirmed] = useState(false)
   const [linkData, setLinkData] = useState<{ url: string; orderId: string } | null>(null)
   const [linkPaymentConfirmed, setLinkPaymentConfirmed] = useState(false)
   const [isSendingLink, setIsSendingLink] = useState(false)
@@ -201,7 +202,7 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
         // em vez de fechar direto — o caixa precisa exibir isso pro cliente.
         if (result.paymentData?.pixQrCode && result.paymentData?.pixQrCodeBase64) {
           const isManual = finalPayments.some((p) => p.method === 'PIX_MANUAL')
-          setPixData({ qrCode: result.paymentData.pixQrCode, qrCodeBase64: result.paymentData.pixQrCodeBase64, isManual })
+          setPixData({ qrCode: result.paymentData.pixQrCode, qrCodeBase64: result.paymentData.pixQrCodeBase64, isManual, orderId: result.orderId })
           toast.success(isManual ? 'Pedido criado! Aguardando confirmação do PIX' : 'Pedido criado! Aguardando pagamento PIX')
           router.refresh()
           return
@@ -221,7 +222,7 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
     setItems([]); setCustomerPhone(''); setCustomerName(''); setCustomerCpf(''); setNotes('')
     setPayments([{ method: defaultPaymentMethod, amount: 0 }])
     setPayNow(true)
-    setPixData(null); setCopied(false)
+    setPixData(null); setPixPaymentConfirmed(false); setCopied(false)
     setLinkData(null); setLinkCopied(false); setLinkPaymentConfirmed(false)
     setSelectedTableId('')
   }
@@ -247,6 +248,27 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
     }, 4000)
     return () => clearInterval(interval)
   }, [linkData, linkPaymentConfirmed])
+
+  // Mesma correção do bug acima, mas para a tela de QR Code do PIX direto —
+  // esse polling nunca tinha sido implementado aqui, por isso a tela ficava
+  // presa em "Aguardando pagamento PIX" mesmo depois do cliente pagar.
+  useEffect(() => {
+    if (!pixData || pixPaymentConfirmed) return
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/orders/${pixData.orderId}/status`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (data.paymentStatus === 'PAID') {
+          setPixPaymentConfirmed(true)
+          router.refresh()
+        }
+      } catch {
+        // silencioso — tenta de novo no próximo intervalo
+      }
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [pixData, pixPaymentConfirmed])
 
   const copyPaymentLink = async () => {
     if (!linkData) return
@@ -368,48 +390,71 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
               </div>
             ) : pixData ? (
               <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center text-center gap-4">
-                <div>
-                  <h3 className="font-bold text-foreground">
-                    {pixData.isManual ? 'Aguardando confirmação do PIX' : 'Aguardando pagamento PIX'}
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {pixData.isManual
-                      ? 'Peça pro cliente escanear o QR Code ou usar o código copia e cola, e mandar o comprovante por WhatsApp.'
-                      : 'Peça pro cliente escanear o QR Code ou usar o código copia e cola. Expira em 5 minutos.'}
-                  </p>
-                </div>
-                <img
-                  src={`data:image/png;base64,${pixData.qrCodeBase64}`}
-                  alt="QR Code PIX"
-                  className="w-56 h-56 rounded-xl border border-border"
-                />
-                <div className="w-full">
-                  <p className="text-xs font-medium text-foreground mb-1 text-left">Código copia e cola</p>
-                  <div className="flex items-center gap-2">
-                    <input readOnly value={pixData.qrCode}
-                      className="flex-1 px-3 py-2 text-xs border border-input rounded-lg bg-muted truncate" />
-                    <button onClick={copyPixCode}
-                      className="px-3 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex-shrink-0">
-                      {copied ? 'Copiado!' : 'Copiar'}
+                {pixPaymentConfirmed ? (
+                  <>
+                    <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center">
+                      <CheckCircle2 className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-foreground">Pagamento confirmado!</h3>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        O cliente já pagou — o pedido foi atualizado automaticamente.
+                      </p>
+                    </div>
+                    <button onClick={closeAndReset}
+                      className="w-full px-4 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors">
+                      Concluir
                     </button>
-                  </div>
-                </div>
-                {pixData.isManual && tenantWhatsapp && (
-                  <a
-                    href={`https://wa.me/${tenantWhatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(
-                      `Olá! Segue o comprovante do PIX do pedido no balcão (${formatCurrency(total)}):`
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full px-4 py-3 bg-[#25D366] text-white font-semibold rounded-lg hover:opacity-90 transition-opacity"
-                  >
-                    📲 Enviar comprovante pelo WhatsApp
-                  </a>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <h3 className="font-bold text-foreground">
+                        {pixData.isManual ? 'Aguardando confirmação do PIX' : 'Aguardando pagamento PIX'}
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {pixData.isManual
+                          ? 'Peça pro cliente escanear o QR Code ou usar o código copia e cola, e mandar o comprovante por WhatsApp.'
+                          : 'Peça pro cliente escanear o QR Code ou usar o código copia e cola. Expira em 5 minutos.'}
+                      </p>
+                    </div>
+                    <img
+                      src={`data:image/png;base64,${pixData.qrCodeBase64}`}
+                      alt="QR Code PIX"
+                      className="w-56 h-56 rounded-xl border border-border"
+                    />
+                    <div className="w-full">
+                      <p className="text-xs font-medium text-foreground mb-1 text-left">Código copia e cola</p>
+                      <div className="flex items-center gap-2">
+                        <input readOnly value={pixData.qrCode}
+                          className="flex-1 px-3 py-2 text-xs border border-input rounded-lg bg-muted truncate" />
+                        <button onClick={copyPixCode}
+                          className="px-3 py-2 text-xs font-semibold bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex-shrink-0">
+                          {copied ? 'Copiado!' : 'Copiar'}
+                        </button>
+                      </div>
+                    </div>
+                    {pixData.isManual && tenantWhatsapp && (
+                      <a
+                        href={`https://wa.me/${tenantWhatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(
+                          `Olá! Segue o comprovante do PIX do pedido no balcão (${formatCurrency(total)}):`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full px-4 py-3 bg-[#25D366] text-white font-semibold rounded-lg hover:opacity-90 transition-opacity"
+                      >
+                        📲 Enviar comprovante pelo WhatsApp
+                      </a>
+                    )}
+                    <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Aguardando o cliente pagar...
+                    </p>
+                    <button onClick={closeAndReset}
+                      className="w-full mt-2 px-4 py-3 bg-muted text-foreground font-semibold rounded-lg hover:bg-muted/70 transition-colors">
+                      Concluir
+                    </button>
+                  </>
                 )}
-                <button onClick={closeAndReset}
-                  className="w-full mt-2 px-4 py-3 bg-muted text-foreground font-semibold rounded-lg hover:bg-muted/70 transition-colors">
-                  Concluir
-                </button>
               </div>
             ) : (
               <>
