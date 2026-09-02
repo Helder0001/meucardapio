@@ -35,7 +35,7 @@ async function getTenantMenu(slug: string) {
     select: {
       id: true, name: true, slug: true, logo: true,
       primaryColor: true, phone: true, settings: true,
-      subscriptionStatus: true, tableQrViewOnly: true,
+      subscriptionStatus: true,
       categories: {
         where: { isActive: true },
         orderBy: { sortOrder: 'asc' },
@@ -129,10 +129,6 @@ export default async function StorefrontPage({ params, searchParams }: PageProps
     if (tableRecord) tableInfo = tableRecord
   }
 
-  // Só afeta o QR Code da mesa (tableInfo existe), nunca o cardápio web
-  // normal (acessado sem ?table=).
-  const viewOnly = Boolean(tableInfo) && tenant.tableQrViewOnly
-
   const menuData = {
     ...tenant,
     categories: tenant.categories.map((cat) => ({
@@ -152,6 +148,7 @@ export default async function StorefrontPage({ params, searchParams }: PageProps
     pixEnabled: (tenant.settings as any)?.pixEnabled ?? true,
     cardEnabled: (tenant.settings as any)?.cardEnabled ?? true,
     linkEnabled: (tenant.settings as any)?.linkEnabled ?? true,
+    manualPixEnabled: (tenant.settings as any)?.manualPixEnabled === true,
     deliveryZones: tenant.deliveryZones.map((z) => ({
       ...z,
       fee:       Number(z.fee),
@@ -166,7 +163,6 @@ export default async function StorefrontPage({ params, searchParams }: PageProps
       tableInfo={tableInfo}
       isOpen={open}
       closedMessage={closedMessage}
-      viewOnly={viewOnly}
     />
   )
 }
