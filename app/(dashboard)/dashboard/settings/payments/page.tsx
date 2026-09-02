@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth/session'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db/client'
 import { PaymentSettingsForm } from '@/components/dashboard/payment-settings-form'
+import { ManualPixSettingsForm } from '@/components/dashboard/manual-pix-settings-form'
 import { Suspense } from 'react'
 import type { Metadata } from 'next'
 
@@ -26,6 +27,7 @@ export default async function PaymentSettingsPage() {
   const pixEnabled = (settings.pixEnabled ?? true) === true
   const cardEnabled = (settings.cardEnabled ?? true) === true
   const linkEnabled = (settings.linkEnabled ?? true) === true
+  const manualPixEnabled = settings.manualPixEnabled === true
 
   return (
     <div className="max-w-2xl space-y-5">
@@ -44,6 +46,15 @@ export default async function PaymentSettingsPage() {
           linkEnabled={linkEnabled}
         />
       </Suspense>
+
+      <ManualPixSettingsForm
+        manualPixEnabled={manualPixEnabled}
+        hasKey={!!settings.manualPixKey}
+        keyType={settings.manualPixKeyType ?? null}
+        pixKey={settings.manualPixKey ?? null}
+        receiverName={settings.manualPixReceiverName ?? null}
+        city={settings.manualPixCity ?? null}
+      />
     </div>
   )
 }
