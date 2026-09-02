@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth/session'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db/client'
+import { hasPermission, type UserRole } from '@/lib/auth/permissions'
 import { ReportsClient } from '@/components/dashboard/reports-client'
 import type { Metadata } from 'next'
 import type { OrderStatus, OrderType } from '@prisma/client'
@@ -123,6 +124,17 @@ async function queryHourChart(
 export default async function ReportsPage({ searchParams }: PageProps) {
   const session = await auth()
   if (!session?.user?.tenantId) redirect('/login')
+
+  // VULN-ALTA-05 CORRIGIDO: o middleware (proxy.ts) só bloqueia navegação
+  // de página pra STAFF/DELIVERY_PERSON, e o sidebar só ESCONDE o link pra
+  // quem não é TENANT_ADMIN/MANAGER — nenhum dos dois impedia um usuário
+  // ATTENDANT (não coberto pelo middleware) de navegar direto pra essa
+  // página e ver faturamento/dados de clientes. Agora a própria página
+  // aplica a mesma regra de permissão usada nas rotas de API
+  // (reports:view em lib/auth/permissions.ts).
+  if (!hasPermission(session.user.role as UserRole, 'reports:view')) {
+    redirect('/dashboard')
+  }
 
   const tenantId = session.user.tenantId
   const now      = new Date()
