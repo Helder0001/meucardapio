@@ -90,7 +90,12 @@ export async function POST(
 
   await prisma.whatsappChat.update({
     where: { id: chat.id },
-    data: { lastMessage: message.body, lastMessageAt: new Date() },
+    data: {
+      lastMessage: message.body,
+      lastMessageAt: new Date(),
+      botActive: false,
+      awaitingAttendant: false,
+    } as any,
   })
 
   return NextResponse.json({ message })
