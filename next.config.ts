@@ -8,10 +8,10 @@ const nextConfig: NextConfig = {
       // Domínio do Supabase Storage (bucket público)
       {
         protocol: 'https',
-        hostname: 'fydorsylrlpqrylrxmfk.supabase.co',
+        hostname: process.env.NEXT_PUBLIC_SUPABASE_HOSTNAME || 'localhost',
         pathname: '/storage/v1/object/public/**',
       },
-      // Para desenvolvimento local (se você ainda usar MinIO ou outro)
+      // Para desenvolvimento local (MinIO ou outro S3 compatível)
       {
         protocol: 'http',
         hostname: 'localhost',
