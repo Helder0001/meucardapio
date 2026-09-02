@@ -7,6 +7,7 @@ import { publishOrderEvent } from '@/lib/cache/redis'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { notifyOrderStatus } from '@/lib/messaging/evolution'
 import { restockCancelledOrder, revalidateStorefrontForTenant } from '@/lib/utils/stock'
+import { geocodeAddress } from '@/lib/utils/geocode'
 import { z } from 'zod'
 
 const ROLE_LABELS: Record<string, string> = {
@@ -60,7 +61,7 @@ export async function PATCH(
     where: { id, tenantId },
     select: {
       id: true, status: true, orderNumber: true, waiterId: true, type: true, pdvId: true,
-      paymentStatus: true,
+      paymentStatus: true, courierId: true, deliveryAddress: true, deliveryLat: true, deliveryLng: true,
       payments: { select: { setAtOrderCreation: true, status: true } },
     },
   })
@@ -169,6 +170,33 @@ export async function PATCH(
     ...(status === 'CANCELLED' && cancelReason ? { cancelReason } : {}),
     ...(status === 'CANCELLED' ? { paymentStatus: 'FAILED' } : {}),
     ...(role === 'STAFF' && !order.waiterId ? { waiterId: session.user.id } : {}),
+  }
+
+  // Rastreamento ao vivo do entregador: quando o pedido sai para entrega,
+  // quem fez a ação "assume" a entrega — reseta a posição anterior (se
+  // havia, de uma entrega passada) para começar o rastreamento do zero, e
+  // dispara a geocodificação do endereço de destino em segundo plano.
+  if (isDelivery && status === 'OUT_FOR_DELIVERY') {
+    updateData.courierId = session.user.id
+    updateData.courierLat = null
+    updateData.courierLng = null
+    updateData.courierUpdatedAt = null
+
+    if (order.deliveryLat == null && order.deliveryLng == null) {
+      const addr = order.deliveryAddress as any
+      const addressText = addr?.address ?? [addr?.street, addr?.number, addr?.district, addr?.city].filter(Boolean).join(', ')
+      if (addressText) {
+        geocodeAddress(addressText)
+          .then((point) => {
+            if (!point) return
+            return prisma.order.update({
+              where: { id },
+              data: { deliveryLat: point.lat, deliveryLng: point.lng },
+            })
+          })
+          .catch((err) => console.error('[updateStatus] Geocodificação do destino falhou:', err))
+      }
+    }
   }
 
   let affectedProductIds: string[] = []
