@@ -7,7 +7,8 @@
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
-import { getBase64FromMediaMessage, getEvolutionWebhookSecret } from '@/lib/messaging/evolution'
+import { getBase64FromMediaMessage, getEvolutionWebhookSecret, sendWhatsAppMessage } from '@/lib/messaging/evolution'
+import { handleIncomingText } from '@/lib/messaging/chatbot-engine'
 import crypto from 'crypto'
 
 export const runtime = 'nodejs'
@@ -97,6 +98,22 @@ export async function POST(request: Request) {
           const fromPhone = msg.key?.remoteJid?.replace('@s.whatsapp.net', '')
           const msgId     = msg.key?.id
 
+          // Mensagem enviada pelo PRÓPRIO número da loja fora do nosso app
+          // (ex.: o dono respondeu direto pelo celular). É uma intervenção
+          // manual — pausamos o robô nesse chat pra evitar respostas
+          // duplicadas/conflitantes, sem duplicar a mensagem (ela já foi
+          // enviada pelo WhatsApp, não precisamos reenviar nada).
+          if (msg.key?.fromMe) {
+            if (fromPhone) {
+              const digits = fromPhone.startsWith('55') ? fromPhone : `55${fromPhone}`
+              await (prisma as any).whatsappChat.updateMany({
+                where: { tenantId: config.tenantId, phone: digits },
+                data: { botActive: false, awaitingAttendant: false },
+              }).catch(() => {})
+            }
+            continue
+          }
+
           // Detectar mídia (imagem, vídeo, áudio, documento, figurinha)
           const mediaMessage =
             msg.message?.imageMessage    ? { type: 'image',    payload: msg.message.imageMessage }    :
@@ -180,6 +197,15 @@ export async function POST(request: Request) {
               mediaFileName: mediaFileName ?? null,
             },
           })
+
+          // Robô de atendimento — só reage a mensagens de TEXTO (mídia sem
+          // legenda não tem o que interpretar) e nunca conflita com um
+          // operador humano já em conversa (ver lib/messaging/chatbot-engine.ts).
+          if (!mediaMessage || msg.message?.conversation || msg.message?.extendedTextMessage) {
+            await runChatbot(config.tenantId, chat.id, phone, text).catch((err) =>
+              console.error('[webhook/evolution] Erro no robô de atendimento:', err)
+            )
+          }
         }
         break
       }
@@ -194,6 +220,51 @@ export async function POST(request: Request) {
     // Nunca retornar erro para o webhook — Evolution API vai retentar
     console.error('[webhook/evolution]', error)
     return NextResponse.json({ ok: true })
+  }
+}
+
+// Busca o estado atual do chat, pergunta ao motor do robô o que responder,
+// envia as mensagens (se houver) e persiste o novo estado — tudo em um só
+// lugar pra manter o webhook enxuto e a lógica do robô 100% em chatbot-engine.ts.
+async function runChatbot(tenantId: string, chatId: string, phone: string, text: string) {
+  const chat = await (prisma as any).whatsappChat.findUnique({
+    where: { id: chatId },
+    select: { id: true, botActive: true, awaitingAttendant: true, botState: true, botFallbackCount: true },
+  })
+  if (!chat) return
+
+  const result = await handleIncomingText({ tenantId, chat, phone, text })
+
+  if (Object.keys(result.chatUpdate).length > 0) {
+    await (prisma as any).whatsappChat.update({ where: { id: chatId }, data: result.chatUpdate })
+  }
+
+  if (result.attendantRequested) {
+    await prisma.notification.create({
+      data: {
+        tenantId,
+        type: 'CHAT_ATTENDANT_REQUESTED',
+        title: 'Cliente pediu atendimento humano',
+        message: 'Um cliente no WhatsApp solicitou falar com um atendente.',
+        data: { chatId },
+      },
+    }).catch(() => {})
+  }
+
+  for (const reply of result.replies) {
+    const sendResult = await sendWhatsAppMessage({ tenantId, phone, message: reply })
+    if ('error' in sendResult) continue
+
+    await (prisma as any).whatsappMessage.create({
+      data: { chatId, tenantId, body: reply, fromMe: true, status: 'sent' },
+    })
+  }
+
+  if (result.replies.length > 0) {
+    await (prisma as any).whatsappChat.update({
+      where: { id: chatId },
+      data: { lastMessage: result.replies[result.replies.length - 1], lastMessageAt: new Date() },
+    })
   }
 }
 
