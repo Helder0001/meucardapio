@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/db/client'
 import { formatCurrency } from '@/lib/utils/format'
+import { buildTemplateVariables, renderTemplate } from './template-variables'
 import crypto from 'crypto'
 
 // ✅ Credenciais vêm das env vars — não do banco
@@ -293,6 +294,18 @@ export async function notifyOrderReceived(orderId: string) {
 
 // ─── Notificar mudança de status (mensagem curta) ────────────────────────────
 
+// Mapeia o evento interno (usado pelo update-status route) para a chave de
+// evento salva em OrderStatusMessage (mesmo nome do OrderStatus do Prisma) —
+// permite que a loja personalize o texto em Automações do Chat.
+const EVENT_TO_ORDER_STATUS: Record<string, string> = {
+  ORDER_CONFIRMED:  'CONFIRMED',
+  ORDER_PREPARING:  'PREPARING',
+  READY:            'READY',
+  OUT_FOR_DELIVERY: 'OUT_FOR_DELIVERY',
+  DELIVERED:        'DELIVERED',
+  CANCELLED:        'CANCELLED',
+}
+
 export async function notifyOrderStatus(
   orderId: string,
   event: keyof typeof STATUS_TEMPLATES
@@ -313,9 +326,32 @@ export async function notifyOrderStatus(
 
   const trackingUrl = `${process.env.NEXT_PUBLIC_APP_URL}/menu/${order.tenant.slug}/pedido/${orderId}`
 
+  // Se a loja personalizou a mensagem desse status em Automações do Chat,
+  // usa o texto dela (com variáveis substituídas). Senão, cai no template
+  // padrão embutido acima.
+  let message = fn(order.orderNumber, trackingUrl)
+  try {
+    const custom = await (prisma as any).orderStatusMessage.findUnique({
+      where: {
+        tenantId_event: {
+          tenantId: order.tenantId,
+          event: EVENT_TO_ORDER_STATUS[event] ?? event,
+        },
+      },
+    })
+    if (custom?.active && custom.message?.trim()) {
+      const vars = await buildTemplateVariables({ tenantId: order.tenantId, orderId })
+      message = renderTemplate(custom.message, vars)
+    }
+  } catch (err: any) {
+    if (!err?.message?.includes('does not exist')) {
+      console.error('[evolution] Erro ao buscar template customizado:', err)
+    }
+  }
+
   await sendWhatsAppMessage({
     tenantId: order.tenantId,
     phone:    order.customer.phone,
-    message:  fn(order.orderNumber, trackingUrl),
+    message,
   })
 }
