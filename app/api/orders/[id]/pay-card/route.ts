@@ -12,6 +12,8 @@ import { prisma } from '@/lib/db/client'
 import { createCardPayment } from '@/lib/mercadopago/checkout-client'
 import { getPaymentProvider } from '@/lib/payments/provider-router'
 import { createTenantCardCharge } from '@/lib/efi/tenant-payments'
+import { createAsaasCardCharge } from '@/lib/asaas/tenant-payments'
+import { AsaasError } from '@/lib/asaas/client'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { applyCashback, applyLoyaltyPoints } from '@/lib/loyalty/apply-rewards'
 import type { PrismaClient } from '@prisma/client'
@@ -36,7 +38,6 @@ const payCardSchema = z.object({
     .transform((v) => v.replace(/\D/g, ''))
     .refine((v) => v.length === 11 || v.length === 14, 'Documento deve ter 11 (CPF) ou 14 (CNPJ) dígitos'),
   customerName: z.string().max(200).optional(),
-  customerPhone: z.string().max(20).optional(),
 })
 
 // Mesmo mecanismo do /status e /regenerate-pix — token HMAC curto pra
@@ -128,7 +129,6 @@ export async function POST(
         payerCpf: body.customerCpf,
         payerName: body.customerName || 'Cliente',
         payerEmail: body.customerEmail,
-        payerPhone: body.customerPhone || '',
         description: `Pedido #${String(order.orderNumber).padStart(4, '0')}`,
       })
 
@@ -138,22 +138,6 @@ export async function POST(
       const existingEfiPayment = await prisma.payment.findFirst({
         where: { orderId: order.id, provider: 'EFI', providerReference: String(chargeResult.chargeId) },
       })
-
-      // BUG CORRIGIDO: todo pedido não-PIX já nasce com um Payment
-      // "placeholder" (status PENDING, sem provider/providerReference —
-      // ver actions/orders/create-order.ts) usado pelo dashboard pra
-      // mostrar "Confirmar"/"Trocar forma de pagamento" em pedidos de
-      // balcão. Sem checar por ele aqui, essa rota sempre criava um
-      // Payment NOVO pro resultado real da cobrança, deixando o
-      // placeholder original órfão pra sempre — por isso o pedido
-      // aparecia com 2 linhas de pagamento (uma paga, uma pendente pra
-      // sempre) em vez de 1.
-      const placeholderPayment = !existingEfiPayment
-        ? await prisma.payment.findFirst({
-            where: { orderId: order.id, method: 'CREDIT_CARD', status: 'PENDING', providerReference: null },
-            orderBy: { createdAt: 'asc' },
-          })
-        : null
 
       const efiPaymentData = {
         tenantId: order.tenantId,
@@ -168,9 +152,8 @@ export async function POST(
         failedAt: isRejected ? new Date() : undefined,
       }
 
-      const targetPaymentId = existingEfiPayment?.id ?? placeholderPayment?.id
-      const efiPayment = targetPaymentId
-        ? await prisma.payment.update({ where: { id: targetPaymentId }, data: efiPaymentData })
+      const efiPayment = existingEfiPayment
+        ? await prisma.payment.update({ where: { id: existingEfiPayment.id }, data: efiPaymentData })
         : await prisma.payment.create({ data: efiPaymentData })
 
       if (isApproved) {
@@ -218,6 +201,89 @@ export async function POST(
     }
   }
 
+  if (cardProvider === 'ASAAS') {
+    const remoteIp =
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      request.headers.get('x-real-ip') ||
+      '127.0.0.1'
+
+    try {
+      const chargeResult = await createAsaasCardCharge({
+        tenantId: order.tenantId,
+        orderId: order.id,
+        amount: stillOwed,
+        creditCardToken: body.cardToken, // aqui é o creditCardToken do tokenizeCreditCard, não o card_token_id do MP
+        remoteIp,
+        customerName: body.customerName,
+        customerCpf: body.customerCpf,
+        customerEmail: body.customerEmail,
+      })
+
+      const isApproved = chargeResult.status === 'approved'
+
+      const asaasPaymentData = {
+        tenantId: order.tenantId,
+        orderId: order.id,
+        method: 'CREDIT_CARD' as const,
+        status: (isApproved ? 'PAID' : 'PENDING') as 'PAID' | 'PENDING',
+        amount: stillOwed,
+        provider: 'ASAAS' as const,
+        providerReference: chargeResult.asaasPaymentId,
+        cardLastDigits: chargeResult.cardLastDigits,
+        paidAt: isApproved ? new Date() : undefined,
+      }
+
+      const asaasPayment = await prisma.payment.create({ data: asaasPaymentData })
+
+      if (isApproved) {
+        const isFullyPaid = await prisma.$transaction(async (tx: Tx) => {
+          const paidPayments = await tx.payment.findMany({
+            where: { orderId: order.id, status: 'PAID' },
+            select: { amount: true },
+          })
+          const totalPaid = paidPayments.reduce((s: number, p: { amount: any }) => s + Number(p.amount), 0)
+          const fullyPaid = Math.round(totalPaid * 100) >= Math.round(Number(order.total) * 100)
+
+          await tx.order.update({
+            where: { id: order.id },
+            data: fullyPaid
+              ? { paymentStatus: 'PAID', status: 'CONFIRMED', confirmedAt: new Date() }
+              : { paymentStatus: 'PARTIAL' },
+          })
+          if (fullyPaid && order.customerId) {
+            await applyCashback(tx, order.tenantId, order.customerId, order.id, Number(order.total))
+            await applyLoyaltyPoints(tx, order.tenantId, order.customerId, order.id, Number(order.total))
+          }
+          return fullyPaid
+        })
+
+        await publishOrderEvent(order.tenantId, {
+          type: 'ORDER_UPDATED',
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          status: isFullyPaid ? 'CONFIRMED' : order.status,
+          paymentStatus: isFullyPaid ? 'PAID' : 'PARTIAL',
+        })
+      }
+
+      return NextResponse.json({
+        status: isApproved ? 'approved' : 'pending',
+        cardLastDigits: asaasPayment.cardLastDigits,
+        paymentId: asaasPayment.id,
+      })
+    } catch (err) {
+      if (err instanceof AsaasError) {
+        console.error('[pay-card][asaas]', err.message, err.details)
+        return NextResponse.json({ error: err.message }, { status: 400 })
+      }
+      console.error('[pay-card][asaas]', err)
+      return NextResponse.json(
+        { error: 'Não foi possível processar o pagamento pelo Asaas. Verifique os dados do cartão e tente novamente.' },
+        { status: 500 }
+      )
+    }
+  }
+
   try {
     const result = await createCardPayment({
       tenantId: order.tenantId,
@@ -236,44 +302,37 @@ export async function POST(
       customerName: body.customerName,
     })
 
-    // Mesmo bug corrigido acima no branch EFI: reaproveita o Payment
-    // placeholder (criado em actions/orders/create-order.ts) em vez de
-    // deixar o upsert por mercadoPagoId sempre criar um registro novo.
-    const placeholderPayment = await prisma.payment.findFirst({
-      where: { orderId: order.id, method: 'CREDIT_CARD', status: 'PENDING', mercadoPagoId: null },
-      orderBy: { createdAt: 'asc' },
-    })
-
-    const mpPaymentData = {
-      mercadoPagoStatus: result.status,
-      cardLastDigits: result.cardLastDigits,
-      cardBrand: result.cardBrand,
-      installments: result.installments,
-      status: result.status === 'approved' ? 'PAID' as const
-        : result.status === 'rejected' ? 'FAILED' as const
-        : 'PENDING' as const,
-      paidAt: result.status === 'approved' ? new Date() : undefined,
-      failedAt: result.status === 'rejected' ? new Date() : undefined,
-    }
-
     // Criar ou atualizar o registro de pagamento
-    const payment = placeholderPayment
-      ? await prisma.payment.update({
-          where: { id: placeholderPayment.id },
-          data: { ...mpPaymentData, mercadoPagoId: result.mercadoPagoId },
-        })
-      : await prisma.payment.upsert({
-          where: { mercadoPagoId: result.mercadoPagoId },
-          update: mpPaymentData,
-          create: {
-            tenantId: order.tenantId,
-            orderId: order.id,
-            method: 'CREDIT_CARD',
-            amount: stillOwed,
-            mercadoPagoId: result.mercadoPagoId,
-            ...mpPaymentData,
-          },
-        })
+    const payment = await prisma.payment.upsert({
+      where: { mercadoPagoId: result.mercadoPagoId },
+      update: {
+        mercadoPagoStatus: result.status,
+        cardLastDigits: result.cardLastDigits,
+        cardBrand: result.cardBrand,
+        installments: result.installments,
+        status: result.status === 'approved' ? 'PAID'
+          : result.status === 'rejected' ? 'FAILED'
+          : 'PENDING',
+        paidAt: result.status === 'approved' ? new Date() : undefined,
+        failedAt: result.status === 'rejected' ? new Date() : undefined,
+      },
+      create: {
+        tenantId: order.tenantId,
+        orderId: order.id,
+        method: 'CREDIT_CARD',
+        status: result.status === 'approved' ? 'PAID'
+          : result.status === 'rejected' ? 'FAILED'
+          : 'PENDING',
+        amount: stillOwed,
+        mercadoPagoId: result.mercadoPagoId,
+        mercadoPagoStatus: result.status,
+        cardLastDigits: result.cardLastDigits,
+        cardBrand: result.cardBrand,
+        installments: result.installments,
+        paidAt: result.status === 'approved' ? new Date() : undefined,
+        failedAt: result.status === 'rejected' ? new Date() : undefined,
+      },
+    })
 
     // Aprovado imediatamente — confirmar o pedido (se cobrir o total) e
     // aplicar rewards. Mesma lógica do webhook: só marca PAID/CONFIRMED
