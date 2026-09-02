@@ -15,6 +15,7 @@ export async function GET() {
       select: {
         id: true, phone: true, contactName: true,
         lastMessage: true, lastMessageAt: true, unreadCount: true, isOpen: true,
+        botActive: true, awaitingAttendant: true,
       },
     })
     return NextResponse.json({ chats })
