@@ -31,8 +31,7 @@ import { queuePrintJob } from '@/lib/utils/print'
 import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
 import { getPaymentProvider } from '@/lib/payments/provider-router'
 import { createTenantPixCharge } from '@/lib/efi/tenant-pix-client'
-import { createAsaasPixCharge } from '@/lib/asaas/tenant-payments'
-import { buildPixPayload, generatePixQrCodeBase64, type PixKeyType } from '@/lib/pix/manual-pix'
+import { sanitizeText } from '@/lib/security/sanitize'
 
 // VULN-NEW-03: gera um token HMAC de curta duração para autorizar
 // o polling público de status do pedido sem exigir login do cliente.
@@ -43,7 +42,7 @@ function generateOrderStatusToken(orderId: string): string {
 
 // ── Schema de pagamento individual ──────────────────────────────────────────
 const paymentEntrySchema = z.object({
-  method: z.enum(['PIX', 'PIX_MANUAL', 'CASH', 'CARD', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD']),
+  method: z.enum(['PIX', 'CASH', 'CARD', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD']),
   amount: z.number().positive('Valor do pagamento deve ser positivo'),
   changeFor: z.number().positive().optional(),
 })
@@ -69,7 +68,7 @@ const createOrderSchema = z.object({
   payments: z.array(paymentEntrySchema).min(1).max(5).optional(),
 
   // Campos legados (retrocompatibilidade com chamadas antigas)
-  paymentMethod: z.enum(['PIX', 'PIX_MANUAL', 'CASH', 'CARD', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD']).optional(),
+  paymentMethod: z.enum(['PIX', 'CASH', 'CARD', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD']).optional(),
   changeFor: z.number().positive().optional(),
 
   cashbackToUse:  z.number().min(0).optional(),
@@ -169,6 +168,16 @@ export async function createOrderAction(
     const phone = data.customerPhone.replace(/\D/g, '')
     const fullPhone = phone.startsWith('55') ? phone : `55${phone}`
 
+    // VULN-ALTA-06 CORRIGIDO: customerName só era validado com
+    // z.string().max(100) — sem remover HTML/JS. Como esse nome depois é
+    // interpolado em relatórios exportados como HTML e em e-mails de
+    // relatório, um payload malicioso aqui virava XSS armazenado contra
+    // quem exportasse/recebesse o relatório. sanitizeText() já existia
+    // pra isso e simplesmente não era usada aqui.
+    const sanitizedCustomerName = data.customerName
+      ? sanitizeText(data.customerName) || undefined
+      : undefined
+
     customer = await prisma.customer.findFirst({
       where: { phone: fullPhone, tenantId: data.tenantId },
     })
@@ -178,17 +187,17 @@ export async function createOrderAction(
         data: {
           tenantId: data.tenantId,
           phone: fullPhone,
-          name: data.customerName,
+          name: sanitizedCustomerName,
           cpf: data.customerCpf ? onlyDigits(data.customerCpf) : undefined,
           lgpdConsent: true,
           lgpdConsentAt: new Date(),
         },
       })
-    } else if ((data.customerName && !customer.name) || (data.customerCpf && !customer.cpf)) {
+    } else if ((sanitizedCustomerName && !customer.name) || (data.customerCpf && !customer.cpf)) {
       customer = await prisma.customer.update({
         where: { id: customer.id },
         data: {
-          ...(data.customerName && !customer.name ? { name: data.customerName } : {}),
+          ...(sanitizedCustomerName && !customer.name ? { name: sanitizedCustomerName } : {}),
           ...(data.customerCpf && !customer.cpf ? { cpf: onlyDigits(data.customerCpf) } : {}),
         },
       })
@@ -388,17 +397,6 @@ export async function createOrderAction(
         console.error('[createOrder] PIX creation failed:', err)
         // Não bloqueia o pedido — cliente pode tentar novamente
       }
-    } else if (payment.method === 'PIX_MANUAL') {
-      try {
-        pixResult = await createManualPixPayment({
-          tenantId: data.tenantId,
-          orderId: order.id,
-          amount: payment.amount,
-        })
-      } catch (err) {
-        console.error('[createOrder] Manual PIX creation failed:', err)
-        // Não bloqueia o pedido — o lojista pode gerar o QR de novo depois
-      }
     } else {
       await prisma.payment.create({
         data: {
@@ -471,53 +469,6 @@ export async function createOrderAction(
   }
 }
 
-// ── Cria pagamento Pix MANUAL — chave própria do estabelecimento, sem ──────
-// gateway. Confirmação é manual (lojista confere e clica em "Marcar como
-// pago" depois de receber o comprovante por WhatsApp).
-async function createManualPixPayment(params: {
-  tenantId: string
-  orderId: string
-  amount: number
-}) {
-  const tenant = await prisma.tenant.findFirst({
-    where: { id: params.tenantId },
-    select: { settings: true, name: true },
-  })
-  const settings = (tenant?.settings as Record<string, any>) ?? {}
-
-  if (!settings.manualPixEnabled || !settings.manualPixKey) {
-    throw new Error('Pix manual não está configurado para este estabelecimento')
-  }
-
-  const payload = buildPixPayload({
-    key: settings.manualPixKey,
-    keyType: (settings.manualPixKeyType ?? 'RANDOM') as PixKeyType,
-    receiverName: settings.manualPixReceiverName || tenant?.name || 'ESTABELECIMENTO',
-    city: settings.manualPixCity || 'BRASIL',
-    amount: params.amount,
-    txid: params.orderId,
-  })
-
-  const qrCodeBase64 = await generatePixQrCodeBase64(payload)
-
-  await prisma.payment.create({
-    data: {
-      tenantId: params.tenantId,
-      orderId: params.orderId,
-      method: 'PIX_MANUAL',
-      status: 'PENDING',
-      amount: params.amount,
-      provider: 'MANUAL',
-      pixQrCode: payload,
-      pixQrCodeBase64: qrCodeBase64,
-      // Sem expiração automática — fica pendente até o lojista confirmar
-      // manualmente, já que não há webhook nenhum monitorando isso.
-    },
-  })
-
-  return { pixQrCode: payload, pixQrCodeBase64: qrCodeBase64 }
-}
-
 // ── Cria pagamento PIX no Mercado Pago ──────────────────────────────────────
 async function createPixPayment(params: {
   tenantId: string
@@ -529,36 +480,6 @@ async function createPixPayment(params: {
   deviceId?: string
 }) {
   const provider = await getPaymentProvider(params.tenantId, 'pix')
-
-  if (provider === 'ASAAS') {
-    const { asaasPaymentId, pixQrCode, pixQrCodeBase64, pixExpiresAt } = await createAsaasPixCharge({
-      tenantId: params.tenantId,
-      orderId: params.orderId,
-      amount: params.amount,
-      customerName: params.customerName,
-      customerCpf: params.customerCpf,
-      customerPhone: params.customerPhone,
-    })
-
-    console.log('[pix][create][asaas]', { orderId: params.orderId, asaasPaymentId })
-
-    await prisma.payment.create({
-      data: {
-        tenantId: params.tenantId,
-        orderId: params.orderId,
-        method: 'PIX',
-        status: 'PENDING',
-        amount: params.amount,
-        provider: 'ASAAS',
-        providerReference: asaasPaymentId,
-        pixQrCode,
-        pixQrCodeBase64,
-        pixExpiresAt,
-      },
-    })
-
-    return { pixQrCode, pixQrCodeBase64 }
-  }
 
   if (provider === 'EFI') {
     // Efí exige nome do pagador (não é opcional como no MP) — usa um
