@@ -50,10 +50,18 @@ export async function POST(
     },
   })
 
-  // Update chat last message
+  // Update chat last message. Um operador respondendo manualmente assume o
+  // controle da conversa — o robô fica em silêncio aqui até ser reativado
+  // (manualmente pelo dashboard ou quando o cliente manda o comando de
+  // encerramento), evitando que os dois respondam ao mesmo tempo.
   await prisma.whatsappChat.update({
     where: { id: chat.id },
-    data: { lastMessage: body.trim(), lastMessageAt: new Date() },
+    data: {
+      lastMessage: body.trim(),
+      lastMessageAt: new Date(),
+      botActive: false,
+      awaitingAttendant: false,
+    } as any,
   })
 
   return NextResponse.json({ message })
