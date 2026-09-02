@@ -82,6 +82,15 @@ export const uploadLimiter = new Ratelimit({
   prefix:  'rl:upload',
 })
 
+// ── Avaliações ─────────────────────────────────────────────────────────────
+// 5 avaliações por hora por pedido — trava tentativas repetidas de submeter
+// review no mesmo orderId (força bruta / abuso), independente do IP.
+export const reviewLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, '1 h'),
+  prefix:  'rl:review:order',
+})
+
 // ── Helper: verificar OTP com ambas as dimensões ──────────────────────────
 export async function checkOtpRateLimit(
   ip: string,
