@@ -4,9 +4,11 @@ export const maxDuration = 60
 
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth/session'
+import { hasPermission, type UserRole } from '@/lib/auth/permissions'
 import { prisma } from '@/lib/db/client'
 import { Resend } from 'resend'
 import { z } from 'zod'
+import { escapeHtml } from '@/lib/security/sanitize'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -44,6 +46,11 @@ const bodySchema = z.object({
 export async function POST(request: Request) {
   const session = await auth()
   if (!session?.user?.tenantId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // VULN-ALTA-05 CORRIGIDO: ver mesma correção em reports/export/route.ts
+  if (!hasPermission(session.user.role as UserRole, 'reports:export')) {
+    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+  }
 
   const rawBody = await request.json().catch(() => null)
   const parsed = bodySchema.safeParse(rawBody)
@@ -89,7 +96,7 @@ export async function POST(request: Request) {
       <tr>
         <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0">#${String(o.orderNumber).padStart(4,'0')}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0">${fmtDate(o.createdAt)}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0">${o.customer?.name ?? '—'}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0">${escapeHtml(o.customer?.name) || '—'}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0">${TYPE_PT[o.type] ?? o.type}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0">${STATUS_PT[o.status] ?? o.status}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0">${PAYMENT_STATUS_PT[o.paymentStatus] ?? o.paymentStatus}</td>
@@ -126,7 +133,7 @@ export async function POST(request: Request) {
     const rows = items.map((item, i) => `
       <tr>
         <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0;text-align:center;font-weight:bold;color:#f97316">${i + 1}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0">${item.productName}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0">${escapeHtml(item.productName)}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0;text-align:center;font-weight:bold">${item._sum.quantity ?? 0}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:bold">${fmtCurrency(Number(item._sum.totalPrice ?? 0))}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #f0f0f0;text-align:center">${item._count.id}</td>
@@ -174,14 +181,16 @@ function buildEmailHtml({ tenantName, title, period, stats, tableHeaders, tableR
     `<th style="background:#f3f4f6;padding:8px;text-align:left;font-size:11px;color:#555;text-transform:uppercase;border-bottom:2px solid #e5e7eb">${h}</th>`
   ).join('')
 
+  const tenantNameSafe = escapeHtml(tenantName)
+
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${title} — ${tenantName}</title></head>
+<title>${title} — ${tenantNameSafe}</title></head>
 <body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif">
   <div style="max-width:700px;margin:32px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)">
     <div style="background:#f97316;padding:24px 32px">
-      <div style="font-size:22px;font-weight:bold;color:#fff">${tenantName}</div>
+      <div style="font-size:22px;font-weight:bold;color:#fff">${tenantNameSafe}</div>
       <div style="font-size:13px;color:rgba(255,255,255,.85);margin-top:4px">${title} • ${period}</div>
     </div>
     <div style="padding:24px 32px">
