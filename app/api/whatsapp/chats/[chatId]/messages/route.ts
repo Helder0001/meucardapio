@@ -15,7 +15,7 @@ export async function GET(
   try {
     const chat = await (prisma as any).whatsappChat.findFirst({
       where: { id: chatId, tenantId: session.user.tenantId },
-      select: { id: true, phone: true, contactName: true, unreadCount: true },
+      select: { id: true, phone: true, contactName: true, unreadCount: true, botActive: true, awaitingAttendant: true },
     })
     if (!chat) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
