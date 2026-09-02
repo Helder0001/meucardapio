@@ -66,8 +66,6 @@ const STATUS_PT: Record<string, string> = {
 // na hora (sempre manual); no cardápio digital, CREDIT_CARD é cobrado online
 // e confirmado sozinho via webhook, mas mantém-se aqui como rede de segurança
 // caso o webhook atrase/falhe. CREDIT_CARD_MANUAL é sempre manual (entrega/retirada).
-// PIX_MANUAL (chave direta, fora de gateway) nunca recebe webhook — sempre
-// depende de alguém confirmar manualmente aqui após ver o comprovante.
 const MANUAL_METHODS = ['CASH', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD', 'VOUCHER', 'TRANSFER', 'PIX_MANUAL']
 
 const STATUS_FLOW = [
