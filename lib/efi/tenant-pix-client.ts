@@ -18,7 +18,7 @@ interface TenantPixChargeParams {
   tenantId: string
   orderId: string
   amount: number
-  payerCpf: string
+  payerCpf?: string
   payerName: string
   description: string
 }
@@ -164,7 +164,7 @@ interface CreateChargeParams extends PixMtlsCredentials {
   accessToken: string
   pixKey: string
   amount: number // em reais
-  payerCpf: string
+  payerCpf?: string
   payerName: string
   description: string
   expirationSeconds?: number
@@ -179,7 +179,10 @@ export async function createImmediatePixCharge(params: CreateChargeParams): Prom
 }> {
   const body = JSON.stringify({
     calendario: { expiracao: params.expirationSeconds ?? 3600 },
-    devedor: { cpf: params.payerCpf, nome: params.payerName },
+    // `devedor` é opcional na API da Efí — quando o cliente não informou
+    // CPF no checkout, a cobrança é criada sem identificar o pagador em
+    // vez de mandar um CPF vazio/inválido (que a Efí rejeitaria).
+    ...(params.payerCpf ? { devedor: { cpf: params.payerCpf, nome: params.payerName } } : {}),
     valor: { original: params.amount.toFixed(2) },
     chave: params.pixKey,
     solicitacaoPagador: params.description.slice(0, 140),
