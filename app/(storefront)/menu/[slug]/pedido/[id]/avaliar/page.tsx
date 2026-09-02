@@ -4,6 +4,15 @@ import { prisma } from '@/lib/db/client'
 import { notFound } from 'next/navigation'
 import { ReviewForm } from './review-form'
 import type { Metadata } from 'next'
+import crypto from 'crypto'
+
+// Mesmo mecanismo HMAC usado em /api/orders/[id]/status e na action
+// submitReviewAction — gerado aqui no server component e repassado ao
+// client component apenas para autorizar o POST da avaliação.
+function generateStatusToken(orderId: string): string {
+  const secret = process.env.ORDER_TOKEN_SECRET ?? process.env.AUTH_SECRET ?? ''
+  return crypto.createHmac('sha256', secret).update(orderId).digest('hex')
+}
 
 export const metadata: Metadata = { title: 'Avaliar pedido' }
 
@@ -72,7 +81,11 @@ export default async function ReviewPage({ params }: PageProps) {
           </p>
         </div>
 
-        <ReviewForm orderId={order.id} tenantId={order.tenantId} />
+        <ReviewForm
+          orderId={order.id}
+          tenantId={order.tenantId}
+          token={generateStatusToken(order.id)}
+        />
       </div>
     </div>
   )

@@ -17,9 +17,10 @@ const RATING_LABELS: Record<number, string> = {
 interface ReviewFormProps {
   orderId:  string
   tenantId: string
+  token:    string
 }
 
-export function ReviewForm({ orderId, tenantId }: ReviewFormProps) {
+export function ReviewForm({ orderId, tenantId, token }: ReviewFormProps) {
   const [rating,    setRating]    = useState(0)
   const [hovered,   setHovered]   = useState(0)
   const [comment,   setComment]   = useState('')
@@ -29,7 +30,7 @@ export function ReviewForm({ orderId, tenantId }: ReviewFormProps) {
   const handleSubmit = () => {
     if (rating === 0) { toast.error('Selecione uma nota'); return }
     start(async () => {
-      const r = await submitReviewAction({ orderId, tenantId, rating, comment })
+      const r = await submitReviewAction({ orderId, tenantId, token, rating, comment })
       if (r.error) { toast.error(r.error); return }
       setSubmitted(true)
     })
