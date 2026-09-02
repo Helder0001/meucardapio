@@ -11,8 +11,10 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth/session'
+import { hasPermission, type UserRole } from '@/lib/auth/permissions'
 import { prisma } from '@/lib/db/client'
 import { formatCurrency, formatDate, formatOrderNumber } from '@/lib/utils/format'
+import { escapeHtml } from '@/lib/security/sanitize'
 
 // Validação estrita de formato de data (YYYY-MM-DD).
 // Impede que strings arbitrárias cheguem ao banco via $queryRaw ou new Date().
@@ -63,6 +65,14 @@ export async function GET(request: Request) {
   const session = await auth()
   if (!session?.user?.tenantId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // VULN-ALTA-05 CORRIGIDO: o menu lateral esconde "Relatórios" pra quem
+  // não é TENANT_ADMIN/MANAGER, mas essa rota checava só a sessão — sem
+  // essa checagem, ATTENDANT/STAFF/DELIVERY_PERSON conseguiam chamar a
+  // API diretamente e exportar faturamento + dados de clientes.
+  if (!hasPermission(session.user.role as UserRole, 'reports:export')) {
+    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
   }
 
   const { searchParams } = new URL(request.url)
@@ -597,12 +607,21 @@ function crc32(buf: Buffer): number {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PDF HTML builders
+//
+// VULN-ALTA-06 CORRIGIDO: essas funções montam HTML por concatenação de
+// string e o retornam com Content-Type: text/html — qualquer valor vindo
+// do banco (nome de cliente, nome de produto, nome do tenant) que não
+// passe por escapeHtml() aqui vira XSS armazenado contra quem abrir o
+// relatório exportado. sanitizeText() já impede a entrada de '<'/'>' em
+// customerName na criação do pedido (ver actions/orders/create-order.ts),
+// mas escapamos de novo aqui — defesa em profundidade, inclusive para
+// dados que já existiam no banco antes dessa correção.
 // ─────────────────────────────────────────────────────────────────────────────
 const pdfBase = (title: string, tenantName: string, period: string, content: string) => `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>${title} — ${tenantName}</title>
+<title>${escapeHtml(title)} — ${escapeHtml(tenantName)}</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box }
 body { font-family: Arial, sans-serif; font-size: 12px; color: #111; padding: 32px }
@@ -619,8 +638,8 @@ tr:nth-child(even) td { background: #fafafa }
 </style>
 </head>
 <body>
-<h1>${tenantName}</h1>
-<p class="meta">${title} • ${period} • Gerado em ${new Date().toLocaleDateString('pt-BR')}</p>
+<h1>${escapeHtml(tenantName)}</h1>
+<p class="meta">${escapeHtml(title)} • ${escapeHtml(period)} • Gerado em ${new Date().toLocaleDateString('pt-BR')}</p>
 ${content}
 <script>window.onload = () => setTimeout(() => window.print(), 400)</script>
 </body>
@@ -644,7 +663,7 @@ function buildOrdersPdf({ tenantName, orders, totalRevenue, startDate, endDate }
   const rows = orders.map((o) => `<tr>
     <td>${formatOrderNumber(o.orderNumber)}</td>
     <td>${formatDate(o.createdAt)}</td>
-    <td>${o.customer?.name ?? '—'}</td>
+    <td>${escapeHtml(o.customer?.name) || '—'}</td>
     <td>${TYPE_PT[o.type]          ?? o.type}</td>
     <td>${STATUS_PT[o.status]      ?? o.status}</td>
     <td>${PGTO_PT[o.paymentStatus] ?? o.paymentStatus}</td>
@@ -705,7 +724,7 @@ function buildProductsPdf({ tenantName, items, startDate, endDate }: {
 
   const rows = items.map((item, i) => `<tr>
     <td style="text-align:center;font-weight:bold;color:#f97316">${i + 1}</td>
-    <td>${item.productName}</td>
+    <td>${escapeHtml(item.productName)}</td>
     <td style="text-align:center;font-weight:bold">${item._sum.quantity ?? 0}</td>
     <td style="text-align:right;font-weight:bold">${formatCurrency(Number(item._sum.totalPrice ?? 0))}</td>
     <td style="text-align:center">${item._count.id}</td>
