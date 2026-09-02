@@ -2,6 +2,7 @@
 // components/storefront/order-tracking.tsx
 
 import { useState, useEffect, useCallback } from 'react'
+import dynamic from 'next/dynamic'
 import {
   CheckCircle2, Clock, ChefHat, Package, Truck, Star,
   Copy, Check, ArrowLeft, MapPin, QrCode, RefreshCw, AlertCircle,
@@ -11,6 +12,13 @@ import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { CardPaymentForm } from './card-payment-form'
 import { EfiCardPaymentForm } from './efi-card-payment-form'
+import { AsaasCardPaymentForm } from './asaas-card-payment-form'
+
+// Leaflet acessa `window` no import — precisa carregar só no client.
+const DeliveryLiveMap = dynamic(
+  () => import('./delivery-live-map').then((m) => m.DeliveryLiveMap),
+  { ssr: false, loading: () => <div className="h-64 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" /> }
+)
 
 const STATUS_STEPS = [
   { key: 'PENDING',          label: 'Recebido',    icon: Clock,        desc: 'Aguardando confirmação' },
@@ -72,9 +80,12 @@ interface OrderTrackingProps {
   mpPublicKey?: string | null
   // Qual provedor o tenant escolheu pra cartão — decide qual formulário
   // renderizar (Brick do MP ou campos manuais + Efí.js).
-  cardProvider?: 'MERCADOPAGO' | 'STRIPE' | 'EFI'
+  cardProvider?: 'MERCADOPAGO' | 'STRIPE' | 'EFI' | 'ASAAS'
   efiAccountIdentifier?: string | null
   efiSandbox?: boolean
+  // Telefone do estabelecimento (WhatsApp) — usado no botão "Enviar
+  // comprovante" do Pix manual (chave própria, sem gateway).
+  tenantWhatsapp?: string | null
 }
 
 // ─── Componente countdown PIX ────────────────────────────────────────────────
@@ -131,12 +142,18 @@ function PixSection({
   payment,
   color,
   orderId,
+  orderNumber,
   onRefresh,
+  isManual,
+  tenantWhatsapp,
 }: {
   payment: Payment
   color: string
   orderId: string
+  orderNumber: number
   onRefresh: () => void
+  isManual?: boolean
+  tenantWhatsapp?: string | null
 }) {
   const [copied, setCopied] = useState(false)
   const [expired, setExpired] = useState(() => {
@@ -150,6 +167,12 @@ function PixSection({
     setCopied(true)
     setTimeout(() => setCopied(false), 2500)
   }
+
+  const whatsappHref = tenantWhatsapp
+    ? `https://wa.me/${tenantWhatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(
+        `Olá! Acabei de pagar o Pix do pedido #${String(orderNumber).padStart(4, '0')} (${formatCurrency(payment.amount)}). Segue o comprovante:`
+      )}`
+    : null
 
   const qrImageSrc = payment.pixQrCodeBase64
     ? `data:image/png;base64,${payment.pixQrCodeBase64}`
@@ -189,7 +212,7 @@ function PixSection({
       </div>
 
       <div className="p-5 space-y-4">
-        {expired ? (
+        {!isManual && expired ? (
           <div className="text-center py-8 space-y-3">
             <div className="w-16 h-16 rounded-3xl bg-red-50 dark:bg-red-950/20 flex items-center justify-center mx-auto">
               <AlertCircle className="w-8 h-8 text-red-400" />
@@ -231,7 +254,7 @@ function PixSection({
               </div>
             )}
 
-            {payment.pixExpiresAt && (
+            {!isManual && payment.pixExpiresAt && (
               <PixCountdown
                 expiresAt={new Date(payment.pixExpiresAt)}
                 onExpired={() => setExpired(true)}
@@ -263,24 +286,59 @@ function PixSection({
               </div>
             )}
 
-            <div className="bg-blue-50 dark:bg-blue-950/20 rounded-2xl p-3 space-y-1.5">
-              <p className="text-xs font-bold text-blue-700 dark:text-blue-300">Como pagar:</p>
-              {[
-                'Abra seu banco ou carteira digital',
-                'Escolha pagar via PIX',
-                'Escaneie o QR Code ou cole o código',
-                'Confirme o pagamento',
-              ].map((step, i) => (
-                <p key={i} className="text-xs text-blue-600 dark:text-blue-400 flex items-start gap-1.5">
-                  <span className="font-black flex-shrink-0">{i + 1}.</span>
-                  {step}
+            {isManual ? (
+              <>
+                {whatsappHref && (
+                  <a
+                    href={whatsappHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-3 rounded-2xl text-white font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-95 bg-[#25D366]"
+                  >
+                    📲 Enviar comprovante pelo WhatsApp
+                  </a>
+                )}
+                <div className="bg-blue-50 dark:bg-blue-950/20 rounded-2xl p-3 space-y-1.5">
+                  <p className="text-xs font-bold text-blue-700 dark:text-blue-300">Como pagar:</p>
+                  {[
+                    'Abra seu banco ou carteira digital',
+                    'Escolha pagar via PIX',
+                    'Escaneie o QR Code ou cole o código',
+                    'Envie o comprovante pelo WhatsApp acima',
+                  ].map((step, i) => (
+                    <p key={i} className="text-xs text-blue-600 dark:text-blue-400 flex items-start gap-1.5">
+                      <span className="font-black flex-shrink-0">{i + 1}.</span>
+                      {step}
+                    </p>
+                  ))}
+                </div>
+                <p className="text-[10px] text-center text-gray-400">
+                  Esse pagamento é conferido pelo estabelecimento — a confirmação pode levar
+                  alguns minutos depois do envio do comprovante.
                 </p>
-              ))}
-            </div>
+              </>
+            ) : (
+              <>
+                <div className="bg-blue-50 dark:bg-blue-950/20 rounded-2xl p-3 space-y-1.5">
+                  <p className="text-xs font-bold text-blue-700 dark:text-blue-300">Como pagar:</p>
+                  {[
+                    'Abra seu banco ou carteira digital',
+                    'Escolha pagar via PIX',
+                    'Escaneie o QR Code ou cole o código',
+                    'Confirme o pagamento',
+                  ].map((step, i) => (
+                    <p key={i} className="text-xs text-blue-600 dark:text-blue-400 flex items-start gap-1.5">
+                      <span className="font-black flex-shrink-0">{i + 1}.</span>
+                      {step}
+                    </p>
+                  ))}
+                </div>
 
-            <p className="text-[10px] text-center text-gray-400">
-              Após o pagamento, o status é atualizado automaticamente em até 30 segundos
-            </p>
+                <p className="text-[10px] text-center text-gray-400">
+                  Após o pagamento, o status é atualizado automaticamente em até 30 segundos
+                </p>
+              </>
+            )}
           </>
         )}
       </div>
@@ -289,14 +347,21 @@ function PixSection({
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey, cardProvider, efiAccountIdentifier, efiSandbox }: OrderTrackingProps) {
+export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey, cardProvider, efiAccountIdentifier, efiSandbox, tenantWhatsapp }: OrderTrackingProps) {
   const [order, setOrder] = useState(initialOrder)
   const [isRefreshingPix, setIsRefreshingPix] = useState(false)
+  const [tracking, setTracking] = useState<{
+    store: { lat: number; lng: number } | null
+    destination: { lat: number; lng: number } | null
+    courier: { lat: number; lng: number; updatedAt?: string | null } | null
+  } | null>(null)
 
   const color = order.tenant.primaryColor ?? '#f97316'
   const pendingPayment = order.payments[0] ?? null
-  const needsPixPayment = pendingPayment?.method === 'PIX' && order.paymentStatus !== 'PAID'
+  const needsPixPayment = (pendingPayment?.method === 'PIX' || pendingPayment?.method === 'PIX_MANUAL') && order.paymentStatus !== 'PAID'
+  const isManualPix = pendingPayment?.method === 'PIX_MANUAL'
   const isEfiCard = cardProvider === 'EFI' && !!efiAccountIdentifier
+  const isAsaasCard = cardProvider === 'ASAAS'
   const needsCardPayment =
     pendingPayment?.method === 'CREDIT_CARD' &&
     order.paymentStatus !== 'PAID' &&
@@ -322,6 +387,7 @@ export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey, c
             paymentStatus: data.paymentStatus ?? prev.paymentStatus,
             payments:      data.payments?.length ? data.payments : prev.payments,
           }))
+          if (data.tracking) setTracking(data.tracking)
         }
       } catch {}
     }, 5000)
@@ -396,7 +462,10 @@ export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey, c
             payment={pixPayment}
             color={color}
             orderId={order.id}
+            orderNumber={order.orderNumber}
             onRefresh={handleRefreshPix}
+            isManual={isManualPix}
+            tenantWhatsapp={tenantWhatsapp}
           />
         )}
 
@@ -407,6 +476,20 @@ export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey, c
               amount={Number(order.total)}
               accountIdentifier={efiAccountIdentifier!}
               sandbox={!!efiSandbox}
+              color={color}
+              statusToken={statusToken}
+              onSuccess={() => {
+                setOrder((prev) => ({
+                  ...prev,
+                  paymentStatus: 'PAID',
+                  status: prev.status === 'PENDING' ? 'CONFIRMED' : prev.status,
+                }))
+              }}
+            />
+          ) : isAsaasCard ? (
+            <AsaasCardPaymentForm
+              orderId={order.id}
+              amount={Number(order.total)}
               color={color}
               statusToken={statusToken}
               onSuccess={() => {
@@ -492,6 +575,20 @@ export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey, c
                 ))}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ── MAPA DE RASTREAMENTO AO VIVO ── */}
+        {isDelivery && order.status === 'OUT_FOR_DELIVERY' && (
+          <div className="space-y-2">
+            <p className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5 px-1">
+              🛵 Acompanhe o entregador em tempo real
+            </p>
+            <DeliveryLiveMap
+              store={tracking?.store ?? null}
+              destination={tracking?.destination ?? null}
+              courier={tracking?.courier ?? null}
+            />
           </div>
         )}
 

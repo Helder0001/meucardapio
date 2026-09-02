@@ -22,6 +22,7 @@ interface CartDrawerProps {
     pixEnabled?: boolean
     cardEnabled?: boolean
     linkEnabled?: boolean
+    manualPixEnabled?: boolean
     deliveryZones: Array<{
       id: string
       bairro: string | null
@@ -38,7 +39,7 @@ type Step = 'cart' | 'info' | 'payment'
 // CORREÇÃO: separar crédito e débito
 // CORREÇÃO: separar crédito pago online (cobrado na hora, confirmação
 // automática) de crédito pago na entrega/retirada (manual, na maquininha)
-type PaymentMethodValue = 'PIX' | 'CASH' | 'CREDIT_CARD' | 'CREDIT_CARD_MANUAL' | 'DEBIT_CARD' | 'LINK'
+type PaymentMethodValue = 'PIX' | 'PIX_MANUAL' | 'CASH' | 'CREDIT_CARD' | 'CREDIT_CARD_MANUAL' | 'DEBIT_CARD' | 'LINK'
 
 const STEPS: Step[] = ['cart', 'info', 'payment']
 const STEP_LABELS = { cart: 'Carrinho', info: 'Seus dados', payment: 'Pagamento' }
@@ -46,14 +47,12 @@ const STEP_LABELS = { cart: 'Carrinho', info: 'Seus dados', payment: 'Pagamento'
 interface PaymentOption { value: PaymentMethodValue; label: string; sub: string }
 
 // Pago agora, direto no cardápio — confirmação automática
+// NOTA: 'LINK' (Mercado Pago) foi removido de propósito das opções do
+// cardápio digital — esse método agora existe SOMENTE no PDV/balcão.
 const ONLINE_PAYMENT_OPTIONS: PaymentOption[] = [
   { value: 'PIX',         label: '⚡ PIX',    sub: 'Confirmação automática' },
+  { value: 'PIX_MANUAL',  label: '⚡ PIX (chave direta)', sub: 'Confirmação em alguns minutos, após envio do comprovante' },
   { value: 'CREDIT_CARD', label: '💳 Crédito', sub: 'Pague agora, na hora' },
-  // Alternativa que redireciona para a página de pagamento do Mercado
-  // Pago — o cliente escolhe lá entre Pix, crédito, débito etc. Útil como
-  // opção de reserva quando o pagamento direto (PIX/cartão no próprio
-  // cardápio) falhar por qualquer motivo.
-  { value: 'LINK',        label: '🔗 Link de pagamento', sub: 'Escolha Pix ou cartão na página do Mercado Pago' },
 ]
 
 // Pago na hora da entrega/retirada — confirmado manualmente pela loja
@@ -79,11 +78,13 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const color = tenant.primaryColor ?? '#f97316'
   const pixEnabled = tenant.pixEnabled ?? tenant.settings?.pixEnabled ?? true
   const cardEnabled = tenant.cardEnabled ?? tenant.settings?.cardEnabled ?? true
-  const linkEnabled = tenant.linkEnabled ?? tenant.settings?.linkEnabled ?? true
+  const manualPixEnabled = tenant.manualPixEnabled ?? tenant.settings?.manualPixEnabled ?? false
+  // 'LINK' (Mercado Pago) não é mais uma opção no cardápio digital — ver
+  // ONLINE_PAYMENT_OPTIONS acima. Fica exclusivo do PDV/balcão.
   const onlineOptions = ONLINE_PAYMENT_OPTIONS.filter((o) => {
     if (o.value === 'PIX') return pixEnabled
+    if (o.value === 'PIX_MANUAL') return manualPixEnabled
     if (o.value === 'CREDIT_CARD') return cardEnabled
-    if (o.value === 'LINK') return linkEnabled && (pixEnabled || cardEnabled)
     return true
   })
 
