@@ -52,6 +52,17 @@ export async function PATCH(
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params
+
+  // VULN-MEDIA-06 CORRIGIDO: o GET já tinha printerLimiter contra força
+  // bruta de token; o PATCH fazia a mesma busca por token (findFirst)
+  // sem nenhum rate limit, permitindo enumerar tokens válidos por aqui
+  // sem estar sujeito ao mesmo limite.
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '127.0.0.1'
+  const { success } = await printerLimiter.limit(ip)
+  if (!success) {
+    return NextResponse.json({ error: 'Muitas requisições' }, { status: 429 })
+  }
+
   const body = await req.json()
   const { jobId, status = 'PRINTED', error } = body
 
