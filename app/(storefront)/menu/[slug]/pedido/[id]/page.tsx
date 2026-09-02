@@ -50,7 +50,7 @@ export default async function OrderPage({ params }: PageProps) {
       deliveryBairro: true,
       notes: true,
       tenant: {
-        select: { name: true, slug: true, primaryColor: true, logo: true },
+        select: { name: true, slug: true, primaryColor: true, logo: true, phone: true },
       },
       items: {
         select: {
@@ -66,7 +66,7 @@ export default async function OrderPage({ params }: PageProps) {
         },
       },
       payments: {
-        where: { method: { in: ['PIX', 'CREDIT_CARD'] } },
+        where: { method: { in: ['PIX', 'PIX_MANUAL', 'CREDIT_CARD'] } },
         orderBy: { createdAt: 'desc' },
         take: 1,
         select: {
@@ -92,7 +92,7 @@ export default async function OrderPage({ params }: PageProps) {
   // Public Key do MP do tenant — só é buscada quando existe pagamento
   // pendente de cartão, para não fazer essa query sem necessidade.
   let mpPublicKey: string | null = null
-  let cardProvider: 'MERCADOPAGO' | 'STRIPE' | 'EFI' = 'MERCADOPAGO'
+  let cardProvider: 'MERCADOPAGO' | 'STRIPE' | 'EFI' | 'ASAAS' = 'MERCADOPAGO'
   let efiAccountIdentifier: string | null = null
   let efiSandbox = false
   const hasPendingCardPayment = order.payments[0]?.method === 'CREDIT_CARD' && order.paymentStatus !== 'PAID'
@@ -110,7 +110,7 @@ export default async function OrderPage({ params }: PageProps) {
       // decide se mostra alguma coisa).
       if (!efiAccountIdentifier) cardProvider = 'MERCADOPAGO'
     }
-    if (cardProvider !== 'EFI') {
+    if (cardProvider !== 'EFI' && cardProvider !== 'ASAAS') {
       mpPublicKey = await resolveTenantMpPublicKey(order.tenantId)
     }
   }
@@ -147,6 +147,7 @@ export default async function OrderPage({ params }: PageProps) {
       cardProvider={cardProvider}
       efiAccountIdentifier={efiAccountIdentifier}
       efiSandbox={efiSandbox}
+      tenantWhatsapp={order.tenant.phone}
     />
   )
 }
