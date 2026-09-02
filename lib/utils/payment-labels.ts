@@ -7,6 +7,7 @@
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   PIX:                '⚡ PIX',
+  PIX_MANUAL:         '⚡ PIX (chave própria)',
   CASH:               '💵 Dinheiro',
   CREDIT_CARD:        '💳 Cartão de Crédito',
   CREDIT_CARD_MANUAL: '💳 Crédito (entrega/retirada)',
