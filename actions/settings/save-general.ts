@@ -19,6 +19,8 @@ const schema = z.object({
   logo:           z.string().url().optional().or(z.literal('')),
   instagram:      z.string().max(100).optional(),
   address:        z.string().max(300).optional(),
+  latitude:       z.string().optional(),
+  longitude:      z.string().optional(),
   acceptedPayments: z.string().optional(), // JSON array
 })
 
@@ -47,6 +49,8 @@ export async function saveGeneralSettings(
     logo:             formData.get('logo') || undefined,
     instagram:        formData.get('instagram') || undefined,
     address:          formData.get('address') || undefined,
+    latitude:         formData.get('latitude') || undefined,
+    longitude:        formData.get('longitude') || undefined,
     acceptedPayments: formData.get('acceptedPayments') || undefined,
   }
 
@@ -96,6 +100,9 @@ export async function saveGeneralSettings(
   if (!parsed.data.coverImage) delete newSettings.coverImage
   if (!parsed.data.instagram) {} // manter como está
 
+  const parsedLat = parsed.data.latitude ? parseFloat(parsed.data.latitude) : undefined
+  const parsedLng = parsed.data.longitude ? parseFloat(parsed.data.longitude) : undefined
+
   await prisma.$transaction(async (tx) => {
     await tx.tenant.update({
       where: { id: tenantId },
@@ -107,6 +114,8 @@ export async function saveGeneralSettings(
         primaryColor: parsed.data.primaryColor ?? null,
         // Logo atualizado se fornecido
         ...(parsed.data.logo ? { logo: parsed.data.logo } : {}),
+        ...(parsedLat !== undefined && !Number.isNaN(parsedLat) ? { latitude: parsedLat } : {}),
+        ...(parsedLng !== undefined && !Number.isNaN(parsedLng) ? { longitude: parsedLng } : {}),
         settings:     newSettings as any,
       },
     })
