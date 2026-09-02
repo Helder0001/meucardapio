@@ -34,7 +34,7 @@ export default async function PaymentSettingsPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Pagamentos</h1>
         <p className="text-muted-foreground text-sm mt-0.5">
-          Conecte a Efí Bank ou use o Pix Manual para receber PIX e cartão dos seus clientes
+          Conecte Mercado Pago, Stripe ou Efí Bank, ou use o Pix Manual para receber PIX e cartão dos seus clientes
         </p>
       </div>
 
