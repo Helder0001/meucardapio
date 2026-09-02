@@ -7,13 +7,39 @@
 import { useFormState, useFormStatus } from 'react-dom'
 import { useEffect, useState, useTransition } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { savePaymentSettings, removePaymentCredentials, togglePaymentOption, setPaymentProvider, type ProviderChoice } from '@/actions/settings/save-payment-settings'
-import { AsaasConnectionCard } from '@/components/dashboard/asaas-connection-form'
+import { savePaymentSettings, togglePaymentOption, setPaymentProvider, type ProviderChoice } from '@/actions/settings/save-payment-settings'
 import {
   Loader2, Eye, EyeOff, CheckCircle2, AlertCircle, ExternalLink,
   Trash2, ShieldCheck, QrCode, Unplug, AlertTriangle, CreditCard,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+// Card estático pra gateways temporariamente desativados (não clicável,
+// sem lógica de conexão) — Mercado Pago, Stripe e Asaas ficam só como
+// "em breve" por enquanto; apenas Efí Bank e o Pix Manual processam
+// pagamento de verdade nesta versão.
+function ComingSoonGatewayCard({
+  name, description, icon, iconBg,
+}: { name: string; description: string; icon: React.ReactNode; iconBg: string }) {
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 opacity-60 cursor-not-allowed select-none">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <div className={cn('h-9 w-9 rounded-lg flex items-center justify-center text-white', iconBg)}>
+            {icon}
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground">{name}</h3>
+            <p className="text-xs text-muted-foreground">{description}</p>
+          </div>
+        </div>
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full text-muted-foreground bg-muted">
+          Em breve
+        </span>
+      </div>
+    </div>
+  )
+}
 
 // Toggle que salva IMEDIATAMENTE ao clicar (nada de precisar apertar um
 // botão "Salvar" separado — isso confundia e fazia parecer que a troca não
@@ -634,182 +660,37 @@ function ProviderSelector() {
 export function PaymentSettingsForm({ hasSecret, pixEnabled, cardEnabled, linkEnabled }: PaymentSettingsFormProps) {
   const [state, formAction] = useFormState(savePaymentSettings, {})
   const [showSecret, setShowSecret] = useState(false)
-  const [isRemoving, setIsRemoving] = useState(false)
-  const [mpStatus, setMpStatus] = useState<MpStatus | null>(null)
-  const [mpLoading, setMpLoading] = useState(true)
-  const [connecting, setConnecting] = useState(false)
-  const [disconnecting, setDisconnecting] = useState(false)
-  const [mpError, setMpError] = useState<string | null>(null)
-
-  const searchParams = useSearchParams()
-
-  async function loadMpStatus() {
-    try {
-      const res = await fetch('/api/mercadopago/status')
-      const data = await res.json()
-      setMpStatus(data)
-    } catch {
-      setMpError('Não foi possível carregar o status da conexão com o Mercado Pago.')
-    } finally {
-      setMpLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    loadMpStatus()
-  }, [])
-
-  useEffect(() => {
-    if (searchParams.get('error') === 'mercadopago') {
-      setMpError('Não foi possível concluir a conexão com o Mercado Pago. Tente novamente.')
-    }
-  }, [searchParams])
-
-  async function handleConnect() {
-    setConnecting(true)
-    setMpError(null)
-    try {
-      const res = await fetch('/api/mercadopago/connect', { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) {
-        setMpError(data.error ?? 'Não foi possível iniciar a conexão.')
-        return
-      }
-      window.location.href = data.authorizationUrl
-    } finally {
-      setConnecting(false)
-    }
-  }
-
-  async function handleDisconnect() {
-    if (!confirm('Desconectar sua conta do Mercado Pago? O PIX vai parar de funcionar até reconectar.')) return
-    setDisconnecting(true)
-    try {
-      await fetch('/api/mercadopago/disconnect', { method: 'POST' })
-      await loadMpStatus()
-    } finally {
-      setDisconnecting(false)
-    }
-  }
-
-  async function handleRemoveLegacy() {
-    if (!confirm('Remover o token antigo configurado manualmente?')) return
-    setIsRemoving(true)
-    await removePaymentCredentials()
-    setIsRemoving(false)
-    await loadMpStatus()
-  }
 
   return (
     <div className="space-y-6">
-      {mpError && (
-        <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-          <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-          {mpError}
-        </div>
-      )}
 
-      {/* Conexão com o Mercado Pago (OAuth) */}
-      <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg flex items-center justify-center text-white font-bold text-sm bg-[#009EE3]">
-              <QrCode className="h-5 w-5" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-foreground">Mercado Pago</h3>
-              <p className="text-xs text-muted-foreground">PIX e cartão dos seus clientes</p>
-            </div>
-          </div>
+      {/* Mercado Pago — desativado por enquanto (só Efí Bank e Pix Manual
+          processam pagamento nesta versão; ver ComingSoonGatewayCard acima). */}
+      <ComingSoonGatewayCard
+        name="Mercado Pago"
+        description="PIX e cartão dos seus clientes"
+        iconBg="bg-[#009EE3]"
+        icon={<QrCode className="h-5 w-5" />}
+      />
 
-          {mpLoading ? (
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          ) : mpStatus?.connected ? (
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full text-emerald-600 bg-emerald-500/10">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Conectado
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full text-muted-foreground bg-muted">
-              Não conectado
-            </span>
-          )}
-        </div>
-
-        {!mpLoading && mpStatus?.connected && (
-          <div className="space-y-3 pt-1">
-            <p className="text-sm text-muted-foreground">
-              Pagamentos dos seus clientes vão direto para a sua conta do Mercado Pago.
-            </p>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-muted-foreground">Modo:</span>
-              {mpStatus.liveMode === false || mpStatus.isTestKey === true ? (
-                <span className="font-semibold text-amber-600">⚠️ Teste (sandbox) — pagamentos não são reais</span>
-              ) : mpStatus.liveMode === true || mpStatus.isTestKey === false ? (
-                <span className="font-semibold text-emerald-600">✅ Produção — pagamentos reais</span>
-              ) : (
-                <span className="font-semibold text-muted-foreground">Não foi possível determinar</span>
-              )}
-            </div>
-            <div className="flex items-center justify-between pt-3 border-t border-border text-xs text-muted-foreground">
-              <span>
-                Conectado {mpStatus.connectedAt ? `em ${new Date(mpStatus.connectedAt).toLocaleDateString('pt-BR')}` : ''}
-              </span>
-              <button
-                onClick={handleDisconnect}
-                disabled={disconnecting}
-                className="flex items-center gap-1 text-destructive hover:text-destructive/80 transition-colors disabled:opacity-50"
-              >
-                {disconnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unplug className="h-3.5 w-3.5" />}
-                Desconectar
-              </button>
-            </div>
-          </div>
-        )}
-
-        {!mpLoading && !mpStatus?.connected && (
-          <button
-            onClick={handleConnect}
-            disabled={connecting}
-            className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 disabled:opacity-60 transition-colors text-sm"
-          >
-            {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-            Conectar conta do Mercado Pago
-          </button>
-        )}
-
-        {!mpLoading && mpStatus?.hasLegacyToken && (
-          <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-500">
-            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-            <div className="space-y-1.5">
-              <p>
-                Você ainda tem um Access Token antigo configurado manualmente.
-                {mpStatus.connected
-                  ? ' A conexão acima (mais segura) está sendo usada como prioridade.'
-                  : ' Ele está sendo usado até você conectar via Mercado Pago acima.'}
-              </p>
-              <button
-                onClick={handleRemoveLegacy}
-                disabled={isRemoving}
-                className="flex items-center gap-1 font-medium hover:underline disabled:opacity-50"
-              >
-                {isRemoving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-                Remover token antigo
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Outras formas de receber — conexão apenas por enquanto. O
-          roteamento de qual provedor processa cada PIX/cartão/link ainda
-          não está ligado a essas conexões; fica pra uma etapa seguinte. */}
+      {/* Outras formas de receber — Stripe e Asaas também desativados por
+          enquanto; só a Efí Bank fica clicável/conectável aqui. */}
       <div className="pt-1">
         <h2 className="text-sm font-semibold text-foreground mb-3">Outras formas de receber</h2>
         <div className="space-y-4">
-          <StripeConnectionCard />
+          <ComingSoonGatewayCard
+            name="Stripe"
+            description="Cartão internacional dos seus clientes"
+            iconBg="bg-[#635BFF]"
+            icon={<CreditCard className="h-5 w-5" />}
+          />
           <EfiConnectionCard />
-          <AsaasConnectionCard />
+          <ComingSoonGatewayCard
+            name="Asaas"
+            description="PIX e cartão dos seus clientes"
+            iconBg="bg-[#00C4B3]"
+            icon={<QrCode className="h-5 w-5" />}
+          />
         </div>
       </div>
 

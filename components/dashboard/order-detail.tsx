@@ -66,7 +66,9 @@ const STATUS_PT: Record<string, string> = {
 // na hora (sempre manual); no cardápio digital, CREDIT_CARD é cobrado online
 // e confirmado sozinho via webhook, mas mantém-se aqui como rede de segurança
 // caso o webhook atrase/falhe. CREDIT_CARD_MANUAL é sempre manual (entrega/retirada).
-const MANUAL_METHODS = ['CASH', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD', 'VOUCHER', 'TRANSFER']
+// PIX_MANUAL (chave direta, fora de gateway) nunca recebe webhook — sempre
+// depende de alguém confirmar manualmente aqui após ver o comprovante.
+const MANUAL_METHODS = ['CASH', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD', 'VOUCHER', 'TRANSFER', 'PIX_MANUAL']
 
 const STATUS_FLOW = [
   { key: 'PENDING',           label: 'Recebido' },
@@ -353,7 +355,7 @@ export function OrderDetail({
   const canConfirmPayment = (payment: any) => {
     if (payment.status === 'PAID' || payment.status === 'FAILED') return false
     if (status === 'CANCELLED') return false
-    const isManualMethod = ['CASH', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD'].includes(payment.method)
+    const isManualMethod = ['CASH', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD', 'PIX_MANUAL'].includes(payment.method)
     if (!isManualMethod) return false
     if (isDeliveryPerson) {
       // Entregador só confirma pagamento de pedidos DELIVERY, e só após entregue
