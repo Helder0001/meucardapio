@@ -76,6 +76,13 @@ export function KanbanBoard({ tenantId, userRole = '', lockedFilter }: KanbanBoa
         audioRef.current = new AudioContext()
       }
       const ctx = audioRef.current
+      // Navegadores suspendem o AudioContext até haver um gesto do usuário
+      // na página; sem isso o oscillator "toca" mas nenhum som sai. Como o
+      // primeiro pedido pode chegar antes de qualquer clique, garantimos o
+      // resume aqui (best-effort) além do listener de desbloqueio abaixo.
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {})
+      }
       const oscillator = ctx.createOscillator()
       const gainNode = ctx.createGain()
       oscillator.connect(gainNode)
@@ -90,6 +97,31 @@ export function KanbanBoard({ tenantId, userRole = '', lockedFilter }: KanbanBoa
       // AudioContext pode não estar disponível
     }
   }, [soundEnabled])
+
+  // Desbloqueia o áudio no primeiro clique/toque/tecla na página — sem
+  // isso o navegador recusa tocar som de eventos assíncronos (SSE) que
+  // não têm um gesto do usuário por perto, e o alerta fica mudo até que
+  // algo dispare um resume() manual.
+  useEffect(() => {
+    const unlockAudio = () => {
+      if (!audioRef.current) {
+        try {
+          audioRef.current = new AudioContext()
+        } catch {
+          return
+        }
+      }
+      if (audioRef.current.state === 'suspended') {
+        audioRef.current.resume().catch(() => {})
+      }
+    }
+    document.addEventListener('pointerdown', unlockAudio, { once: true })
+    document.addEventListener('keydown', unlockAudio, { once: true })
+    return () => {
+      document.removeEventListener('pointerdown', unlockAudio)
+      document.removeEventListener('keydown', unlockAudio)
+    }
+  }, [])
 
   // Conectar ao SSE
   const connect = useCallback(() => {
@@ -295,7 +327,17 @@ export function KanbanBoard({ tenantId, userRole = '', lockedFilter }: KanbanBoa
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setSoundEnabled((s) => !s)}
+            onClick={() => {
+              setSoundEnabled((s) => !s)
+              // Clique é um gesto do usuário — aproveita pra desbloquear o
+              // áudio, caso o listener global ainda não tenha rodado.
+              if (!audioRef.current) {
+                try { audioRef.current = new AudioContext() } catch {}
+              }
+              if (audioRef.current?.state === 'suspended') {
+                audioRef.current.resume().catch(() => {})
+              }
+            }}
             className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             title={soundEnabled ? 'Desativar som' : 'Ativar som'}
           >
