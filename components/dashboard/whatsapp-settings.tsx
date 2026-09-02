@@ -21,8 +21,19 @@ export function WhatsAppSettings({ tenantId, config }: WhatsAppSettingsProps) {
   const [status, setStatus]         = useState(config?.status ?? 'DISCONNECTED')
   const [qrCode, setQrCode]         = useState<string | null>(null)
   const [isConnecting, setIsConnecting] = useState(false)
+  const [serviceError, setServiceError] = useState<string | null>(null)
+  const [retryCooldown, setRetryCooldown] = useState(0)
 
   const isConnected = status === 'CONNECTED'
+
+  // Cooldown depois de um erro de serviço (ex: licença da Evolution API
+  // pendente) — evita o lojista clicar em "Conectar" repetidamente sem
+  // efeito, que é o que estava acontecendo nos logs.
+  useEffect(() => {
+    if (retryCooldown <= 0) return
+    const t = setInterval(() => setRetryCooldown((s) => Math.max(0, s - 1)), 1000)
+    return () => clearInterval(t)
+  }, [retryCooldown])
 
   // Polling enquanto aguarda scan do QR Code
   useEffect(() => {
@@ -47,6 +58,7 @@ export function WhatsAppSettings({ tenantId, config }: WhatsAppSettingsProps) {
 
   const handleConnect = async () => {
     setIsConnecting(true)
+    setServiceError(null)
     try {
       const res  = await fetch('/api/whatsapp/connect', {
         method: 'POST',
@@ -57,6 +69,12 @@ export function WhatsAppSettings({ tenantId, config }: WhatsAppSettingsProps) {
 
       if (data.error) {
         toast.error(data.error)
+        if (res.status === 503) {
+          // Erro de serviço (ex: licença pendente) — não adianta tentar de
+          // novo em seguida, então trava o botão por um tempo.
+          setServiceError(data.error)
+          setRetryCooldown(30)
+        }
         return
       }
 
@@ -156,13 +174,20 @@ export function WhatsAppSettings({ tenantId, config }: WhatsAppSettingsProps) {
           <p className="text-sm text-muted-foreground mb-4">
             Conecte o WhatsApp do seu restaurante para enviar notificações automáticas aos clientes sobre o status dos pedidos.
           </p>
+          {serviceError && (
+            <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-3 mb-4">
+              {serviceError}
+            </p>
+          )}
           <button
             onClick={handleConnect}
-            disabled={isConnecting || status === 'CONNECTING'}
+            disabled={isConnecting || status === 'CONNECTING' || retryCooldown > 0}
             className="flex items-center gap-2 px-5 py-2.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
           >
             {isConnecting ? (
               <><Loader2 className="h-4 w-4 animate-spin" /> Gerando QR Code...</>
+            ) : retryCooldown > 0 ? (
+              <>Tentar novamente em {retryCooldown}s</>
             ) : (
               <><Wifi className="h-4 w-4" /> Conectar WhatsApp</>
             )}
