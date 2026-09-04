@@ -12,9 +12,12 @@ import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
 import { paymentMethodLabel } from '@/lib/utils/payment-labels'
 import { z } from 'zod'
 import { isValidCpf, onlyDigits, pixPayerEmail } from '@/lib/utils/cpf'
+import { getPaymentProvider } from '@/lib/payments/provider-router'
+import { createTenantPixCharge } from '@/lib/efi/tenant-pix-client'
+import { createAsaasPixCharge } from '@/lib/asaas/tenant-payments'
 
 const paymentEntrySchema = z.object({
-  method: z.enum(['PIX', 'CASH', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD', 'VOUCHER', 'TRANSFER']),
+  method: z.enum(['PIX', 'PIX_MANUAL', 'CASH', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD', 'VOUCHER', 'TRANSFER']),
   amount: z.number().positive('Valor deve ser positivo'),
   changeFor: z.number().positive().optional(),
 })
@@ -34,14 +37,86 @@ const bodySchema = z.object({
 
 const ALLOWED_ROLES = ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'STAFF']
 
-// ── Gera PIX no Mercado Pago e salva o Payment ────────────────────────────────
+// CORREÇÃO (bug reportado: "PIX do cobrar depois puxando Mercado Pago"):
+// esta função era hardcoded pro Mercado Pago — pedidos "cobrar depois"
+// (registrados aqui via /add-payment) sempre tentavam PIX via MP mesmo
+// quando o tenant configurou EFI ou Asaas como provedor de Pix, dando
+// "Erro ao gerar PIX. Verifique as credenciais do Mercado Pago" mesmo com
+// as credenciais certas do provedor de verdade. Agora usa o mesmo
+// roteamento multi-provedor de actions/orders/create-order.ts.
 async function createPixPayment(params: {
   tenantId: string
   orderId: string
   amount: number
   deviceId?: string
   customerCpf?: string
+  customerName?: string
+  customerPhone?: string
 }) {
+  const provider = await getPaymentProvider(params.tenantId, 'pix')
+
+  if (provider === 'ASAAS') {
+    const { asaasPaymentId, pixQrCode, pixQrCodeBase64, pixExpiresAt } = await createAsaasPixCharge({
+      tenantId: params.tenantId,
+      orderId: params.orderId,
+      amount: params.amount,
+      customerName: params.customerName,
+      customerCpf: params.customerCpf,
+      customerPhone: params.customerPhone,
+    })
+
+    console.log('[pix][add-payment][asaas]', { orderId: params.orderId, asaasPaymentId })
+
+    const created = await prisma.payment.create({
+      data: {
+        tenantId: params.tenantId,
+        orderId: params.orderId,
+        method: 'PIX',
+        status: 'PENDING',
+        amount: params.amount,
+        provider: 'ASAAS',
+        providerReference: asaasPaymentId,
+        pixQrCode,
+        pixQrCodeBase64,
+        pixExpiresAt,
+      },
+    })
+
+    return { created, pixQrCode, pixQrCodeBase64 }
+  }
+
+  if (provider === 'EFI') {
+    const { txid, pixCopiaECola, pixQrCodeImage } = await createTenantPixCharge({
+      tenantId: params.tenantId,
+      orderId: params.orderId,
+      amount: params.amount,
+      payerCpf: params.customerCpf ? onlyDigits(params.customerCpf) : undefined,
+      payerName: params.customerName?.trim() || 'Cliente',
+      description: `Pedido #${params.orderId.slice(-8).toUpperCase()}`,
+      expirationSeconds: 300,
+    })
+
+    console.log('[pix][add-payment][efi]', { orderId: params.orderId, txid })
+
+    const created = await prisma.payment.create({
+      data: {
+        tenantId: params.tenantId,
+        orderId: params.orderId,
+        method: 'PIX',
+        status: 'PENDING',
+        amount: params.amount,
+        provider: 'EFI',
+        providerReference: txid,
+        pixQrCode: pixCopiaECola,
+        pixQrCodeBase64: pixQrCodeImage ?? undefined,
+        pixExpiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5min — mesmo tempo configurado na Efí abaixo
+      },
+    })
+
+    return { created, pixQrCode: pixCopiaECola, pixQrCodeBase64: pixQrCodeImage ?? undefined }
+  }
+
+  // MERCADOPAGO (ou STRIPE, que não tem QR inline — cai pro MP igual em create-order.ts)
   const accessToken = await resolveTenantMpAccessToken(params.tenantId)
   if (!accessToken) throw new Error('Mercado Pago não configurado')
 
@@ -64,7 +139,9 @@ async function createPixPayment(params: {
         // pagador — agora usa o CPF real coletado na tela (ver comentário
         // equivalente em actions/orders/create-order.ts).
         email: pixPayerEmail(params.customerCpf ?? ''),
-        identification: { type: 'CPF', number: onlyDigits(params.customerCpf ?? '') },
+        ...(params.customerCpf
+          ? { identification: { type: 'CPF', number: onlyDigits(params.customerCpf) } }
+          : {}),
       },
       description: `Pedido #${params.orderId.slice(-8).toUpperCase()}`,
       external_reference: params.orderId,
@@ -79,7 +156,7 @@ async function createPixPayment(params: {
   }
 
   const mpData = await response.json()
-  console.log('[pix][add-payment]', {
+  console.log('[pix][add-payment][mp]', {
     orderId: params.orderId,
     mpPaymentId: mpData.id,
     status: mpData.status,
@@ -143,7 +220,7 @@ export async function POST(
     select: {
       id: true, orderNumber: true, status: true,
       paymentStatus: true, type: true, total: true, customerId: true,
-      customer: { select: { cpf: true } },
+      customer: { select: { cpf: true, name: true, phone: true } },
       payments: { select: { id: true, method: true, status: true, amount: true, checkoutUrl: true } },
     },
   })
@@ -175,13 +252,22 @@ export async function POST(
   const pendingManualSum = order.payments
     .filter((p) => p.status === 'PENDING' && !p.checkoutUrl)
     .reduce((s, p) => s + Number(p.amount), 0)
-  if (alreadyPaid + pendingManualSum >= orderTotal - 0.01) {
+  // CORREÇÃO: margem de tolerância de ponto flutuante estava em 0.01 (1
+  // centavo) — do mesmo tamanho da própria unidade que estamos comparando.
+  // Com um saldo restante de exatamente R$0,01 (comum em testes, mas pode
+  // acontecer em produção após edição de pedido), a comparação
+  // "alreadyPaid >= orderTotal - 0.01" dava true mesmo sobrando 1 centavo
+  // de verdade a pagar, bloqueando o registro do pagamento restante com a
+  // mensagem enganosa de "já existe pagamento pendente". Epsilon reduzido
+  // pra meio centavo, suficiente só pra arredondamento de float.
+  const EPSILON = 0.005
+  if (alreadyPaid + pendingManualSum >= orderTotal - EPSILON) {
     return NextResponse.json({
       error: 'Já existe um pagamento registrado aguardando confirmação para este pedido. Confirme-o antes de registrar outro.',
     }, { status: 422 })
   }
 
-  if (alreadyPaid + newTotal < orderTotal - 0.01) {
+  if (alreadyPaid + newTotal < orderTotal - EPSILON) {
     return NextResponse.json({
       error: `Valor insuficiente. Total: R$${orderTotal.toFixed(2)}. Já registrado: R$${alreadyPaid.toFixed(2)}. Falta: R$${(orderTotal - alreadyPaid - newTotal).toFixed(2)}.`,
     }, { status: 422 })
@@ -198,7 +284,11 @@ export async function POST(
     if (p.method === 'PIX') {
       // PIX: gera QR Code no Mercado Pago (fora da transaction para evitar timeout)
       try {
-        const pixResult = await createPixPayment({ tenantId, orderId, amount: p.amount, deviceId, customerCpf: effectiveCpf })
+        const pixResult = await createPixPayment({
+          tenantId, orderId, amount: p.amount, deviceId, customerCpf: effectiveCpf,
+          customerName: order.customer?.name ?? undefined,
+          customerPhone: order.customer?.phone ?? undefined,
+        })
         createdPayments.push({
           id: pixResult.created.id,
           method: 'PIX',
@@ -213,7 +303,7 @@ export async function POST(
       } catch (err) {
         console.error('[add-payment] PIX error:', err)
         return NextResponse.json({
-          error: 'Erro ao gerar PIX. Verifique as credenciais do Mercado Pago.',
+          error: 'Erro ao gerar PIX. Verifique as credenciais do provedor de pagamento configurado (Mercado Pago, Efí ou Asaas).',
         }, { status: 502 })
       }
     } else {
