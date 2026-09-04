@@ -21,6 +21,7 @@ interface TenantPixChargeParams {
   payerCpf?: string
   payerName: string
   description: string
+  expirationSeconds?: number
 }
 
 export interface TenantPixChargeResult {
@@ -63,6 +64,7 @@ export async function createTenantPixCharge(params: TenantPixChargeParams): Prom
     payerCpf: params.payerCpf,
     payerName: params.payerName,
     description: params.description,
+    expirationSeconds: params.expirationSeconds,
   })
 
   const pixQrCodeImage = charge.locationId
