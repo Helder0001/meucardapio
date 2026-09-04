@@ -225,7 +225,11 @@ export async function createOrderAction(
   if (paymentsList.length > 0) {
     if (data.payments) {
       const sumPaid = data.payments.reduce((s, p) => s + p.amount, 0)
-      if (Math.abs(sumPaid - calculation.total) > 0.05) {
+      // CORREÇÃO: tolerância de 0.05 (5 centavos) era grande demais — um
+      // pedido de R$0,01 com pagamentos somando R$0,02 (o dobro) passava
+      // sem erro, criando um segundo Payment fantasma que ficava "a
+      // confirmar" mesmo com o pedido já pago de verdade.
+      if (Math.abs(sumPaid - calculation.total) > 0.005) {
         return { error: `Total dos pagamentos (${sumPaid.toFixed(2)}) não confere com o valor do pedido (${calculation.total.toFixed(2)})` }
       }
       paymentsList.forEach((p) => {
@@ -571,6 +575,8 @@ async function createPixPayment(params: {
     // genérico se o cliente não informou nome no checkout. CPF agora é
     // opcional: se não vier, a cobrança é criada sem identificar o
     // pagador (devedor fica de fora do payload — ver tenant-pix-client.ts).
+    // CORREÇÃO: expiração era de 1h (padrão da lib) — deveria ser 5min,
+    // igual ao Mercado Pago, pra manter consistência entre provedores.
     const { txid, pixCopiaECola, pixQrCodeImage } = await createTenantPixCharge({
       tenantId: params.tenantId,
       orderId: params.orderId,
@@ -578,6 +584,7 @@ async function createPixPayment(params: {
       payerCpf: params.customerCpf ? onlyDigits(params.customerCpf) : undefined,
       payerName: params.customerName?.trim() || 'Cliente',
       description: `Pedido #${params.orderId.slice(-8).toUpperCase()}`,
+      expirationSeconds: 300,
     })
 
     console.log('[pix][create][efi]', { orderId: params.orderId, txid })
@@ -593,7 +600,7 @@ async function createPixPayment(params: {
         providerReference: txid,
         pixQrCode: pixCopiaECola,
         pixQrCodeBase64: pixQrCodeImage ?? undefined,
-        pixExpiresAt: new Date(Date.now() + 60 * 60 * 1000), // expiracao configurada em 1h na criação da cobrança
+        pixExpiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5min — mesmo tempo configurado na Efí acima
       },
     })
 
