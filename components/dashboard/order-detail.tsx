@@ -136,8 +136,8 @@ function getAllowedNextStatus(
 }
 
 export function OrderDetail({
-  order, userRole, catalog = [], pixEnabled = true, cardEnabled = true,
-}: { order: any; userRole: string; catalog?: CatalogCategory[]; pixEnabled?: boolean; cardEnabled?: boolean }) {
+  order, userRole, catalog = [], pixEnabled = true, cardEnabled = true, linkEnabled = true,
+}: { order: any; userRole: string; catalog?: CatalogCategory[]; pixEnabled?: boolean; cardEnabled?: boolean; linkEnabled?: boolean }) {
   const [status,   setStatus]   = useState(order.status)
   const [payments, setPayments] = useState<any[]>(order.payments)
 
@@ -773,7 +773,7 @@ export function OrderDetail({
               </h3>
               <div className="flex items-center gap-3">
                 {/* Link de pagamento via WhatsApp — qualquer método */}
-                {stillOwed > 0 && status !== 'CANCELLED' && (
+                {stillOwed > 0 && status !== 'CANCELLED' && linkEnabled && (
                   <button
                     onClick={handleSendPaymentLink}
                     disabled={isSendingLink}
@@ -859,9 +859,25 @@ export function OrderDetail({
                       <option value="TRANSFER">🏦 Transferência</option>
                     </select>
                     <input
-                      type="number" min="0.01" step="0.01"
-                      value={p.amount || ''}
-                      onChange={(e) => setAddPayments((prev) => prev.map((x, i) => i === idx ? { ...x, amount: Number(e.target.value) } : x))}
+                      type="text" inputMode="decimal"
+                      // CORREÇÃO: type="number" com teclado numérico Android
+                      // em pt-BR mostra vírgula, mas o input HTML só aceita
+                      // ponto — o usuário digitava "0,02" e o valor ficava
+                      // vazio/inválido sem nenhum aviso. Aceita os dois
+                      // formatos e converte na hora de guardar o estado.
+                      value={p.amount === 0 ? '' : String(p.amount).replace('.', ',')}
+                      onChange={(e) => {
+                        const cleaned = e.target.value.replace(/[^0-9,]/g, '')
+                        // Mantém só a primeira vírgula, caso o usuário digite mais de uma
+                        const firstComma = cleaned.indexOf(',')
+                        const raw = firstComma === -1
+                          ? cleaned
+                          : cleaned.slice(0, firstComma + 1) + cleaned.slice(firstComma + 1).replace(/,/g, '')
+                        const normalized = raw.replace(',', '.')
+                        const parsed = normalized === '' || normalized === '.' ? 0 : Number(normalized)
+                        if (Number.isNaN(parsed)) return
+                        setAddPayments((prev) => prev.map((x, i) => i === idx ? { ...x, amount: parsed } : x))
+                      }}
                       placeholder="0,00"
                       className="w-24 px-2 py-1.5 text-xs border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
                     />

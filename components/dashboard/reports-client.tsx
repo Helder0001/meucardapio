@@ -152,10 +152,15 @@ function InfoTooltip({ text }: { text: string }) {
   return (
     <span className="group relative inline-flex ml-auto">
       <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-muted-foreground cursor-help" />
-      {/* Centralizado sob o ícone (em vez de ancorado à direita) para não
-          estourar a tela em telas pequenas, e com largura limitada ao
-          viewport para nunca ficar cortado nas laterais. */}
-      <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-5 z-20 w-56 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-popover text-popover-foreground text-[11px] leading-snug p-2 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
+      {/* CORREÇÃO: estava centralizado sob o ícone (left-1/2 -translate-x-1/2).
+          Como o ícone normalmente já fica empurrado pro canto direito do
+          card (por causa do ml-auto acima), centralizar um tooltip de 224px
+          sob ele estourava a borda direita da tela em mobile — pior ainda
+          em cards da coluna direita de um grid 2 colunas (ex: "Clientes").
+          Ancorado pela direita agora: a ponta direita do tooltip alinha
+          com o ícone e ele cresce para a esquerda, ficando dentro da tela
+          na grande maioria dos casos. */}
+      <span className="pointer-events-none absolute right-0 top-5 z-20 w-56 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-popover text-popover-foreground text-[11px] leading-snug p-2 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
         {text}
       </span>
     </span>
