@@ -101,11 +101,18 @@ export async function PATCH(
     }
 
     // Verificar se todos os pagamentos do pedido estão pagos agora
+    // CORREÇÃO: buscava TODOS os pagamentos do pedido, incluindo os que já
+    // foram substituídos (status FAILED, deixados pra trás por uma troca
+    // de forma de pagamento em /change-payment-method). Como FAILED nunca
+    // vira PAID, o .every() abaixo nunca dava true de novo depois de UMA
+    // troca de forma de pagamento — mesmo confirmando o pagamento novo, o
+    // pedido ficava preso em "Pendente" pra sempre. Só os pagamentos
+    // ainda ativos (não substituídos/cancelados) entram nessa checagem.
     const allPayments = await tx.payment.findMany({
-      where: { orderId },
+      where: { orderId, status: { notIn: ['FAILED', 'CANCELLED', 'REFUNDED'] } },
       select: { status: true },
     })
-    const allPaid = allPayments.every((p) => p.status === 'PAID')
+    const allPaid = allPayments.length > 0 && allPayments.every((p) => p.status === 'PAID')
 
     if (allPaid && order.paymentStatus !== 'PAID') {
       await tx.order.update({
