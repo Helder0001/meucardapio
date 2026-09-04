@@ -109,7 +109,7 @@ export async function PATCH(
     // pedido ficava preso em "Pendente" pra sempre. Só os pagamentos
     // ainda ativos (não substituídos/cancelados) entram nessa checagem.
     const allPayments = await tx.payment.findMany({
-      where: { orderId, status: { notIn: ['FAILED', 'CANCELLED', 'REFUNDED'] } },
+      where: { orderId, status: { notIn: ['FAILED', 'REFUNDED'] } },
       select: { status: true },
     })
     const allPaid = allPayments.length > 0 && allPayments.every((p) => p.status === 'PAID')
