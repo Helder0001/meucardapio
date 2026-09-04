@@ -81,6 +81,10 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   })
   const pixEnabled  = ((tenantSettings?.settings as any)?.pixEnabled  ?? true) === true
   const cardEnabled = ((tenantSettings?.settings as any)?.cardEnabled ?? true) === true
+  // CORREÇÃO: "Enviar link de pagamento" aparecia sempre no detalhe do
+  // pedido, mesmo com "Habilitar link de pagamento" desligado nas
+  // configurações — a tela do PDV já respeitava esse toggle, aqui não.
+  const linkEnabled = ((tenantSettings?.settings as any)?.linkEnabled ?? true) === true
 
   // CORREÇÃO: mesma checagem de expiração de PIX usada no polling do cliente
   // — assim a tela do dashboard também cancela sozinha, sem depender só do
@@ -143,7 +147,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       </div>
       {/* CORREÇÃO: garçons (STAFF) só podem confirmar, cancelar ou marcar
           como entregue — demais transições ficam ocultas. */}
-      <OrderDetail order={serialized} userRole={session.user.role} catalog={catalog} pixEnabled={pixEnabled} cardEnabled={cardEnabled} />
+      <OrderDetail order={serialized} userRole={session.user.role} catalog={catalog} pixEnabled={pixEnabled} cardEnabled={cardEnabled} linkEnabled={linkEnabled} />
     </div>
   )
 }
