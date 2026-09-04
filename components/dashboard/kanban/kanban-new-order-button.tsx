@@ -133,7 +133,12 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
     const finalPayments: PaymentEntry[] = payments.length === 1
       ? [{ ...payments[0], amount: total }]
       : payments
-    if (payments.length > 1 && Math.abs(remaining) > 0.01) {
+    // CORREÇÃO: tolerância de 1 centavo (0.01) permitia diferença de até
+    // R$0,01 sem bloquear — para pedidos pequenos (ex: R$0,01 de teste),
+    // isso deixava passar pagamentos somando o DOBRO do total (dois
+    // lançamentos de R$0,01 num pedido de R$0,01), criando um pagamento
+    // fantasma que depois aparecia "a confirmar" mesmo já tendo sido pago.
+    if (payments.length > 1 && Math.abs(remaining) > 0.005) {
       toast.error(remaining > 0
         ? `Faltam ${formatCurrency(remaining)} para completar o pagamento`
         : `Os valores excedem o total em ${formatCurrency(-remaining)}`)
@@ -632,9 +637,22 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
 
                         {payments.length > 1 && (
                           <input
-                            type="number" min="0" step="0.01"
-                            value={p.amount || ''}
-                            onChange={(e) => updatePaymentAmount(idx, Number(e.target.value))}
+                            type="text" inputMode="decimal"
+                            // CORREÇÃO: mesmo bug do order-detail.tsx — teclado
+                            // numérico Android em pt-BR usa vírgula, mas
+                            // type="number" só aceita ponto.
+                            value={p.amount === 0 ? '' : String(p.amount).replace('.', ',')}
+                            onChange={(e) => {
+                              const cleaned = e.target.value.replace(/[^0-9,]/g, '')
+                              const firstComma = cleaned.indexOf(',')
+                              const raw = firstComma === -1
+                                ? cleaned
+                                : cleaned.slice(0, firstComma + 1) + cleaned.slice(firstComma + 1).replace(/,/g, '')
+                              const normalized = raw.replace(',', '.')
+                              const parsed = normalized === '' || normalized === '.' ? 0 : Number(normalized)
+                              if (Number.isNaN(parsed)) return
+                              updatePaymentAmount(idx, parsed)
+                            }}
                             placeholder="0,00"
                             className="w-24 px-2.5 py-2 text-xs border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
                           />
