@@ -644,8 +644,8 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                 <p className="text-xs text-gray-400 mt-1.5">Você receberá atualizações do pedido via WhatsApp</p>
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Seu nome (opcional)</label>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="João Silva"
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Seu nome *</label>
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="João Silva" required
                   className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500" />
               </div>
             </div>
@@ -853,6 +853,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                 <button
                   onClick={() => {
                     if (!phone && !customerPhone) { toast.error('Informe seu telefone'); return }
+                    if (!name.trim()) { toast.error('Informe seu nome'); return }
                     setCustomer(phone || customerPhone!, name)
                     setStep('payment')
                   }}
