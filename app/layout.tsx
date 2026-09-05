@@ -7,6 +7,7 @@ import { GeistMono } from 'geist/font/mono'
 import { Toaster } from 'sonner'
 import { PwaRegister } from '@/components/shared/pwa-register'
 import { ThemeProvider } from '@/components/shared/theme-provider'
+import { AnalyticsConsent } from '@/components/shared/analytics-consent'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -52,6 +53,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           {children}
           <Toaster position="top-right" richColors closeButton duration={4000} />
           <PwaRegister />
+          <AnalyticsConsent />
         </ThemeProvider>
       </body>
     </html>
