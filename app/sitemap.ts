@@ -5,8 +5,11 @@ import { MetadataRoute } from 'next'
 import { prisma } from '@/lib/db/client'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // CORREÇÃO: domínio padrão atualizado de foodsaas.com.br para meucardapio.com.br
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.meucardapio.com.br'
+  // Fallback: domínio real hoje é o subdomínio da Vercel — se/quando você
+  // conectar um domínio próprio (ex.: meucardapio.com.br), configure a env
+  // var NEXT_PUBLIC_APP_URL na Vercel com o novo domínio; não precisa
+  // editar este arquivo (nem app/robots.ts, que usa a mesma env var).
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://meucardapio-teal.vercel.app'
 
   const tenants = await prisma.tenant.findMany({
     where: { isActive: true, subscriptionStatus: { in: ['ACTIVE', 'TRIAL'] } },
