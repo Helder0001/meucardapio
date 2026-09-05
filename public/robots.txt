@@ -1,9 +1,0 @@
-User-agent: *
-Allow: /menu/
-Disallow: /dashboard/
-Disallow: /master/
-Disallow: /api/
-Disallow: /login
-Disallow: /register
-
-Sitemap: https://www.meucardapio.com.br/sitemap.xml
