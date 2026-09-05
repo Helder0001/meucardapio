@@ -21,6 +21,9 @@ const SCRIPT_SRC_DOMAINS = [
   'https://http2.mlstatic.com',
   'https://www.mercadopago.com',
   'https://device.clearsale.com.br',
+  // Google Analytics (gtag.js) — carregado só depois que o usuário aceita
+  // cookies no banner de consentimento (ver components/shared/analytics-consent.tsx).
+  'https://www.googletagmanager.com',
 ]
 
 /**
@@ -41,6 +44,11 @@ const CONNECT_SRC_DOMAINS = [
   'https://cobrancas-h.api.efipay.com.br',
   'https://device.clearsale.com.br',
   'https://web.fpcs-monitor.com.br',
+  // Google Analytics — endpoints de coleta (gtag beacon).
+  'https://www.googletagmanager.com',
+  'https://www.google-analytics.com',
+  'https://*.google-analytics.com',
+  'https://*.analytics.google.com',
   'wss:',
 ]
 
