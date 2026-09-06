@@ -3,7 +3,9 @@
 // components/storefront/delivery-live-map.tsx
 //
 // Mapa com o percurso ao vivo do entregador — mostrado ao cliente na
-// página de acompanhamento do pedido enquanto o status é "A caminho".
+// página de acompanhamento do pedido enquanto o status é "A caminho", e
+// também na tela dedicada do entregador
+// (components/dashboard/delivery-tracking-screen.tsx).
 // Usa Leaflet + OpenStreetMap (gratuito, sem API key).
 //
 // Três marcadores possíveis (qualquer um pode faltar):
@@ -12,10 +14,13 @@
 //   📍 destino      — endereço do cliente, geocodificado automaticamardo o
 //                     pedido saiu para entrega
 //
+// `route`, se fornecido (via lib/utils/osrm.ts), desenha o traçado real da
+// rota rodoviária entre origem e destino em vez de uma linha reta.
+//
 // Renderizado via next/dynamic com ssr:false (Leaflet precisa de `window`).
 
 import { useEffect, useMemo, useRef } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -25,6 +30,8 @@ interface DeliveryLiveMapProps {
   store: LatLng | null
   destination: LatLng | null
   courier: (LatLng & { updatedAt?: string | Date | null }) | null
+  /** Traçado da rota (lib/utils/osrm.ts) — opcional, desenha a linha azul. */
+  route?: [number, number][] | null
 }
 
 function emojiIcon(emoji: string, size = 32) {
@@ -56,7 +63,7 @@ function FitBounds({ points }: { points: LatLng[] }) {
   return null
 }
 
-export function DeliveryLiveMap({ store, destination, courier }: DeliveryLiveMapProps) {
+export function DeliveryLiveMap({ store, destination, courier, route }: DeliveryLiveMapProps) {
   const points = useMemo(
     () => [store, destination, courier].filter((p): p is LatLng => !!p),
     [store, destination, courier]
@@ -87,6 +94,10 @@ export function DeliveryLiveMap({ store, destination, courier }: DeliveryLiveMap
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <FitBounds points={points} />
+
+        {route && route.length > 1 && (
+          <Polyline positions={route} pathOptions={{ color: '#2563eb', weight: 5, opacity: 0.85 }} />
+        )}
 
         {store && (
           <Marker position={[store.lat, store.lng]} icon={storeIcon}>
