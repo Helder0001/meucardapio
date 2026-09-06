@@ -19,6 +19,7 @@ import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/client'
 import { restockCancelledOrder, revalidateStorefrontForTenant } from '@/lib/utils/stock'
 import { processEfiPixWebhookEntries } from '@/lib/efi/pix-webhook-handler'
+import { Prisma } from '@prisma/client'
 import crypto from 'crypto'
 
 function generateStatusToken(orderId: string): string {
@@ -91,8 +92,8 @@ export async function GET(
         // Com `take: 1` só o PIX mais recente aparecia; um pagamento em
         // CREDIT_CARD (link) nunca era retornado aqui e ficava para sempre
         // como PENDING na tela até um reload manual.
-        where: { method: { in: ['PIX', 'CREDIT_CARD'] as const } },
-        orderBy: { createdAt: 'desc' as const },
+        where: { method: { in: ['PIX', 'CREDIT_CARD'] } },
+        orderBy: { createdAt: 'desc' },
         select: {
           id: true, // BUG CORRIGIDO: faltava o id do pagamento — order-detail.tsx
                      // casa a atualização do polling com `data.payments.find(dp =>
@@ -117,7 +118,7 @@ export async function GET(
           providerReference: true,
         },
       },
-    } as const
+    } satisfies Prisma.OrderSelect
 
     let order = await prisma.order.findFirst({
       where: { id, ...tenantFilter },
