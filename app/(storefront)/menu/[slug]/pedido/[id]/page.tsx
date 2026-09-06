@@ -48,6 +48,7 @@ export default async function OrderPage({ params }: PageProps) {
       cashbackUsed: true,
       createdAt: true,
       deliveryBairro: true,
+      deliveryAddress: true,
       notes: true,
       tenant: {
         select: { name: true, slug: true, primaryColor: true, logo: true, phone: true },
@@ -117,8 +118,15 @@ export default async function OrderPage({ params }: PageProps) {
 
   const { tenantId, ...orderWithoutTenantId } = order
 
+  // Mesmo padrão usado na tela do entregador (delivery/tracking/[orderId]/page.tsx)
+  // para transformar o Json de deliveryAddress numa linha de texto exibível.
+  const addr = order.deliveryAddress as any
+  const addressLine: string | null =
+    addr?.address ?? ([addr?.street, addr?.number].filter(Boolean).join(', ') || null)
+
   const serialized = {
     ...orderWithoutTenantId,
+    addressLine,
     total:          Number(order.total),
     subtotal:       Number(order.subtotal),
     deliveryFee:    Number(order.deliveryFee),
