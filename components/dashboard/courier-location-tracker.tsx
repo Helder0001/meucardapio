@@ -81,7 +81,12 @@ export function CourierLocationTracker() {
   return (
     <div
       className={cn(
-        'fixed bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-2 rounded-full shadow-lg text-xs font-medium border',
+        // CORREÇÃO: no mobile o menu inferior (sidebar.tsx) é fixo em
+        // bottom-0 com z-30; este aviso usava bottom-4 com z-50 (acima do
+        // menu), ficando sobreposto aos botões de navegação. A partir de
+        // md o menu inferior some (vira sidebar lateral), então só
+        // precisa do respiro extra abaixo de md.
+        'fixed bottom-20 md:bottom-4 right-4 z-30 flex items-center gap-2 px-3 py-2 rounded-full shadow-lg text-xs font-medium border',
         status === 'sharing' && 'bg-emerald-500 text-white border-emerald-600',
         status === 'error'   && 'bg-red-500 text-white border-red-600',
         status === 'idle'    && 'bg-muted text-muted-foreground border-border'

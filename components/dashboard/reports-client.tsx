@@ -66,23 +66,30 @@ const ROLE_LABELS_SHORT: Record<string, string> = {
   ATTENDANT: 'Atendente', STAFF: 'Operador', DELIVERY_PERSON: 'Entregador',
 }
 
+// CORREÇÃO: faltavam PIX_MANUAL e CASHBACK — pagamentos registrados nessas
+// formas apareciam com o valor bruto do enum ("PIX_MANUAL") no gráfico de
+// formas de pagamento, e não davam pra filtrar por elas nesta aba.
 const METHOD_LABELS: Record<string, string> = {
   PIX:                'PIX',
+  PIX_MANUAL:         'PIX (chave própria)',
   CASH:               'Dinheiro',
   CREDIT_CARD:        'Crédito',
   CREDIT_CARD_MANUAL: 'Crédito (entrega)',
   DEBIT_CARD:         'Débito',
   VOUCHER:            'Voucher',
+  CASHBACK:           'Cashback',
 }
 
 const METHOD_OPTIONS = [
   { value: '',                    label: 'Todas' },
   { value: 'PIX',                 label: '⚡ PIX' },
+  { value: 'PIX_MANUAL',          label: '⚡ PIX (chave própria)' },
   { value: 'CASH',                label: '💵 Dinheiro' },
   { value: 'CREDIT_CARD',         label: '💳 Crédito' },
   { value: 'CREDIT_CARD_MANUAL',  label: '💳 Crédito (entrega)' },
   { value: 'DEBIT_CARD',          label: '💳 Débito' },
   { value: 'VOUCHER',             label: '🎟️ Voucher' },
+  { value: 'CASHBACK',            label: '💰 Cashback' },
 ]
 
 const TYPE_OPTIONS = [
@@ -100,9 +107,17 @@ const METHOD_COLORS: Record<string, string> = {
   CREDIT_CARD_MANUAL: '#a78bfa',
   DEBIT_CARD:         '#3b82f6',
   PIX:                '#10b981',
+  PIX_MANUAL:         '#059669',
   CASH:               '#f59e0b',
   VOUCHER:            '#f43f5e',
+  CASHBACK:           '#eab308',
 }
+
+// Paleta rotativa para o card "Vendas por bairro" — ao contrário de forma de
+// pagamento/tipo de pedido, o bairro é texto livre (nome do bairro
+// cadastrado na zona de entrega), então não dá pra ter uma cor fixa por
+// valor; roda pelas mesmas cores em ordem de faturamento (maior primeiro).
+const BAIRRO_COLORS = ['#f97316', '#8b5cf6', '#10b981', '#3b82f6', '#eab308', '#f43f5e', '#059669', '#a78bfa']
 
 const TYPE_COLORS: Record<string, string> = {
   TABLE:    '#10b981',
@@ -291,6 +306,9 @@ export function ReportsClient({
       return acc
     }, {} as Record<string, number>)
   ).reduce((a, b) => a + b, 0) || 1
+  // Total de faturamento por bairro para calcular % (mesmo padrão do
+  // card "Formas de pagamento" logo abaixo).
+  const totalBairroAll = salesByBairro.reduce((s, b) => s + b.total, 0) || 1
 
   // Produto top
   const topProduct = topProducts[0]
@@ -807,40 +825,37 @@ export function ReportsClient({
       </div>
 
       {/* ── Vendas por bairro (feature #4 pt.2) ── */}
+      {/* CORREÇÃO: pedido pra deixar visualmente igual ao card "Formas de
+          pagamento" (barra de progresso horizontal com % e valor) em vez do
+          gráfico de barras do Recharts + lista ao lado que só existia aqui. */}
       {salesByBairro.length > 0 && (
         <div className="bg-card border border-border rounded-2xl p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-foreground">Vendas por bairro</h2>
             <InfoTooltip text="Quantidade de pedidos e faturamento por bairro de entrega, no período selecionado. Pedidos de retirada/mesa/PDV não têm bairro e ficam de fora." align="right" />
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={salesByBairro.slice(0, 8)}
-                  layout="vertical"
-                  margin={{ top: 0, right: 8, left: 0, bottom: 0 }}
-                >
-                  <XAxis type="number" tick={{ fontSize: 9, fill: 'var(--muted-foreground)' }} tickFormatter={(v) => formatCurrency(v)} />
-                  <YAxis type="category" dataKey="bairro" width={90} tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} />
-                  <Tooltip
-                    formatter={(v) => typeof v === 'number' ? [formatCurrency(v), 'Faturamento'] : [v, '']}
-                  />
-                  <Bar dataKey="total" radius={[0, 4, 4, 0]} fill="#f97316" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-              {salesByBairro.map((b) => (
-                <div key={b.bairro} className="flex items-center justify-between text-sm border-b border-border/50 pb-2 last:border-0">
-                  <div>
-                    <p className="font-medium text-foreground">{b.bairro}</p>
-                    <p className="text-xs text-muted-foreground">{b.count} pedido{b.count === 1 ? '' : 's'}</p>
+          <div className="space-y-4">
+            {salesByBairro.slice(0, 8).map((b, i) => {
+              const pct = Math.round((b.total / totalBairroAll) * 100)
+              const color = BAIRRO_COLORS[i % BAIRRO_COLORS.length]
+              return (
+                <div key={b.bairro}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-foreground">{b.bairro}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-bold text-foreground">{pct}%</span>
+                      <span className="text-xs text-muted-foreground">{formatCurrency(b.total)}</span>
+                    </div>
                   </div>
-                  <p className="font-bold text-foreground">{formatCurrency(b.total)}</p>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${pct}%`, backgroundColor: color }}
+                    />
+                  </div>
                 </div>
-              ))}
-            </div>
+              )
+            })}
           </div>
         </div>
       )}

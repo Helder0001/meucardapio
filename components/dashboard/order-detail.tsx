@@ -10,7 +10,6 @@ import { OrderStatusBadge } from './order-status-badge'
 import { cn } from '@/lib/utils'
 import { Loader2, CheckCircle2, XCircle, CreditCard, Plus, X, Pencil, Minus, Trash2, Search, RotateCcw } from 'lucide-react'
 import { toast } from 'sonner'
-import { formatCpf, isValidCpf } from '@/lib/utils/cpf'
 import { paymentMethodLabel } from '@/lib/utils/payment-labels'
 
 interface CatalogProduct { id: string; name: string; price: number; isOutOfStock?: boolean }
@@ -217,7 +216,6 @@ export function OrderDetail({
   // ── Modal de pagamento posterior ──────────────────────────────────────────
   const [showAddPayment, setShowAddPayment]     = useState(false)
   const [addPayments, setAddPayments]           = useState<AddPaymentEntry[]>([{ method: 'CASH', amount: Number(order.total) }])
-  const [addPaymentCpf, setAddPaymentCpf]       = useState('')
   const [isAddingPayment, startAddPayment]      = useTransition()
   // QR Code PIX após registrar pagamento posterior
   const [addPixData, setAddPixData]             = useState<{ qrCode: string; qrCodeBase64: string } | null>(null)
@@ -265,10 +263,6 @@ export function OrderDetail({
       toast.error(`Valor insuficiente. Ainda faltam ${formatCurrency(stillOwed - addPaymentsSum)}.`)
       return
     }
-    if (addPayments.some((p) => p.method === 'PIX') && addPaymentCpf && !isValidCpf(addPaymentCpf)) {
-      toast.error('CPF inválido — deixe em branco ou corrija')
-      return
-    }
     startAddPayment(async () => {
       // Device ID gerado pelo script de segurança do Mercado Pago
       // (window.MP_DEVICE_SESSION_ID), carregado no layout do dashboard.
@@ -280,7 +274,8 @@ export function OrderDetail({
         body: JSON.stringify({
           payments: addPayments,
           deviceId,
-          customerCpf: addPayments.some((p) => p.method === 'PIX') ? addPaymentCpf : undefined,
+          // CPF removido desta tela — o servidor já usa o CPF cadastrado do
+          // cliente (order.customer.cpf) como fallback quando não enviado.
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -896,23 +891,6 @@ export function OrderDetail({
                     )}
                   </div>
                 ))}
-
-                {addPayments.some((p) => p.method === 'PIX') && (
-                  <div>
-                    {/* CORREÇÃO: CPF virou opcional em todo o resto do
-                        sistema (create-order.ts, add-payment/route.ts) mas
-                        essa tela ainda bloqueava o envio exigindo CPF
-                        válido antes mesmo de chegar no servidor. */}
-                    <label className="block text-[10px] font-medium text-muted-foreground mb-1">CPF de quem vai pagar (opcional)</label>
-                    <input
-                      value={formatCpf(addPaymentCpf)}
-                      onChange={(e) => setAddPaymentCpf(e.target.value)}
-                      placeholder="000.000.000-00"
-                      maxLength={14}
-                      className="w-full px-2 py-1.5 text-xs border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-                )}
 
                 <div className="flex items-center justify-between">
                   <button

@@ -194,15 +194,24 @@ export function OrdersTable({ orders, total, page, pageSize, currentFilters }: O
         />
 
         {/* Filtro de forma de pagamento */}
+        {/* CORREÇÃO: lista estava desatualizada com o enum PaymentMethod —
+            faltavam PIX_MANUAL, CREDIT_CARD_MANUAL, VOUCHER e CASHBACK, então
+            pedidos pagos nessas formas nunca apareciam ao filtrar (não tinham
+            como ser selecionados). Rótulos alinhados com
+            lib/utils/payment-labels.ts para não divergir do resto do painel. */}
         <StyledSelect
           value={currentFilters.payment ?? ''}
           onChange={(v) => updateFilter('payment', v)}
           options={[
             { value: '', label: 'Todas as formas' },
             { value: 'PIX', label: '⚡ PIX' },
-            { value: 'CREDIT_CARD', label: '💳 Crédito' },
-            { value: 'DEBIT_CARD', label: '💳 Débito' },
+            { value: 'PIX_MANUAL', label: '⚡ PIX (chave própria)' },
+            { value: 'CREDIT_CARD', label: '💳 Cartão de Crédito' },
+            { value: 'CREDIT_CARD_MANUAL', label: '💳 Crédito (entrega/retirada)' },
+            { value: 'DEBIT_CARD', label: '💳 Cartão de Débito' },
             { value: 'CASH', label: '💵 Dinheiro' },
+            { value: 'VOUCHER', label: '🎟️ Voucher' },
+            { value: 'CASHBACK', label: '💰 Cashback' },
           ]}
         />
 
