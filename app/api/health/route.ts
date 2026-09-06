@@ -1,59 +1,17 @@
 // app/api/health/route.ts
-// Endpoint de healthcheck para monitoramento externo (UptimeRobot, BetterUptime, etc.)
+// Endpoint de healthcheck para monitoramento externo (Sentry Uptime Monitoring,
+// UptimeRobot, BetterUptime, etc.) — aponte um monitor externo pra essa URL.
 // Verifica: banco de dados, Redis e configurações críticas.
 // Não expõe dados sensíveis — apenas status operacional.
+//
+// A lógica de checagem mora em lib/monitoring/health-checks.ts, reaproveitada
+// também pela página app/(master)/master/monitoring (ver lá).
 
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/db/client'
-import { redis } from '@/lib/cache/redis'
+import { runHealthChecks } from '@/lib/monitoring/health-checks'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-interface CheckResult {
-  ok: boolean
-  latencyMs?: number
-  error?: string
-}
-
-async function checkDatabase(): Promise<CheckResult> {
-  const start = Date.now()
-  try {
-    await prisma.$queryRaw`SELECT 1`
-    return { ok: true, latencyMs: Date.now() - start }
-  } catch (err: any) {
-    return { ok: false, error: 'database unreachable' }
-  }
-}
-
-async function checkRedis(): Promise<CheckResult> {
-  const start = Date.now()
-  try {
-    await redis.ping()
-    return { ok: true, latencyMs: Date.now() - start }
-  } catch (err: any) {
-    return { ok: false, error: 'redis unreachable' }
-  }
-}
-
-function checkEnvVars(): CheckResult {
-  const required = [
-    'DATABASE_URL',
-    'ENCRYPTION_KEY',
-    'OTP_SALT',
-    'ORDER_TOKEN_SECRET',
-  ]
-  const missing = required.filter((k) => !process.env[k])
-  // AUTH_SECRET é o nome atual; NEXTAUTH_SECRET é aceito como fallback
-  // (ver lib/auth/config.ts e proxy.ts) — só falha se nenhum dos dois existir.
-  if (!process.env.AUTH_SECRET && !process.env.NEXTAUTH_SECRET) {
-    missing.push('AUTH_SECRET (ou NEXTAUTH_SECRET)')
-  }
-  if (missing.length > 0) {
-    return { ok: false, error: `missing env vars: ${missing.join(', ')}` }
-  }
-  return { ok: true }
-}
 
 export async function GET(request: Request) {
   // Healthcheck detalhado apenas para chamadas internas (com CRON_SECRET)
@@ -61,29 +19,23 @@ export async function GET(request: Request) {
   const secret = request.headers.get('x-cron-secret')
   const isInternal = secret === process.env.CRON_SECRET
 
-  const [db, cache, env] = await Promise.all([
-    checkDatabase(),
-    checkRedis(),
-    Promise.resolve(checkEnvVars()),
-  ])
-
-  const allOk = db.ok && cache.ok && env.ok
+  const report = await runHealthChecks()
 
   if (isInternal) {
     return NextResponse.json(
       {
-        status: allOk ? 'ok' : 'degraded',
+        status: report.ok ? 'ok' : 'degraded',
         timestamp: new Date().toISOString(),
-        checks: { database: db, redis: cache, env },
+        checks: { database: report.database, redis: report.redis, env: report.env },
         version: process.env.npm_package_version ?? 'unknown',
       },
-      { status: allOk ? 200 : 503 }
+      { status: report.ok ? 200 : 503 }
     )
   }
 
   // Resposta pública mínima — não expõe detalhes internos
   return NextResponse.json(
-    { status: allOk ? 'ok' : 'degraded' },
-    { status: allOk ? 200 : 503 }
+    { status: report.ok ? 'ok' : 'degraded' },
+    { status: report.ok ? 200 : 503 }
   )
 }
