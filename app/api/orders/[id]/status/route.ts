@@ -1,289 +1,375 @@
-// app/api/orders/[id]/status/route.ts
+// app/api/orders/[id]/add-payment/route.ts
 //
-// VULN-NEW-03 CORRIGIDO: endpoint de polling de status do pedido (usado pelo
-// storefront após checkout) agora exige um token HMAC curto para autorizar
-// o acesso, sem exigir login do cliente final.
-//
-// Fluxo seguro:
-//   1. createOrderAction() gera um statusToken = HMAC-SHA256(orderId, ORDER_TOKEN_SECRET)
-//      e o retorna junto com o orderId.
-//   2. O frontend armazena o token apenas em memória (não no localStorage).
-//   3. Ao fazer polling, envia ?token=<statusToken>.
-//   4. Este endpoint valida o token antes de retornar qualquer dado.
-//
-// Usuários autenticados do dashboard (TENANT_ADMIN, MANAGER etc.) continuam
-// acessando via session JWT — não precisam do token.
+// Adiciona pagamento a um pedido existente (criado com "cobrar no final").
+// PIX gera QR Code via Mercado Pago igual ao fluxo normal.
 
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/client'
-import { restockCancelledOrder, revalidateStorefrontForTenant } from '@/lib/utils/stock'
-import { processEfiPixWebhookEntries } from '@/lib/efi/pix-webhook-handler'
-import { Prisma } from '@prisma/client'
-import crypto from 'crypto'
+import { publishOrderEvent } from '@/lib/cache/redis'
+import { auditLog, AuditActions } from '@/lib/utils/audit'
+import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
+import { paymentMethodLabel } from '@/lib/utils/payment-labels'
+import { z } from 'zod'
+import { onlyDigits, pixPayerEmail } from '@/lib/utils/cpf'
+import { getPaymentProvider } from '@/lib/payments/provider-router'
+import { createTenantPixCharge } from '@/lib/efi/tenant-pix-client'
+import { createAsaasPixCharge } from '@/lib/asaas/tenant-payments'
 
-function generateStatusToken(orderId: string): string {
-  const secret = process.env.ORDER_TOKEN_SECRET ?? process.env.AUTH_SECRET ?? ''
-  return crypto.createHmac('sha256', secret).update(orderId).digest('hex')
-}
+const paymentEntrySchema = z.object({
+  method: z.enum(['PIX', 'PIX_MANUAL', 'CASH', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD', 'VOUCHER', 'TRANSFER']),
+  amount: z.number().positive('Valor deve ser positivo'),
+  changeFor: z.number().positive().optional(),
+})
 
-export function validateStatusToken(orderId: string, token: string): boolean {
-  const expected = generateStatusToken(orderId)
-  if (expected.length !== token.length) return false
-  try {
-    return crypto.timingSafeEqual(
-      Buffer.from(expected, 'hex'),
-      Buffer.from(token,    'hex'),
-    )
-  } catch {
-    return false
+const bodySchema = z.object({
+  payments: z.array(paymentEntrySchema).min(1).max(5),
+  // Device ID do Mercado Pago (security.js), enviado como X-Meli-Session-Id
+  // na criação do PIX pra reduzir recusas de antifraude.
+  deviceId: z.string().optional(),
+  // CORREÇÃO: CPF é opcional em todo o resto do sistema desde que o PSP
+  // passou a aceitar cobrança PIX sem identificar o pagador quando o
+  // cliente não informa (ver create-order.ts) — esse .refine() aqui
+  // ainda exigia CPF válido obrigatoriamente, bloqueando o registro
+  // manual de pagamento PIX sem CPF mesmo depois dessa mudança.
+  customerCpf: z.string().optional(),
+})
+
+const ALLOWED_ROLES = ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'STAFF']
+
+// CORREÇÃO (bug reportado: "PIX do cobrar depois puxando Mercado Pago"):
+// esta função era hardcoded pro Mercado Pago — pedidos "cobrar depois"
+// (registrados aqui via /add-payment) sempre tentavam PIX via MP mesmo
+// quando o tenant configurou EFI ou Asaas como provedor de Pix, dando
+// "Erro ao gerar PIX. Verifique as credenciais do Mercado Pago" mesmo com
+// as credenciais certas do provedor de verdade. Agora usa o mesmo
+// roteamento multi-provedor de actions/orders/create-order.ts.
+async function createPixPayment(params: {
+  tenantId: string
+  orderId: string
+  amount: number
+  deviceId?: string
+  customerCpf?: string
+  customerName?: string
+  customerPhone?: string
+}) {
+  const provider = await getPaymentProvider(params.tenantId, 'pix')
+
+  if (provider === 'ASAAS') {
+    const { asaasPaymentId, pixQrCode, pixQrCodeBase64, pixExpiresAt } = await createAsaasPixCharge({
+      tenantId: params.tenantId,
+      orderId: params.orderId,
+      amount: params.amount,
+      customerName: params.customerName,
+      customerCpf: params.customerCpf,
+      customerPhone: params.customerPhone,
+    })
+
+    console.log('[pix][add-payment][asaas]', { orderId: params.orderId, asaasPaymentId })
+
+    const created = await prisma.payment.create({
+      data: {
+        tenantId: params.tenantId,
+        orderId: params.orderId,
+        method: 'PIX',
+        status: 'PENDING',
+        amount: params.amount,
+        provider: 'ASAAS',
+        providerReference: asaasPaymentId,
+        pixQrCode,
+        pixQrCodeBase64,
+        pixExpiresAt,
+      },
+    })
+
+    return { created, pixQrCode, pixQrCodeBase64 }
   }
+
+  if (provider === 'EFI') {
+    const { txid, pixCopiaECola, pixQrCodeImage } = await createTenantPixCharge({
+      tenantId: params.tenantId,
+      orderId: params.orderId,
+      amount: params.amount,
+      payerCpf: params.customerCpf ? onlyDigits(params.customerCpf) : undefined,
+      payerName: params.customerName?.trim() || 'Cliente',
+      description: `Pedido #${params.orderId.slice(-8).toUpperCase()}`,
+      expirationSeconds: 300,
+    })
+
+    console.log('[pix][add-payment][efi]', { orderId: params.orderId, txid })
+
+    const created = await prisma.payment.create({
+      data: {
+        tenantId: params.tenantId,
+        orderId: params.orderId,
+        method: 'PIX',
+        status: 'PENDING',
+        amount: params.amount,
+        provider: 'EFI',
+        providerReference: txid,
+        pixQrCode: pixCopiaECola,
+        pixQrCodeBase64: pixQrCodeImage ?? undefined,
+        pixExpiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5min — mesmo tempo configurado na Efí abaixo
+      },
+    })
+
+    return { created, pixQrCode: pixCopiaECola, pixQrCodeBase64: pixQrCodeImage ?? undefined }
+  }
+
+  // MERCADOPAGO (ou STRIPE, que não tem QR inline — cai pro MP igual em create-order.ts)
+  const accessToken = await resolveTenantMpAccessToken(params.tenantId)
+  if (!accessToken) throw new Error('Mercado Pago não configurado')
+
+  const response = await fetch('https://api.mercadopago.com/v1/payments', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': `${params.orderId}-pix-addpay-${params.amount}`,
+      // Device ID (security.js do MP, capturado no navegador do atendente
+      // na tela do balcão) — reduz recusas de antifraude em pagamentos
+      // criados via API direta. Opcional, não bloqueia se ausente.
+      ...(params.deviceId ? { 'X-Meli-Session-Id': params.deviceId } : {}),
+    },
+    body: JSON.stringify({
+      transaction_amount: params.amount,
+      payment_method_id: 'pix',
+      payer: {
+        // CORREÇÃO: usava CPF de teste fixo (11144477735) pra qualquer
+        // pagador — agora usa o CPF real coletado na tela (ver comentário
+        // equivalente em actions/orders/create-order.ts).
+        email: pixPayerEmail(params.customerCpf ?? ''),
+        ...(params.customerCpf
+          ? { identification: { type: 'CPF', number: onlyDigits(params.customerCpf) } }
+          : {}),
+      },
+      description: `Pedido #${params.orderId.slice(-8).toUpperCase()}`,
+      external_reference: params.orderId,
+      notification_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/mercadopago`,
+      date_of_expiration: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(`MP Error: ${JSON.stringify(error)}`)
+  }
+
+  const mpData = await response.json()
+  console.log('[pix][add-payment][mp]', {
+    orderId: params.orderId,
+    mpPaymentId: mpData.id,
+    status: mpData.status,
+    statusDetail: mpData.status_detail,
+    hasQrCode: !!mpData.point_of_interaction?.transaction_data?.qr_code,
+  })
+  const pixQrCode       = mpData.point_of_interaction?.transaction_data?.qr_code as string | undefined
+  const pixQrCodeBase64 = mpData.point_of_interaction?.transaction_data?.qr_code_base64 as string | undefined
+  const pixExpiresAt    = mpData.date_of_expiration
+    ? new Date(mpData.date_of_expiration)
+    : new Date(Date.now() + 5 * 60 * 1000)
+
+  const created = await prisma.payment.create({
+    data: {
+      tenantId:          params.tenantId,
+      orderId:           params.orderId,
+      method:            'PIX',
+      status:            'PENDING',
+      amount:            params.amount,
+      mercadoPagoId:     String(mpData.id),
+      mercadoPagoStatus: mpData.status,
+      pixQrCode,
+      pixQrCodeBase64,
+      pixExpiresAt,
+    },
+  })
+
+  return { created, pixQrCode, pixQrCodeBase64 }
 }
 
-export async function GET(
+export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const { id } = await params
-    const { searchParams } = new URL(request.url)
-    const token = searchParams.get('token')
-
-    // Opção A: usuário autenticado do dashboard (TENANT_ADMIN, MANAGER etc.)
-    const session = await auth()
-    const isAuthenticatedStaff = !!(session?.user?.tenantId)
-
-    // Opção B: cliente do storefront com token HMAC válido
-    const hasValidToken = token ? validateStatusToken(id, token) : false
-
-    if (!isAuthenticatedStaff && !hasValidToken) {
-      // Retornar 404 em vez de 401 para não confirmar a existência do pedido
-      return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    }
-
-    // Se autenticado como staff, garantir que o pedido pertence ao tenant
-    const tenantFilter = isAuthenticatedStaff
-      ? { tenantId: session!.user.tenantId! }
-      : {}
-
-    const orderSelect = {
-      id: true,
-      tenantId: true,
-      status: true,
-      paymentStatus: true,
-      createdAt: true,
-      confirmedAt: true,
-      readyAt: true,
-      deliveredAt: true,
-      type: true,
-      courierLat: true,
-      courierLng: true,
-      courierUpdatedAt: true,
-      deliveryLat: true,
-      deliveryLng: true,
-      tenant: { select: { latitude: true, longitude: true } },
-      payments: {
-        // BUG CORRIGIDO: filtro restrito a `method: 'PIX'` e `take: 1` fazia
-        // sentido para o storefront (order-tracking.tsx só acompanha 1 PIX),
-        // mas esse mesmo endpoint também é usado pelo polling do dashboard
-        // (order-detail.tsx e kanban-new-order-button.tsx) para pagamentos
-        // "cobrar no final" — que podem ter PIX *e* cartão via link, e podem
-        // ter mais de um registro de pagamento (ex.: pagamento dividido).
-        // Com `take: 1` só o PIX mais recente aparecia; um pagamento em
-        // CREDIT_CARD (link) nunca era retornado aqui e ficava para sempre
-        // como PENDING na tela até um reload manual.
-        where: { method: { in: ['PIX', 'CREDIT_CARD'] } },
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true, // BUG CORRIGIDO: faltava o id do pagamento — order-detail.tsx
-                     // casa a atualização do polling com `data.payments.find(dp =>
-                     // dp.id === p.id)`; sem `id` no retorno, `dp.id` é sempre
-                     // `undefined` e o `find` nunca casa com nada, então o pagamento
-                     // PIX registrado via "cobrar no final" nunca saía de
-                     // "Aguardando confirmação PIX" na tela, mesmo já pago (diferente
-                     // do fluxo de PDV/balcão, que compara pelo `paymentStatus` do
-                     // pedido como um todo em vez de por pagamento individual).
-          status: true,
-          method: true, // BUG CORRIGIDO: sem isso, o frontend (order-tracking.tsx)
-                         // perde a referência de que é um pagamento PIX assim que o
-                         // primeiro poll substitui o array de payments — a checagem
-                         // `pendingPayment?.method === 'PIX'` vira false e o
-                         // QR/copia-e-cola some da tela em ~5s (1º ciclo de polling).
-          pixQrCode: true,
-          pixQrCodeBase64: true,
-          pixExpiresAt: true,
-          checkoutUrl: true,
-          amount: true,
-          provider: true,
-          providerReference: true,
-        },
-      },
-    } satisfies Prisma.OrderSelect
-
-    let order = await prisma.order.findFirst({
-      where: { id, ...tenantFilter },
-      select: orderSelect,
-    })
-
-    if (!order) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    }
-
-    // CORREÇÃO: um PIX via Efí só é confirmado quando a Efí notifica o
-    // nosso webhook (app/api/webhooks/efi-pix/pix/route.ts) — mas esse
-    // webhook depende de ter sido registrado corretamente pra chave Pix
-    // do tenant (configurePixWebhook). Se esse cadastro nunca "colou" do
-    // lado da Efí (falhou silenciosamente, foi feito antes de trocar de
-    // chave, etc.), a notificação simplesmente nunca chega e a tela fica
-    // presa em "Aguardando pagamento PIX" pra sempre — mesmo com o
-    // cliente já tendo pago de verdade — porque não existia nenhum outro
-    // lugar consultando a Efí proativamente. Agora, a cada poll de status
-    // com um PIX Efí ainda PENDING (e ainda não expirado), consultamos a
-    // cobrança direto na API da Efí como rede de segurança — mesma
-    // checagem autoritativa (status CONCLUIDA + valor batendo) já usada
-    // no próprio webhook, só que disparada por nós em vez de esperar a
-    // notificação.
-    const pendingEfiPix = order.payments.filter(
-      (p) =>
-        p.status === 'PENDING' &&
-        p.method === 'PIX' &&
-        p.provider === 'EFI' &&
-        p.providerReference &&
-        (!p.pixExpiresAt || p.pixExpiresAt > new Date())
-    )
-    if (pendingEfiPix.length > 0) {
-      await processEfiPixWebhookEntries(
-        pendingEfiPix.map((p) => ({ txid: p.providerReference as string }))
-      )
-      const refreshed = await prisma.order.findFirst({
-        where: { id, ...tenantFilter },
-        select: orderSelect,
-      })
-      if (refreshed) order = refreshed
-    }
-
-    const PENDING_PAYMENT_TIMEOUT_MS = 2 * 60 * 60 * 1000 // 2 horas
-
-    // CORREÇÃO: cancelar automaticamente quando o PIX expira, sem depender só
-    // do webhook do MP (que pode demorar/falhar) nem do cron diário (no plano
-    // Hobby da Vercel só roda 1x/dia — muito lento pra uma janela de 5min).
-    // Precisa ser o PIX especificamente (não `payments[0]`): agora que a
-    // query acima também traz pagamentos CREDIT_CARD, o primeiro item do
-    // array pode não ser mais o PIX.
-    const expiredPix = order.payments.find((p) => p.method === 'PIX')
-    const pixExpired = !!(
-      order.status === 'PENDING' &&
-      expiredPix?.status === 'PENDING' &&
-      expiredPix.pixExpiresAt &&
-      expiredPix.pixExpiresAt < new Date()
-    )
-
-    // Regra geral: qualquer pedido PENDING sem pagamento confirmado há mais
-    // de 2h é cancelado. Roda aqui (a cada vez que o cliente consulta o
-    // status) porque o plano Hobby da Vercel só permite cron 1x/dia — não dá
-    // pra confiar só no cron pra cumprir a janela de 2h. O cron diário fica
-    // como rede de segurança para pedidos cujo cliente nunca voltou a
-    // consultar o status (ex.: fechou a aba).
-    const paymentTimedOut = !!(
-      order.status === 'PENDING' &&
-      order.paymentStatus === 'PENDING' &&
-      Date.now() - order.createdAt.getTime() > PENDING_PAYMENT_TIMEOUT_MS
-    )
-
-    if (pixExpired || paymentTimedOut) {
-      const cancelReason = pixExpired
-        ? 'PIX expirado sem pagamento'
-        : 'Cancelamento automático por falta de pagamento (2h)'
-      const historyNote = pixExpired
-        ? 'Cancelamento automático: PIX expirado sem pagamento'
-        : 'Cancelamento automático: pagamento pendente há mais de 2 horas'
-
-      let affectedProductIds: string[] = []
-      await prisma.$transaction(async (tx) => {
-        // Só cancela se ainda estiver PENDING no momento exato da transação
-        // (evita corrida com o webhook do MP ou outra consulta concorrente).
-        const updated = await tx.order.updateMany({
-          where: { id, status: 'PENDING' },
-          data: {
-            status: 'CANCELLED',
-            paymentStatus: 'FAILED',
-            cancelledAt: new Date(),
-            cancelReason,
-          },
-        })
-        if (updated.count === 0) return // outra rotina já tratou este pedido
-
-        await tx.payment.updateMany({
-          where: { orderId: id, status: 'PENDING' },
-          data: { status: 'FAILED', failedAt: new Date() },
-        })
-        await tx.orderStatusHistory.create({
-          data: { orderId: id, status: 'CANCELLED', notes: historyNote },
-        })
-        // Devolve ao estoque tudo que foi debitado na criação do pedido
-        const result = await restockCancelledOrder(tx, { tenantId: order.tenantId, orderId: id })
-        affectedProductIds = result.affectedProductIds
-      })
-
-      if (affectedProductIds.length > 0) {
-        await revalidateStorefrontForTenant(order.tenantId)
-      }
-
-      order.status = 'CANCELLED'
-      if (pixExpired) {
-        order.paymentStatus = 'FAILED'
-        if (expiredPix) expiredPix.status = 'FAILED'
-      }
-    }
-
-    // Não retornar QR Code de PIX expirado
-    const now = new Date()
-    const payments = order.payments.map((p) => ({
-      id: p.id,
-      status: p.status,
-      method: p.method,
-      amount: Number(p.amount),
-      pixExpiresAt: p.pixExpiresAt,
-      checkoutUrl: p.checkoutUrl,
-      // QR Code só é retornado enquanto válido e o pagamento está pendente
-      pixQrCode: (p.pixExpiresAt && p.pixExpiresAt > now && p.status === 'PENDING')
-        ? p.pixQrCode
-        : null,
-      pixQrCodeBase64: (p.pixExpiresAt && p.pixExpiresAt > now && p.status === 'PENDING')
-        ? p.pixQrCodeBase64
-        : null,
-    }))
-
-    return NextResponse.json({
-      status: order.status,
-      paymentStatus: order.paymentStatus,
-      confirmedAt: order.confirmedAt,
-      readyAt: order.readyAt,
-      deliveredAt: order.deliveredAt,
-      payments,
-      // Mapa de rastreamento ao vivo — só relevante para pedidos de entrega
-      // "a caminho". Qualquer um dos três pode vir null (loja sem
-      // localização cadastrada, endereço não geocodificado, ou entregador
-      // ainda não começou a compartilhar a posição).
-      ...(order.type === 'DELIVERY' ? {
-        tracking: {
-          store: (order.tenant.latitude != null && order.tenant.longitude != null)
-            ? { lat: order.tenant.latitude, lng: order.tenant.longitude }
-            : null,
-          destination: (order.deliveryLat != null && order.deliveryLng != null)
-            ? { lat: order.deliveryLat, lng: order.deliveryLng }
-            : null,
-          courier: (order.courierLat != null && order.courierLng != null)
-            ? { lat: order.courierLat, lng: order.courierLng, updatedAt: order.courierUpdatedAt }
-            : null,
-        },
-      } : {}),
-    })
-  } catch (error) {
-    console.error('[orders/status] Erro interno:', error)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  const session = await auth()
+  if (!session?.user?.tenantId) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
-}
+  if (!ALLOWED_ROLES.includes(session.user.role)) {
+    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+  }
 
-// Exportar o helper para uso em createOrderAction
-export { generateStatusToken }
+  const { id: orderId } = await params
+  const tenantId = session.user.tenantId
+
+  // ── Parse body ────────────────────────────────────────────────────────────
+  let rawBody: unknown
+  try { rawBody = await request.json() } catch {
+    return NextResponse.json({ error: 'JSON inválido' }, { status: 400 })
+  }
+  const parsed = bodySchema.safeParse(rawBody)
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.errors[0].message }, { status: 400 })
+  }
+  const { payments, deviceId, customerCpf } = parsed.data
+
+  // ── Buscar pedido ─────────────────────────────────────────────────────────
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, tenantId },
+    select: {
+      id: true, orderNumber: true, status: true,
+      paymentStatus: true, type: true, total: true, customerId: true,
+      customer: { select: { cpf: true, name: true, phone: true } },
+      payments: { select: { id: true, method: true, status: true, amount: true, checkoutUrl: true } },
+    },
+  })
+  if (!order) {
+    return NextResponse.json({ error: 'Pedido não encontrado' }, { status: 404 })
+  }
+
+  // ── Validações ────────────────────────────────────────────────────────────
+  if (['CANCELLED', 'REFUNDED'].includes(order.status)) {
+    return NextResponse.json({ error: 'Pedido cancelado ou estornado.' }, { status: 422 })
+  }
+  if (order.type === 'DELIVERY') {
+    return NextResponse.json({ error: 'Use o fluxo de pagamento de delivery.' }, { status: 422 })
+  }
+
+  // CORREÇÃO: só pagamento com status PAID conta como "já pago" — um
+  // pagamento PENDING (ex.: link de pagamento ainda não confirmado) não
+  // deveria contar aqui, senão bloqueia o registro de um pagamento de
+  // verdade achando que o pedido já está coberto.
+  const alreadyPaid = order.payments.filter((p) => p.status === 'PAID').reduce((s, p) => s + Number(p.amount), 0)
+  const newTotal    = payments.reduce((s, p) => s + p.amount, 0)
+  const orderTotal  = Number(order.total)
+
+  // Pagamentos registrados manualmente (sem checkoutUrl — diferente de um
+  // link/PIX aguardando o cliente) que já estão pendentes de confirmação.
+  // Se eles já cobrem o total, bloqueia registrar mais um por cima — senão
+  // os dois podem ser confirmados depois e o pedido fica com pagamento em
+  // duplicidade (valor recebido maior que o total do pedido).
+  const pendingManualSum = order.payments
+    .filter((p) => p.status === 'PENDING' && !p.checkoutUrl)
+    .reduce((s, p) => s + Number(p.amount), 0)
+  // CORREÇÃO: margem de tolerância de ponto flutuante estava em 0.01 (1
+  // centavo) — do mesmo tamanho da própria unidade que estamos comparando.
+  // Com um saldo restante de exatamente R$0,01 (comum em testes, mas pode
+  // acontecer em produção após edição de pedido), a comparação
+  // "alreadyPaid >= orderTotal - 0.01" dava true mesmo sobrando 1 centavo
+  // de verdade a pagar, bloqueando o registro do pagamento restante com a
+  // mensagem enganosa de "já existe pagamento pendente". Epsilon reduzido
+  // pra meio centavo, suficiente só pra arredondamento de float.
+  const EPSILON = 0.005
+  if (alreadyPaid + pendingManualSum >= orderTotal - EPSILON) {
+    return NextResponse.json({
+      error: 'Já existe um pagamento registrado aguardando confirmação para este pedido. Confirme-o antes de registrar outro.',
+    }, { status: 422 })
+  }
+
+  if (alreadyPaid + newTotal < orderTotal - EPSILON) {
+    return NextResponse.json({
+      error: `Valor insuficiente. Total: R$${orderTotal.toFixed(2)}. Já registrado: R$${alreadyPaid.toFixed(2)}. Falta: R$${(orderTotal - alreadyPaid - newTotal).toFixed(2)}.`,
+    }, { status: 422 })
+  }
+
+  const effectiveCpf = customerCpf ?? order.customer?.cpf ?? undefined
+
+  // ── Criar pagamentos ──────────────────────────────────────────────────────
+  // CORREÇÃO: faltava `pixQrCode` (e o resto do necessário pro polling)
+  // em cada item de `createdPayments` — o pixQrCode só ia solto lá fora
+  // na resposta (`...(pixQrCode ? { pixQrCode, pixQrCodeBase64 } : {})`).
+  // A tela (order-detail.tsx) guarda essa lista como está no estado local
+  // de `payments`, e o polling que verifica "tem PIX pendente aguardando
+  // pagamento?" depende de achar `p.pixQrCode` dentro do próprio pagamento
+  // — sem isso, nunca reconhecia esse PIX como pendente de gateway, e o
+  // polling nunca chegava a iniciar (ficava preso em "Aguardando PIX" pra
+  // sempre, mesmo o cliente já tendo pago e o webhook já tendo confirmado).
+  const createdPayments: Array<{
+    id: string; method: string; status: string; amount: number
+    pixQrCode?: string; pixQrCodeBase64?: string
+  }> = []
+  let pixQrCode: string | undefined
+  let pixQrCodeBase64: string | undefined
+
+  for (const p of payments) {
+    if (p.method === 'PIX') {
+      // PIX: gera QR Code no Mercado Pago (fora da transaction para evitar timeout)
+      try {
+        const pixResult = await createPixPayment({
+          tenantId, orderId, amount: p.amount, deviceId, customerCpf: effectiveCpf,
+          customerName: order.customer?.name ?? undefined,
+          customerPhone: order.customer?.phone ?? undefined,
+        })
+        createdPayments.push({
+          id: pixResult.created.id,
+          method: 'PIX',
+          status: 'PENDING',
+          amount: Number(pixResult.created.amount),
+          pixQrCode: pixResult.pixQrCode,
+          pixQrCodeBase64: pixResult.pixQrCodeBase64,
+        })
+        // Só guarda o QR do primeiro PIX (caso split)
+        if (!pixQrCode) {
+          pixQrCode       = pixResult.pixQrCode
+          pixQrCodeBase64 = pixResult.pixQrCodeBase64
+        }
+      } catch (err) {
+        console.error('[add-payment] PIX error:', err)
+        return NextResponse.json({
+          error: 'Erro ao gerar PIX. Verifique as credenciais do provedor de pagamento configurado (Mercado Pago, Efí ou Asaas).',
+        }, { status: 502 })
+      }
+    } else {
+      // Métodos manuais: cria direto no banco
+      let changeAmount: number | undefined
+      if (p.method === 'CASH' && p.changeFor && p.changeFor > p.amount) {
+        changeAmount = p.changeFor - p.amount
+      }
+      const created = await prisma.payment.create({
+        data: {
+          tenantId,
+          orderId,
+          method: p.method as any,
+          amount: p.amount,
+          status: 'PENDING' as any,
+          ...(changeAmount !== undefined ? { changeAmount } : {}),
+        },
+      })
+      createdPayments.push({
+        id: created.id,
+        method: created.method,
+        status: created.status,
+        amount: Number(created.amount),
+      })
+    }
+  }
+
+  // Registrar no histórico
+  await prisma.orderStatusHistory.create({
+    data: {
+      orderId,
+      status: order.status as any,
+      userId: session.user.id,
+      notes: `Pagamento adicionado por ${session.user.name ?? session.user.email}: ${payments.map((p) => `${paymentMethodLabel(p.method, order.type)} R$${p.amount.toFixed(2)}`).join(', ')}`,
+    },
+  })
+
+  // ── Audit + evento ────────────────────────────────────────────────────────
+  await auditLog({
+    tenantId,
+    userId: session.user.id,
+    action: AuditActions.PAYMENT_RECEIVED,
+    resource: 'orders',
+    resourceId: orderId,
+    newValue: { action: 'add_payment', payments: createdPayments },
+  })
+  try { await publishOrderEvent(tenantId, { type: 'PAYMENT_UPDATED', orderId }) } catch {}
+
+  return NextResponse.json({
+    ok: true,
+    payments: createdPayments,
+    // Se teve PIX, retorna os dados para exibir o QR Code na tela
+    ...(pixQrCode ? { pixQrCode, pixQrCodeBase64 } : {}),
+  })
+}
