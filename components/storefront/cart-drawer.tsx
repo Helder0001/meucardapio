@@ -140,6 +140,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const [couponDescription, setCouponDescription] = useState('')
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false)
   const [deliveryAddress, setDeliveryAddress] = useState('')
+  const [deliveryNumber, setDeliveryNumber] = useState('')
   const [cep, setCep] = useState('')
   const [cepLoading, setCepLoading] = useState(false)
   const [cepError, setCepError] = useState('')
@@ -262,6 +263,10 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
       toast.error('Informe o endereço completo para entrega')
       return
     }
+    if (deliveryType === 'DELIVERY' && !deliveryNumber.trim()) {
+      toast.error('Informe o número da casa/apartamento')
+      return
+    }
 
     // Total já cobre zero (cashback/desconto cobriu tudo) — não faz sentido
     // pedir forma de pagamento pra cobrar R$0,00.
@@ -307,7 +312,12 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
         cashbackToUse:  useCashback && cashbackToUse > 0 ? cashbackToUse : undefined,
         pointsToRedeem: usePoints && pointsToRedeem > 0 ? pointsToRedeem : undefined,
         deliveryBairro: deliveryBairro ?? undefined,
-        deliveryAddress: deliveryAddress || undefined,
+        // Número da casa concatenado no endereço — evita migração de
+        // schema só pra isso, e mantém compatibilidade com quem já lê
+        // deliveryAddress como texto único (impressão, WhatsApp, etc).
+        deliveryAddress: deliveryAddress
+          ? `${deliveryAddress}, ${deliveryNumber || 'S/N'}`
+          : undefined,
         customerPhone: isTableOrder ? (customerPhone || phone || undefined) : (customerPhone || phone),
         customerName: name || undefined,
         // 'LINK' não é um método aceito na criação do pedido (só existe pro
@@ -613,15 +623,31 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                             </div>
                           )}
                           {/* Endereço preenchido automaticamente ou manualmente */}
-                          <div className="relative">
+                          <div className="grid grid-cols-3 gap-2">
                             <input
                               type="text"
                               value={deliveryAddress}
                               onChange={(e) => setDeliveryAddress(e.target.value)}
-                              placeholder="Rua, número, complemento *"
+                              placeholder="Rua, complemento *"
                               className={cn(
-                                'w-full px-3 py-2.5 text-sm border rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500',
+                                'col-span-2 px-3 py-2.5 text-sm border rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500',
                                 !deliveryAddress.trim() ? 'border-brand-300 dark:border-brand-700' : 'border-gray-200 dark:border-gray-700'
+                              )}
+                            />
+                            {/* CORREÇÃO: número da casa ficava dentro do
+                                mesmo texto corrido do endereço — cliente
+                                esquecia de digitar e o entregador não
+                                achava a casa. Agora é campo obrigatório
+                                separado. */}
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={deliveryNumber}
+                              onChange={(e) => setDeliveryNumber(e.target.value)}
+                              placeholder="Nº *"
+                              className={cn(
+                                'px-3 py-2.5 text-sm border rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500',
+                                !deliveryNumber.trim() ? 'border-brand-300 dark:border-brand-700' : 'border-gray-200 dark:border-gray-700'
                               )}
                             />
                           </div>
@@ -713,7 +739,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                         </div>
                         <div>
                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1.5">
-                            Pagamento na entrega/retirada — manual
+                            Pagamento na entrega/retirada
                           </p>
                           <div className="grid grid-cols-3 gap-1.5">
                             {MANUAL_PAYMENT_OPTIONS.map((opt) => (
@@ -834,6 +860,10 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                 }
                 if (deliveryType === 'DELIVERY' && !deliveryAddress.trim()) {
                   toast.error('Informe o endereço completo antes de continuar')
+                  return
+                }
+                if (deliveryType === 'DELIVERY' && !deliveryNumber.trim()) {
+                  toast.error('Informe o número da casa/apartamento')
                   return
                 }
                 setStep(isTableOrder ? 'payment' : 'info')
