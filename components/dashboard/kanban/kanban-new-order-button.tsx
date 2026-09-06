@@ -11,6 +11,15 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
+// Máscara de dinheiro estilo "centavos entram pela direita" (padrão de
+// apps bancários brasileiros) — evita a ambiguidade de digitar "500"
+// esperando R$5,00 e receber R$500,00.
+function formatCentsMask(amount: number): string {
+  if (amount === 0) return ''
+  const cents = Math.round(amount * 100)
+  return (cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
 interface Product { id: string; name: string; price: number; isOutOfStock?: boolean }
 interface Category { id: string; name: string; products: Product[] }
 
@@ -128,6 +137,7 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
 
   const handleSubmit = () => {
     if (items.length === 0) { toast.error('Adicione pelo menos um item'); return }
+    if (!customerName.trim()) { toast.error('Informe o nome do cliente'); return }
     // Com 1 só forma de pagamento, o valor é sempre o total do pedido.
     // Com mais de uma (split), as parcelas precisam somar exatamente o total.
     const finalPayments: PaymentEntry[] = payments.length === 1
@@ -585,8 +595,8 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
                     className="w-full px-3 py-2 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-foreground mb-1">Nome (opcional)</label>
-                  <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Nome do cliente"
+                  <label className="block text-xs font-medium text-foreground mb-1">Nome *</label>
+                  <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Nome do cliente" required
                     className="w-full px-3 py-2 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
                 </div>
               </div>
@@ -637,21 +647,19 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
 
                         {payments.length > 1 && (
                           <input
-                            type="text" inputMode="decimal"
-                            // CORREÇÃO: mesmo bug do order-detail.tsx — teclado
-                            // numérico Android em pt-BR usa vírgula, mas
-                            // type="number" só aceita ponto.
-                            value={p.amount === 0 ? '' : String(p.amount).replace('.', ',')}
+                            type="text" inputMode="numeric"
+                            // CORREÇÃO 2: a tentativa anterior (aceitar vírgula
+                            // livre) resolvia o crash do type="number", mas
+                            // criava confusão nova — digitar "500" achando que
+                            // ia virar R$5,00 resultava em R$500,00. Agora
+                            // usa a mesma máscara "dígitos = centavos, entram
+                            // da direita" que apps bancários brasileiros usam:
+                            // digitar 5,0,0 vira 0,05 → 0,50 → 5,00 progressivamente.
+                            value={formatCentsMask(p.amount)}
                             onChange={(e) => {
-                              const cleaned = e.target.value.replace(/[^0-9,]/g, '')
-                              const firstComma = cleaned.indexOf(',')
-                              const raw = firstComma === -1
-                                ? cleaned
-                                : cleaned.slice(0, firstComma + 1) + cleaned.slice(firstComma + 1).replace(/,/g, '')
-                              const normalized = raw.replace(',', '.')
-                              const parsed = normalized === '' || normalized === '.' ? 0 : Number(normalized)
-                              if (Number.isNaN(parsed)) return
-                              updatePaymentAmount(idx, parsed)
+                              const digits = e.target.value.replace(/\D/g, '')
+                              const cents = digits === '' ? 0 : parseInt(digits, 10)
+                              updatePaymentAmount(idx, cents / 100)
                             }}
                             placeholder="0,00"
                             className="w-24 px-2.5 py-2 text-xs border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
