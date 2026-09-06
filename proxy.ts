@@ -8,7 +8,7 @@ const RESTRICTED_ROLES = ['STAFF', 'DELIVERY_PERSON']
 
 const ALLOWED_EXACT = ['/dashboard']
 
-const ALLOWED_PREFIXES = ['/dashboard/orders']
+const ALLOWED_PREFIXES = ['/dashboard/orders', '/dashboard/delivery/tracking']
 
 // crypto.timingSafeEqual (Node.js) não existe no Edge Runtime, onde este
 // middleware sempre roda — implementação manual constant-time (XOR
