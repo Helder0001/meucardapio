@@ -25,6 +25,7 @@ interface ReportsClientProps {
   topProducts:    Array<{ id: string; name: string; quantity: number; revenue: number }>
   salesByType:    Array<{ type: string; total: number; count: number }>
   salesByPayment: Array<{ method: string; total: number; count: number }>
+  salesByBairro?: Array<{ bairro: string; total: number; count: number }>
   salesByHour:    Array<{ hour: number; orders: number }>
   summary: {
     thisRevenue:   number
@@ -44,9 +45,11 @@ interface ReportsClientProps {
   pdvList:     Array<{ id: string; name: string }>
   productList: Array<{ id: string; name: string }>
   userList:    Array<{ id: string; name: string; role: string }>
+  bairroList?: string[]
   filterPdv:      string
   filterPayment:  string
   filterProduct:  string
+  filterBairro?:  string
   filterSaleType: string
   filterUser:     string
 }
@@ -195,10 +198,10 @@ const SelectFilter = ({
 )
 
 export function ReportsClient({
-  revenueChart, revenueChartPrev = [], topProducts, salesByType, salesByPayment,
+  revenueChart, revenueChartPrev = [], topProducts, salesByType, salesByPayment, salesByBairro = [],
   salesByHour, summary, startDate, endDate,
-  productList, userList,
-  filterPdv, filterPayment, filterProduct, filterSaleType, filterUser,
+  productList, userList, bairroList = [],
+  filterPdv, filterPayment, filterProduct, filterSaleType, filterUser, filterBairro = '',
 }: ReportsClientProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -211,18 +214,20 @@ export function ReportsClient({
   const [product,  setProduct]  = useState(filterProduct)
   const [saleType, setSaleType] = useState(filterSaleType)
   const [user,     setUser]     = useState(filterUser)
+  const [bairro,   setBairro]   = useState(filterBairro)
   const [showAdvanced, setShowAdvanced] = useState(
-    !!(filterPdv || filterPayment || filterProduct || filterSaleType || filterUser)
+    !!(filterPdv || filterPayment || filterProduct || filterSaleType || filterUser || filterBairro)
   )
   const [activePreset, setActivePreset] = useState<string>('')
 
-  const buildUrl = (s: string, e: string, p = pdv, pay = payment, prod = product, st = saleType, u = user) => {
+  const buildUrl = (s: string, e: string, p = pdv, pay = payment, prod = product, st = saleType, u = user, b = bairro) => {
     const q = new URLSearchParams({ start: s, end: e })
     if (p)   q.set('pdv',      p)
     if (pay) q.set('payment',  pay)
     if (prod)q.set('product',  prod)
     if (st)  q.set('saleType', st)
     if (u)   q.set('user',     u)
+    if (b)   q.set('bairro',   b)
     return `/dashboard/reports?${q.toString()}`
   }
 
@@ -247,11 +252,11 @@ export function ReportsClient({
   }
 
   const clearAdvanced = () => {
-    setPdv(''); setPayment(''); setProduct(''); setSaleType(''); setUser('')
-    startTransition(() => router.push(buildUrl(start, end, '', '', '', '', '')))
+    setPdv(''); setPayment(''); setProduct(''); setSaleType(''); setUser(''); setBairro('')
+    startTransition(() => router.push(buildUrl(start, end, '', '', '', '', '', '')))
   }
 
-  const hasActiveFilters = !!(pdv || payment || product || saleType)
+  const hasActiveFilters = !!(pdv || payment || product || saleType || bairro)
 
   // Período anterior (mesma duração, imediatamente antes do período selecionado)
   // — replica o cálculo do servidor para exibir no tooltip dos cards.
@@ -483,7 +488,7 @@ export function ReportsClient({
             Filtros avançados
             {hasActiveFilters && (
               <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold bg-primary text-primary-foreground rounded-full leading-none">
-                {[payment, product, saleType].filter(Boolean).length}
+                {[payment, product, saleType, bairro].filter(Boolean).length}
               </span>
             )}
             {showAdvanced ? <ChevronUp className="h-3.5 w-3.5 ml-1" /> : <ChevronDown className="h-3.5 w-3.5 ml-1" />}
@@ -505,6 +510,11 @@ export function ReportsClient({
                   })),
                 ]} />
               <SelectFilter label="Tipo de venda" value={saleType} onChange={setSaleType} options={TYPE_OPTIONS} />
+              <SelectFilter label="Bairro" value={bairro} onChange={setBairro}
+                options={[
+                  { value: '', label: 'Todos os bairros' },
+                  ...bairroList.map((b) => ({ value: b, label: b })),
+                ]} />
               <div className="flex gap-2 pb-0.5">
                 <button onClick={applyFilter} disabled={isPending}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-60 transition-colors">
@@ -795,6 +805,45 @@ export function ReportsClient({
           )}
         </div>
       </div>
+
+      {/* ── Vendas por bairro (feature #4 pt.2) ── */}
+      {salesByBairro.length > 0 && (
+        <div className="bg-card border border-border rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-foreground">Vendas por bairro</h2>
+            <InfoTooltip text="Quantidade de pedidos e faturamento por bairro de entrega, no período selecionado. Pedidos de retirada/mesa/PDV não têm bairro e ficam de fora." align="right" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={salesByBairro.slice(0, 8)}
+                  layout="vertical"
+                  margin={{ top: 0, right: 8, left: 0, bottom: 0 }}
+                >
+                  <XAxis type="number" tick={{ fontSize: 9, fill: 'var(--muted-foreground)' }} tickFormatter={(v) => formatCurrency(v)} />
+                  <YAxis type="category" dataKey="bairro" width={90} tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }} />
+                  <Tooltip
+                    formatter={(v) => typeof v === 'number' ? [formatCurrency(v), 'Faturamento'] : [v, '']}
+                  />
+                  <Bar dataKey="total" radius={[0, 4, 4, 0]} fill="#f97316" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+              {salesByBairro.map((b) => (
+                <div key={b.bairro} className="flex items-center justify-between text-sm border-b border-border/50 pb-2 last:border-0">
+                  <div>
+                    <p className="font-medium text-foreground">{b.bairro}</p>
+                    <p className="text-xs text-muted-foreground">{b.count} pedido{b.count === 1 ? '' : 's'}</p>
+                  </div>
+                  <p className="font-bold text-foreground">{formatCurrency(b.total)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Clientes ── */}
       {(summary.totalClients != null) && (
