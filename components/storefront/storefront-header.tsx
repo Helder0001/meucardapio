@@ -3,6 +3,7 @@
 
 import { ShoppingBag, MapPin, Search } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils/format'
+import Image from 'next/image'
 
 interface StorefrontHeaderProps {
   tenant: { name: string; logo: string | null; primaryColor: string | null }
@@ -22,11 +23,9 @@ export function StorefrontHeader({ tenant, tableInfo, cartCount, cartTotal, onCa
         {/* Logo + nome */}
         <div className="flex items-center gap-3 min-w-0">
           {tenant.logo ? (
-            <img
-              src={tenant.logo}
-              alt={tenant.name}
-              className="w-10 h-10 rounded-2xl object-cover flex-shrink-0 shadow-sm"
-            />
+            <div className="relative w-10 h-10 rounded-2xl overflow-hidden flex-shrink-0 shadow-sm">
+              <Image src={tenant.logo} alt={tenant.name} fill sizes="40px" className="object-cover" />
+            </div>
           ) : (
             <div
               className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-black text-sm flex-shrink-0 shadow-sm"

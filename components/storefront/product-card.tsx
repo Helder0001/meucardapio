@@ -35,6 +35,7 @@ export function ProductCard({ product, onSelect, disabled, primaryColor }: Produ
         {product.image ? (
           <Image
             src={product.image} alt={product.name} fill
+            sizes="(max-width: 640px) 112px, 128px"
             className={`object-cover group-hover:scale-105 transition-transform duration-400 ${product.isOutOfStock ? 'grayscale opacity-60' : ''}`}
           />
         ) : (

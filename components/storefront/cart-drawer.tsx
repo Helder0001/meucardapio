@@ -2,6 +2,7 @@
 // components/storefront/cart-drawer.tsx — pagamento múltiplo + endereço obrigatório
 
 import { useState, useEffect } from 'react'
+import Script from 'next/script'
 import { X, Trash2, Plus, Minus, Tag, Loader2, ArrowRight, ShoppingBag, Truck, Store, MapPin, PlusCircle, MinusCircle } from 'lucide-react'
 import { useCartStore } from '@/lib/store/cart'
 import { formatCurrency } from '@/lib/utils/format'
@@ -295,10 +296,16 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
       const isPaymentLink = payments.length === 1 && payments[0].method === 'LINK'
 
       // Device ID gerado pelo script de segurança do Mercado Pago
-      // (window.MP_DEVICE_SESSION_ID), carregado no layout do storefront.
-      // Se o script ainda não rodou (ex.: bloqueado por ad-blocker), segue
-      // sem ele — não bloqueia o pedido. Não é necessário pro fluxo de LINK
-      // (o Checkout Pro coleta isso sozinho).
+      // (window.MP_DEVICE_SESSION_ID), carregado logo abaixo neste mesmo
+      // componente assim que o carrinho é aberto (antes só existia via
+      // strategy="afterInteractive" no layout do storefront, carregando em
+      // toda visita ao cardápio — inclusive pra quem nunca chega a comprar
+      // — e consumindo ~740ms de thread principal no meio do carregamento
+      // da página, segundo o PageSpeed Insights).
+      // Se o script ainda não rodou (ex.: bloqueado por ad-blocker, ou
+      // cliente fechou o carrinho rápido demais), segue sem ele — não
+      // bloqueia o pedido. Não é necessário pro fluxo de LINK (o Checkout
+      // Pro coleta isso sozinho).
       const deviceId = isPaymentLink
         ? undefined
         : (typeof window !== 'undefined' ? (window as any).MP_DEVICE_SESSION_ID : undefined)
@@ -372,6 +379,17 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
 
   return (
     <div className="fixed inset-0 z-50 flex">
+      {/*
+        Script de segurança do Mercado Pago — gera o Device ID usado ao
+        criar pagamentos PIX via API direta, pra reduzir recusas de
+        antifraude. Antes carregava globalmente no layout do storefront
+        (toda visita ao cardápio); agora só monta quando o carrinho é
+        aberto de fato — o cliente ainda tem as etapas de carrinho → dados
+        → pagamento pela frente, tempo de sobra para o script terminar de
+        gerar o ID antes do pedido ser enviado.
+      */}
+      <Script src="https://www.mercadopago.com/v2/security.js" strategy="afterInteractive" {...({ view: 'checkout' } as any)} />
+
       <div className="flex-1 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       <div className="w-full max-w-sm bg-white dark:bg-gray-900 flex flex-col h-full shadow-2xl">

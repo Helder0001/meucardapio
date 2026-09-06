@@ -101,7 +101,7 @@ export function ProductModal({ product, onClose, disabled, primaryColor }: Produ
         {/* Imagem */}
         {product.image ? (
           <div className="h-52 sm:h-60 relative rounded-t-3xl overflow-hidden flex-shrink-0">
-            <Image src={product.image} alt={product.name} fill className="object-cover" />
+            <Image src={product.image} alt={product.name} fill sizes="(max-width: 640px) 100vw, 512px" className="object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
             {/* Nome sobre imagem */}
             <div className="absolute bottom-4 left-5 right-12">
