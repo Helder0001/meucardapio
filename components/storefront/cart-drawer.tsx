@@ -106,7 +106,12 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
       const data = await res.json()
       const { logradouro, bairro, localidade } = data
 
-      setDeliveryAddress(`${logradouro}, ${bairro}, ${localidade}`.replace(/^, |, $/g, ''))
+      // CORREÇÃO: rua e "bairro, cidade" ficam em estados separados pra dar
+      // pra encaixar o número da casa entre os dois na hora de montar o
+      // endereço final (ex.: "Rua Ana Batista 55, Jardim Iracema, Fortaleza")
+      // em vez do número cair no fim de tudo.
+      setDeliveryAddress(logradouro || '')
+      setDeliveryCityLine([bairro, localidade].filter(Boolean).join(', '))
 
       const bairroNorm = (bairro || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       const zone = tenant.deliveryZones.find(z => {
@@ -141,6 +146,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const [couponDescription, setCouponDescription] = useState('')
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false)
   const [deliveryAddress, setDeliveryAddress] = useState('')
+  const [deliveryCityLine, setDeliveryCityLine] = useState('') // "bairro, cidade" — preenchido junto com o CEP
   const [deliveryNumber, setDeliveryNumber] = useState('')
   const [cep, setCep] = useState('')
   const [cepLoading, setCepLoading] = useState(false)
@@ -329,8 +335,11 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
         // Número da casa concatenado no endereço — evita migração de
         // schema só pra isso, e mantém compatibilidade com quem já lê
         // deliveryAddress como texto único (impressão, WhatsApp, etc).
+        // CORREÇÃO: número fica logo depois da rua (antes do bairro/cidade)
+        // — ex.: "Rua Ana Batista 55, Jardim Iracema, Fortaleza" — em vez
+        // de cair no final do texto todo.
         deliveryAddress: deliveryAddress
-          ? `${deliveryAddress}, ${deliveryNumber || 'S/N'}`
+          ? [`${deliveryAddress} ${deliveryNumber || 'S/N'}`, deliveryCityLine].filter(Boolean).join(', ')
           : undefined,
         customerPhone: isTableOrder ? (customerPhone || phone || undefined) : (customerPhone || phone),
         customerName: name || undefined,
@@ -620,6 +629,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                               setCepZone(null)
                               setCepError('')
                               setDeliveryBairro(null)
+                              setDeliveryCityLine('')
                             }
                           }}
                             className={cn('py-3 rounded-2xl text-sm font-bold border-2 transition-all flex items-center justify-center gap-1.5',
