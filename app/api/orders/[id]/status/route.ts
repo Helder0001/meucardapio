@@ -25,7 +25,7 @@ function generateStatusToken(orderId: string): string {
   return crypto.createHmac('sha256', secret).update(orderId).digest('hex')
 }
 
-function validateStatusToken(orderId: string, token: string): boolean {
+export function validateStatusToken(orderId: string, token: string): boolean {
   const expected = generateStatusToken(orderId)
   if (expected.length !== token.length) return false
   try {
@@ -83,10 +83,26 @@ export async function GET(
         deliveryLng: true,
         tenant: { select: { latitude: true, longitude: true } },
         payments: {
-          where: { method: 'PIX' },
+          // BUG CORRIGIDO: filtro restrito a `method: 'PIX'` e `take: 1` fazia
+          // sentido para o storefront (order-tracking.tsx só acompanha 1 PIX),
+          // mas esse mesmo endpoint também é usado pelo polling do dashboard
+          // (order-detail.tsx e kanban-new-order-button.tsx) para pagamentos
+          // "cobrar no final" — que podem ter PIX *e* cartão via link, e podem
+          // ter mais de um registro de pagamento (ex.: pagamento dividido).
+          // Com `take: 1` só o PIX mais recente aparecia; um pagamento em
+          // CREDIT_CARD (link) nunca era retornado aqui e ficava para sempre
+          // como PENDING na tela até um reload manual.
+          where: { method: { in: ['PIX', 'CREDIT_CARD'] } },
           orderBy: { createdAt: 'desc' },
-          take: 1,
           select: {
+            id: true, // BUG CORRIGIDO: faltava o id do pagamento — order-detail.tsx
+                       // casa a atualização do polling com `data.payments.find(dp =>
+                       // dp.id === p.id)`; sem `id` no retorno, `dp.id` é sempre
+                       // `undefined` e o `find` nunca casa com nada, então o pagamento
+                       // PIX registrado via "cobrar no final" nunca saía de
+                       // "Aguardando confirmação PIX" na tela, mesmo já pago (diferente
+                       // do fluxo de PDV/balcão, que compara pelo `paymentStatus` do
+                       // pedido como um todo em vez de por pagamento individual).
             status: true,
             method: true, // BUG CORRIGIDO: sem isso, o frontend (order-tracking.tsx)
                            // perde a referência de que é um pagamento PIX assim que o
@@ -96,6 +112,7 @@ export async function GET(
             pixQrCode: true,
             pixQrCodeBase64: true,
             pixExpiresAt: true,
+            checkoutUrl: true,
             amount: true,
           },
         },
@@ -111,7 +128,10 @@ export async function GET(
     // CORREÇÃO: cancelar automaticamente quando o PIX expira, sem depender só
     // do webhook do MP (que pode demorar/falhar) nem do cron diário (no plano
     // Hobby da Vercel só roda 1x/dia — muito lento pra uma janela de 5min).
-    const expiredPix = order.payments[0]
+    // Precisa ser o PIX especificamente (não `payments[0]`): agora que a
+    // query acima também traz pagamentos CREDIT_CARD, o primeiro item do
+    // array pode não ser mais o PIX.
+    const expiredPix = order.payments.find((p) => p.method === 'PIX')
     const pixExpired = !!(
       order.status === 'PENDING' &&
       expiredPix?.status === 'PENDING' &&
@@ -173,17 +193,19 @@ export async function GET(
       order.status = 'CANCELLED'
       if (pixExpired) {
         order.paymentStatus = 'FAILED'
-        if (order.payments[0]) order.payments[0].status = 'FAILED'
+        if (expiredPix) expiredPix.status = 'FAILED'
       }
     }
 
     // Não retornar QR Code de PIX expirado
     const now = new Date()
     const payments = order.payments.map((p) => ({
+      id: p.id,
       status: p.status,
       method: p.method,
       amount: Number(p.amount),
       pixExpiresAt: p.pixExpiresAt,
+      checkoutUrl: p.checkoutUrl,
       // QR Code só é retornado enquanto válido e o pagamento está pendente
       pixQrCode: (p.pixExpiresAt && p.pixExpiresAt > now && p.status === 'PENDING')
         ? p.pixQrCode
