@@ -148,6 +148,11 @@ export function OrderDetail({
 }: { order: any; userRole: string; catalog?: CatalogCategory[]; pixEnabled?: boolean; cardEnabled?: boolean; linkEnabled?: boolean }) {
   const [status,   setStatus]   = useState(order.status)
   const [payments, setPayments] = useState<any[]>(order.payments)
+  // Mostra a mesma tela de "Pagamento confirmado!" usada no modal de Novo
+  // Pedido (Balcão/PDV) quando o polling abaixo detecta que um pagamento
+  // pendente (PIX/cartão) foi confirmado — ex.: cliente pagou o PIX
+  // diretamente pra o estabelecimento e o webhook atualizou em segundo plano.
+  const [pixJustConfirmed, setPixJustConfirmed] = useState(false)
 
   // BUG CORRIGIDO: essa tela nunca atualizava sozinha — só quando o staff
   // clicava em algo manualmente (ex.: "Concluído"). No balcão, quando o
@@ -181,6 +186,11 @@ export function OrderDetail({
             const stillPending = data.payments.some((p: any) => p.status === 'PENDING')
             if (!stillPending) {
               clearInterval(interval)
+              const anyPaid = data.payments.some((p: any) => p.status === 'PAID')
+              if (anyPaid) {
+                setPixJustConfirmed(true)
+                setAddPixData(null) // fecha o QR Code, se estava aberto — já foi pago
+              }
               router.refresh() // pega o status do pedido tb (PENDING → CONFIRMED, etc.)
             }
           }
@@ -1108,6 +1118,30 @@ export function OrderDetail({
           )}
         </div>
       </div>
+
+      {/* ── Modal Pagamento confirmado (PIX pago pelo cliente em segundo plano) ── */}
+      {pixJustConfirmed && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setPixJustConfirmed(false)} />
+          <div className="relative w-full max-w-sm bg-card border border-border rounded-2xl shadow-2xl p-6 flex flex-col items-center text-center gap-4">
+            <div className="w-14 h-14 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center">
+              <CheckCircle2 className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div>
+              <h3 className="font-bold text-foreground">Pagamento confirmado!</h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                O cliente já pagou — o pedido foi atualizado automaticamente.
+              </p>
+            </div>
+            <button
+              onClick={() => setPixJustConfirmed(false)}
+              className="w-full px-4 py-3 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Concluir
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Modal QR Code PIX (pagamento posterior) ───────────────────────── */}
       {addPixData && (
