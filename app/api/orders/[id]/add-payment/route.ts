@@ -11,7 +11,7 @@ import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
 import { paymentMethodLabel } from '@/lib/utils/payment-labels'
 import { z } from 'zod'
-import { isValidCpf, onlyDigits, pixPayerEmail } from '@/lib/utils/cpf'
+import { onlyDigits, pixPayerEmail } from '@/lib/utils/cpf'
 import { getPaymentProvider } from '@/lib/payments/provider-router'
 import { createTenantPixCharge } from '@/lib/efi/tenant-pix-client'
 import { createAsaasPixCharge } from '@/lib/asaas/tenant-payments'
@@ -27,13 +27,13 @@ const bodySchema = z.object({
   // Device ID do Mercado Pago (security.js), enviado como X-Meli-Session-Id
   // na criação do PIX pra reduzir recusas de antifraude.
   deviceId: z.string().optional(),
-  // CPF real de quem vai pagar — obrigatório quando há PIX entre os
-  // pagamentos (ver mesma correção em actions/orders/create-order.ts).
+  // CORREÇÃO: CPF é opcional em todo o resto do sistema desde que o PSP
+  // passou a aceitar cobrança PIX sem identificar o pagador quando o
+  // cliente não informa (ver create-order.ts) — esse .refine() aqui
+  // ainda exigia CPF válido obrigatoriamente, bloqueando o registro
+  // manual de pagamento PIX sem CPF mesmo depois dessa mudança.
   customerCpf: z.string().optional(),
-}).refine(
-  (data) => !data.payments.some((p) => p.method === 'PIX') || isValidCpf(data.customerCpf ?? ''),
-  { message: 'CPF inválido — obrigatório para pagamento via PIX', path: ['customerCpf'] }
-)
+})
 
 const ALLOWED_ROLES = ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'STAFF']
 
