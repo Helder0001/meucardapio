@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import {
   CheckCircle2, Clock, ChefHat, Package, Truck, Star,
-  Copy, Check, ArrowLeft, MapPin, QrCode, RefreshCw, AlertCircle,
+  Copy, Check, ArrowLeft, MapPin, QrCode, RefreshCw, AlertCircle, Ruler,
 } from 'lucide-react'
 import { formatCurrency, formatOrderNumber } from '@/lib/utils/format'
 import { cn } from '@/lib/utils'
@@ -28,6 +28,22 @@ const STATUS_STEPS = [
   { key: 'OUT_FOR_DELIVERY', label: 'A caminho',   icon: Truck,        desc: 'Saiu para entrega' },
   { key: 'DELIVERED',        label: 'Entregue',    icon: CheckCircle2, desc: 'Bom apetite! 🎉' },
 ]
+
+// Mesmo formato usado na tela do entregador (delivery-tracking-screen.tsx) —
+// mantém a distância/tempo estimado consistentes entre as duas telas.
+function formatDistance(meters: number): string {
+  if (meters < 1000) return `${Math.round(meters)} m`
+  return `${(meters / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} km`
+}
+
+function formatDuration(seconds: number): string {
+  const mins = Math.round(seconds / 60)
+  if (mins < 1) return '< 1 min'
+  if (mins < 60) return `${mins} min`
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return `${h}h${m > 0 ? ` ${m}min` : ''}`
+}
 
 const STATUS_MESSAGES: Record<string, { text: string; emoji: string }> = {
   PENDING:          { text: 'Aguardando confirmação do estabelecimento…', emoji: '⏳' },
@@ -63,6 +79,7 @@ interface OrderTrackingProps {
     cashbackUsed: number
     createdAt: Date
     deliveryBairro: string | null
+    addressLine: string | null
     notes: string | null
     tenant: { name: string; slug: string; primaryColor: string | null; logo: string | null }
     items: Array<{
@@ -355,6 +372,10 @@ export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey, c
     destination: { lat: number; lng: number } | null
     courier: { lat: number; lng: number; updatedAt?: string | null } | null
   } | null>(null)
+  // Distância/tempo estimado até o cliente — mesma informação já mostrada
+  // na tela do entregador (delivery-tracking-screen.tsx), agora também
+  // aqui, no acompanhamento do pedido pelo cliente.
+  const [route, setRoute] = useState<{ distanceMeters: number; durationSeconds: number } | null>(null)
 
   const color = order.tenant.primaryColor ?? '#f97316'
   const pendingPayment = order.payments[0] ?? null
@@ -393,6 +414,26 @@ export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey, c
     }, 5000)
     return () => clearInterval(interval)
   }, [order.id, order.status, order.paymentStatus, statusToken])
+
+  // Distância/tempo até o cliente (rota via OSRM) — mesma info da tela do
+  // entregador, agora também aqui. Só faz sentido enquanto o pedido está
+  // "a caminho"; recalcula a cada 30s (não precisa de mais frequência que
+  // isso, o entregador já reenvia a posição a cada ~8s por conta própria).
+  useEffect(() => {
+    if (!isDelivery || order.status !== 'OUT_FOR_DELIVERY') return
+    let cancelled = false
+    const fetchRoute = async () => {
+      try {
+        const res = await fetch(`/api/delivery/route?orderId=${order.id}&token=${statusToken}`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled && data.route) setRoute(data.route)
+      } catch {}
+    }
+    fetchRoute()
+    const interval = setInterval(fetchRoute, 30000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [order.id, order.status, isDelivery, statusToken])
 
   // Regenerar PIX expirado
   const handleRefreshPix = useCallback(async () => {
@@ -589,6 +630,35 @@ export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey, c
               destination={tracking?.destination ?? null}
               courier={tracking?.courier ?? null}
             />
+            {/* CORREÇÃO: endereço/distância/tempo já apareciam na tela do
+                entregador (delivery-tracking-screen.tsx), mas nunca tinham
+                sido levados para a tela do cliente — aqui sem os botões de
+                navegação externa (Google Maps/Waze), que não fazem sentido
+                pra quem está recebendo o pedido. */}
+            {(order.addressLine || order.deliveryBairro || route) && (
+              <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm px-4 py-3 space-y-1.5">
+                {(order.addressLine || order.deliveryBairro) && (
+                  <div className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-300">
+                    <MapPin className="h-3.5 w-3.5 flex-shrink-0" style={{ color }} />
+                    <span className="truncate">
+                      {order.addressLine}
+                      {order.addressLine && order.deliveryBairro ? ' — ' : ''}
+                      {order.deliveryBairro}
+                    </span>
+                  </div>
+                )}
+                {route && (
+                  <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                    <span className="flex items-center gap-1">
+                      <Ruler className="h-3.5 w-3.5" /> {formatDistance(route.distanceMeters)}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5" /> {formatDuration(route.durationSeconds)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

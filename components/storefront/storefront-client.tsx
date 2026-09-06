@@ -15,6 +15,7 @@ import {
   Info, Instagram, Home as HomeIcon, Clock3, CreditCard, Phone,
   ChevronRight, ArrowLeft, User, LogOut, Settings, Moon, Sun,
   Tag, PiggyBank, UtensilsCrossed, ClipboardList, RotateCcw,
+  Zap, Banknote, Landmark,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils/format'
 import Image from 'next/image'
@@ -75,6 +76,19 @@ function InfoModal({
 
   const DAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
 
+  // Ícone por forma de pagamento — antes usava o mesmo ícone genérico de
+  // cartão pra tudo (inclusive PIX e Dinheiro), o que confundia mais do
+  // que ajudava. Comparação por inclusão de texto porque o valor vem de
+  // texto livre digitado em Configurações (PAYMENT_OPTIONS em
+  // general-settings-form.tsx), não de um enum fechado.
+  function paymentIcon(label: string) {
+    const l = label.toLowerCase()
+    if (l.includes('pix')) return Zap
+    if (l.includes('dinheiro')) return Banknote
+    if (l.includes('débito') || l.includes('debito')) return Landmark
+    return CreditCard // crédito e qualquer outra forma não reconhecida
+  }
+
   if (!modalOpen) return null
 
   const TABS: Array<{ key: typeof tab; label: string }> = [
@@ -86,7 +100,11 @@ function InfoModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full sm:max-w-lg bg-white dark:bg-gray-900 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+      {/* CORREÇÃO: no mobile o modal ficava com altura limitada a 85vh como
+          uma folha (bottom sheet) — pedido era pra ocupar a tela toda (h-full,
+          sem cantos arredondados) nas três abas. A partir de sm continua como
+          card centralizado, sem mudança. */}
+      <div className="relative w-full h-full sm:h-auto sm:max-w-lg bg-white dark:bg-gray-900 rounded-none sm:rounded-3xl sm:max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4 flex-shrink-0">
           <h2 className="font-black text-gray-900 dark:text-gray-100 text-lg">{tenant.name}</h2>
@@ -196,12 +214,15 @@ function InfoModal({
           {tab === 'pagamento' && (
             acceptedPayments.length > 0 ? (
               <div className="space-y-2">
-                {acceptedPayments.map((p) => (
-                  <div key={p} className="flex items-center gap-3 text-sm font-semibold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/50 rounded-xl px-4 py-3.5">
-                    <CreditCard className="w-4 h-4" style={{ color }} />
-                    {p}
-                  </div>
-                ))}
+                {acceptedPayments.map((p) => {
+                  const PaymentIcon = paymentIcon(p)
+                  return (
+                    <div key={p} className="flex items-center gap-3 text-sm font-semibold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/50 rounded-xl px-4 py-3.5">
+                      <PaymentIcon className="w-4 h-4" style={{ color }} />
+                      {p}
+                    </div>
+                  )
+                })}
               </div>
             ) : (
               <p className="text-sm text-gray-400">PIX, Dinheiro, Cartão de Crédito/Débito</p>
@@ -776,8 +797,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, vie
           <div className="mt-1.5 text-sm text-gray-600 dark:text-gray-400">
             {isOpen ? (
               <span className="font-semibold" style={{ color }}>
-                Aberto{minDeliveryTime ? ` · ${minDeliveryTime}–${minDeliveryTime + 15} min` : ''}
-                {minDeliveryFee !== null ? ` · a partir de ${minDeliveryFee === 0 ? 'grátis' : formatCurrency(minDeliveryFee)}` : ''}
+                Aberto
               </span>
             ) : (
               <span className="font-semibold text-red-500">Fechado no momento</span>

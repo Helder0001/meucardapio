@@ -176,7 +176,14 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
       .catch(() => {})
   }, [customerPhone, tenant.id])
 
-  const selectedZone = deliveryBairro
+  // BUG CORRIGIDO: deliveryFee dependia só de `deliveryBairro`, sem checar
+  // `deliveryType`. Como `deliveryBairro` fica salvo no carrinho (persist)
+  // e `setDeliveryType` nunca o limpava, trocar de Entrega pra Retirada
+  // mantinha o bairro anterior guardado e a taxa de entrega continuava
+  // sendo cobrada no total — mesmo depois de reload de página (o bairro
+  // é persistido) ou de adicionar outro produto (o cálculo não dependia
+  // do tipo de pedido, só recalculava o subtotal).
+  const selectedZone = deliveryType === 'DELIVERY' && deliveryBairro
     ? tenant.deliveryZones.find((z) => z.bairro === deliveryBairro)
     : null
   const deliveryFee = selectedZone
@@ -601,7 +608,20 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                       <p className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Como deseja receber?</p>
                       <div className="grid grid-cols-2 gap-2">
                         {(['DELIVERY', 'PICKUP'] as const).map((type) => (
-                          <button key={type} onClick={() => setDeliveryType(type)}
+                          <button key={type} onClick={() => {
+                            setDeliveryType(type)
+                            // CORREÇÃO (junto com o cálculo de deliveryFee acima): ao
+                            // trocar pra Retirada, limpa o CEP/zona da tela — senão,
+                            // se o cliente voltar pra Entrega depois, via reaparecer o
+                            // aviso "Entrega disponível" de uma busca antiga sem
+                            // revalidar o CEP contra o carrinho atual.
+                            if (type === 'PICKUP') {
+                              setCep('')
+                              setCepZone(null)
+                              setCepError('')
+                              setDeliveryBairro(null)
+                            }
+                          }}
                             className={cn('py-3 rounded-2xl text-sm font-bold border-2 transition-all flex items-center justify-center gap-1.5',
                               deliveryType === type ? 'text-white border-transparent' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300')}
                             style={deliveryType === type ? { background: color, borderColor: color } : {}}>
