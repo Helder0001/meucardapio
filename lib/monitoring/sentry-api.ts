@@ -39,10 +39,11 @@ export interface SentryIssuesResult {
   issues: MonitoringIssue[]
 }
 
-// Sentry roteia por subdomínio da organização desde 2024 (ex.:
-// meucardapio.sentry.io) — usamos esse formato porque é o que aparece de
-// fato na URL do painel, em vez do domínio genérico sentry.io que exige
-// lógica extra de redirecionamento por região.
+// A API do Sentry fica num host diferente do painel visual — o painel
+// usa o subdomínio da organização (ex.: meucardapio.sentry.io), mas a
+// API só aceita chamadas em sentry.io (ou us.sentry.io/de.sentry.io pra
+// quem escolheu guardar dados numa região específica). Usar o subdomínio
+// da org aqui dá 403, porque aquele host só serve o front-end.
 export async function getRecentSentryIssues(): Promise<SentryIssuesResult> {
   const org = process.env.SENTRY_ORG
   const project = process.env.SENTRY_PROJECT
@@ -52,7 +53,7 @@ export async function getRecentSentryIssues(): Promise<SentryIssuesResult> {
     return { configured: false, error: null, issues: [] }
   }
 
-  const url = `https://${org}.sentry.io/api/0/projects/${org}/${project}/issues/?query=is:unresolved&statsPeriod=24h&sort=freq&limit=10`
+  const url = `https://sentry.io/api/0/projects/${org}/${project}/issues/?query=is:unresolved&statsPeriod=24h&sort=freq&limit=10`
 
   try {
     const res = await fetch(url, {
