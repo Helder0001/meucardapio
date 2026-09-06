@@ -145,6 +145,19 @@ export const authConfig: NextAuthConfig = {
 
         const email = parsed.data.email;
 
+        // CORREÇÃO: loginLimiter/loginEmailLimiter estavam importados mas
+        // nunca usados — não havia rate limit de verdade no login, apesar
+        // do comentário acima e da mensagem RATE_LIMIT já existirem
+        // prontos em actions/auth/login.ts esperando por isso.
+        const { success: ipOk } = await loginLimiter.limit(ip);
+        if (!ipOk) {
+          throw new Error('RATE_LIMIT');
+        }
+        const { success: emailOk } = await loginEmailLimiter.limit(email);
+        if (!emailOk) {
+          throw new Error('RATE_LIMIT');
+        }
+
         const user = await prisma.user.findFirst({
           where: {
             email,
@@ -169,7 +182,13 @@ export const authConfig: NextAuthConfig = {
         }
 
         if (user.lockedUntil && user.lockedUntil > new Date()) {
-          return null;
+          // CORREÇÃO: retornava null aqui — indistinguível de "senha
+          // errada" pro usuário (as duas caem na mesma mensagem genérica
+          // em actions/auth/login.ts). Depois de algumas tentativas
+          // (inclusive digitando a senha CERTA depois de bloqueado), a
+          // pessoa via sempre "Email ou senha incorretos" sem saber que
+          // na real a conta é que estava temporariamente travada.
+          throw new Error('ACCOUNT_LOCKED');
         }
 
         const passwordValid = await verifyPassword(
@@ -195,11 +214,14 @@ export const authConfig: NextAuthConfig = {
         }
 
         // Proteção de tenant
+        // CORREÇÃO: os dois `return null` aqui tinham o mesmo problema do
+        // lockedUntil acima — indistinguíveis de senha errada, apesar da
+        // mensagem TENANT_SUSPENDED já existir pronta esperando por isso.
         if (user.role !== 'MASTER_ADMIN') {
-          if (!user.tenant?.isActive) return null;
+          if (!user.tenant?.isActive) throw new Error('TENANT_SUSPENDED');
 
           if (user.tenant?.subscriptionStatus === 'SUSPENDED') {
-            return null;
+            throw new Error('TENANT_SUSPENDED');
           }
         }
 
