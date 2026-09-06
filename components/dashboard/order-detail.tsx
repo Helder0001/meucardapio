@@ -162,6 +162,17 @@ export function OrderDetail({
   // ativo enquanto existir pagamento PIX/CREDIT_CARD ainda PENDING, e para
   // sozinho assim que confirmar (ou depois de ~3min, pra não ficar
   // batendo pra sempre num pagamento abandonado).
+  //
+  // CORREÇÃO: dependência era só `[order.id]`, então esse efeito rodava
+  // (e decidia se tinha pagamento pendente) uma única vez, ao montar a
+  // tela. Se o PIX pendente só passa a existir DEPOIS — ex.: pedido já
+  // criado sem pagamento, e o operador registra um PIX pelo modal
+  // "Pagamento posterior" — o polling nunca era iniciado: a tela do QR
+  // Code ficava parada pra sempre, sem "Aguardando o cliente pagar..." e
+  // sem detectar quando o cliente paga. Adicionar `payments.length` faz
+  // o efeito reavaliar sempre que um pagamento é adicionado (o próprio
+  // polling só atualiza os já existentes via `.map`, não muda o length —
+  // então não entra em loop).
   useEffect(() => {
     const hasPendingGatewayPayment = payments.some(
       (p) => p.status === 'PENDING' && (p.method === 'PIX' || p.method === 'CREDIT_CARD') && (p.pixQrCode || p.checkoutUrl)
@@ -203,7 +214,7 @@ export function OrderDetail({
 
     return () => clearInterval(interval)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [order.id])
+  }, [order.id, payments.length])
 
   const [isPending, start]      = useTransition()
   const router = useRouter()
@@ -1175,6 +1186,9 @@ export function OrderDetail({
                 </button>
               </div>
             </div>
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+              <Loader2 className="h-3 w-3 animate-spin" /> Aguardando o cliente pagar...
+            </p>
             <button
               onClick={() => setAddPixData(null)}
               className="w-full px-4 py-2.5 bg-muted text-foreground text-sm font-semibold rounded-lg hover:bg-muted/70 transition-colors"
