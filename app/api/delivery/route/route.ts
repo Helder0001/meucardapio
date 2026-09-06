@@ -16,19 +16,39 @@ import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/client'
 import { getDrivingRoute } from '@/lib/utils/osrm'
 import { apiLimiter } from '@/lib/security/rate-limit'
+import { validateStatusToken } from '@/app/api/orders/[id]/status/route'
 import { z } from 'zod'
 
 const schema = z.object({
   orderId: z.string().min(1),
   // Posição atual de quem está pedindo a rota (o navegador do entregador).
-  // Se omitida, calculamos a partir da loja (útil antes do GPS responder).
+  // Se omitida, calculamos a partir da última posição do entregador salva
+  // no pedido, ou da loja se ele ainda não começou a compartilhar localização.
   lat: z.coerce.number().min(-90).max(90).optional(),
   lng: z.coerce.number().min(-180).max(180).optional(),
+  // CORREÇÃO: item pendente ("e, futuramente, pelo mapa do cliente") — o
+  // cliente final não tem sessão de staff, então precisa do mesmo token HMAC
+  // usado em /api/orders/[id]/status para autorizar a consulta sem login.
+  token: z.string().optional(),
 })
 
 export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const parsed = schema.safeParse({
+    orderId: searchParams.get('orderId'),
+    lat: searchParams.get('lat') ?? undefined,
+    lng: searchParams.get('lng') ?? undefined,
+    token: searchParams.get('token') ?? undefined,
+  })
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Parâmetros inválidos' }, { status: 400 })
+  }
+
   const session = await auth()
-  if (!session?.user?.tenantId) {
+  const isAuthenticatedStaff = !!session?.user?.tenantId
+  const hasValidToken = parsed.data.token ? validateStatusToken(parsed.data.orderId, parsed.data.token) : false
+
+  if (!isAuthenticatedStaff && !hasValidToken) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -38,21 +58,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Muitas requisições' }, { status: 429 })
   }
 
-  const { searchParams } = new URL(request.url)
-  const parsed = schema.safeParse({
-    orderId: searchParams.get('orderId'),
-    lat: searchParams.get('lat') ?? undefined,
-    lng: searchParams.get('lng') ?? undefined,
-  })
-  if (!parsed.success) {
-    return NextResponse.json({ error: 'Parâmetros inválidos' }, { status: 400 })
-  }
+  const tenantFilter = isAuthenticatedStaff ? { tenantId: session!.user.tenantId! } : {}
 
   const order = await prisma.order.findFirst({
-    where: { id: parsed.data.orderId, tenantId: session.user.tenantId, type: 'DELIVERY' },
+    where: { id: parsed.data.orderId, ...tenantFilter, type: 'DELIVERY' },
     select: {
       deliveryLat: true,
       deliveryLng: true,
+      courierLat: true,
+      courierLng: true,
       tenant: { select: { latitude: true, longitude: true } },
     },
   })
@@ -66,9 +80,11 @@ export async function GET(request: Request) {
   const origin =
     parsed.data.lat != null && parsed.data.lng != null
       ? { lat: parsed.data.lat, lng: parsed.data.lng }
-      : order.tenant.latitude != null && order.tenant.longitude != null
-        ? { lat: order.tenant.latitude, lng: order.tenant.longitude }
-        : null
+      : order.courierLat != null && order.courierLng != null
+        ? { lat: order.courierLat, lng: order.courierLng }
+        : order.tenant.latitude != null && order.tenant.longitude != null
+          ? { lat: order.tenant.latitude, lng: order.tenant.longitude }
+          : null
 
   if (!origin) {
     return NextResponse.json({ error: 'Sem ponto de partida disponível' }, { status: 422 })
