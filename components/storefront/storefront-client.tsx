@@ -12,9 +12,9 @@ import { ClosedBanner } from './closed-banner'
 import {
   Search, X, ShoppingBag, MapPin, Clock, Star,
   ChevronDown, MessageCircle, Flame, Sparkles,
-  Info, Instagram, Home as HomeIcon, Clock3, CreditCard,
+  Info, Instagram, Home as HomeIcon, Clock3, CreditCard, Phone,
   ChevronRight, ArrowLeft, User, LogOut, Settings, Moon, Sun,
-  Tag, PiggyBank, UtensilsCrossed, ClipboardList,
+  Tag, PiggyBank, UtensilsCrossed, ClipboardList, RotateCcw,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils/format'
 import Image from 'next/image'
@@ -48,6 +48,11 @@ interface StorefrontClientProps {
 }
 
 // ─── Modal de Mais Informações ───
+// CORREÇÃO (redesign #6): reestruturado em abas (Sobre / Horário /
+// Pagamento) no estilo de referência pedido — mesma ideia visual de
+// separar em abas em vez de empilhar tudo numa rolagem só, mas mantendo
+// nosso próprio fundo/tema (claro/escuro) em vez do fundo branco fixo
+// da referência.
 function InfoModal({
   tenant,
   isOpen: modalOpen,
@@ -59,9 +64,11 @@ function InfoModal({
   onClose: () => void
   color: string
 }) {
+  const [tab, setTab] = useState<'sobre' | 'horario' | 'pagamento'>('sobre')
   const settings = tenant.settings as any ?? {}
   const instagram: string | null = settings?.instagram ?? null
   const address: string | null = settings?.address ?? null
+  const tagline: string | null = settings?.tagline ?? null
   const businessHours: Array<{ dayOfWeek: number; openTime: string; closeTime: string; isOpen: boolean }> =
     settings?.businessHoursDisplay ?? []
   const acceptedPayments: string[] = settings?.acceptedPayments ?? []
@@ -70,91 +77,136 @@ function InfoModal({
 
   if (!modalOpen) return null
 
+  const TABS: Array<{ key: typeof tab; label: string }> = [
+    { key: 'sobre',     label: 'Sobre' },
+    { key: 'horario',   label: 'Horário' },
+    { key: 'pagamento', label: 'Pagamento' },
+  ]
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full sm:max-w-lg bg-white dark:bg-gray-900 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100 dark:border-gray-800 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <Info className="w-5 h-5" style={{ color }} />
-            <h2 className="font-black text-gray-900 dark:text-gray-100 text-lg">Mais informações</h2>
-          </div>
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 flex-shrink-0">
+          <h2 className="font-black text-gray-900 dark:text-gray-100 text-lg">{tenant.name}</h2>
           <button onClick={onClose} className="w-9 h-9 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center text-gray-500">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
-          {/* Sobre / Instagram */}
-          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 space-y-3">
-            <h3 className="font-black text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2">
-              <User className="w-4 h-4" style={{ color }} /> Sobre
-            </h3>
-            {tenant.name && <p className="text-sm text-gray-700 dark:text-gray-300 font-semibold">{tenant.name}</p>}
-            {instagram && (
-              <a
-                href={`https://instagram.com/${instagram.replace('@', '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm font-semibold px-3 py-2 rounded-xl text-white transition-all hover:opacity-90"
-                style={{ background: 'linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045)' }}
-              >
-                <Instagram className="w-4 h-4" />
-                {instagram.startsWith('@') ? instagram : `@${instagram}`}
-              </a>
-            )}
-            {address && (
-              <div className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400">
-                <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color }} />
-                <span>{address}</span>
-              </div>
-            )}
-            {!instagram && !address && (
-              <p className="text-sm text-gray-400">Informações de contato não configuradas.</p>
-            )}
-          </div>
+        {/* Abas */}
+        <div className="flex border-b border-gray-100 dark:border-gray-800 flex-shrink-0 px-5">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className="relative px-3 py-3 text-sm font-bold uppercase tracking-wide transition-colors"
+              style={{ color: tab === t.key ? color : undefined }}
+            >
+              <span className={tab === t.key ? '' : 'text-gray-400 dark:text-gray-500'}>{t.label}</span>
+              {tab === t.key && (
+                <span className="absolute left-0 right-0 -bottom-px h-0.5 rounded-full" style={{ background: color }} />
+              )}
+            </button>
+          ))}
+        </div>
 
-          {/* Horários */}
-          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 space-y-3">
-            <h3 className="font-black text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2">
-              <Clock3 className="w-4 h-4" style={{ color }} /> Horários de funcionamento
-            </h3>
-            {businessHours.length > 0 ? (
-              <div className="space-y-2">
+        <div className="overflow-y-auto flex-1 px-5 py-5">
+          {tab === 'sobre' && (
+            <div className="space-y-5">
+              {tenant.logo && (
+                <img src={tenant.logo} alt={tenant.name} className="w-24 h-24 rounded-2xl object-cover mx-auto" />
+              )}
+              {tagline && (
+                <p className="text-center text-gray-700 dark:text-gray-300">{tagline}</p>
+              )}
+              {instagram && (
+                <a
+                  href={`https://instagram.com/${instagram.replace('@', '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:underline"
+                >
+                  <Instagram className="w-5 h-5" style={{ color }} />
+                  {instagram.startsWith('@') ? instagram : `@${instagram}`}
+                </a>
+              )}
+
+              {(tenant.phone || address) && (
+                <div className="space-y-3 pt-2">
+                  {tenant.phone && (
+                    <>
+                      <h3 className="font-black text-sm text-gray-900 dark:text-gray-100">Contato</h3>
+                      <div className="flex flex-col gap-2">
+                        <a
+                          href={`https://wa.me/${tenant.phone.replace(/\D/g, '')}`}
+                          target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-sm font-semibold px-4 py-3 rounded-xl border-2 text-gray-700 dark:text-gray-300"
+                          style={{ borderColor: color }}
+                        >
+                          <MessageCircle className="w-4 h-4" style={{ color }} />
+                          {tenant.phone}
+                        </a>
+                        <a
+                          href={`tel:${tenant.phone.replace(/\D/g, '')}`}
+                          className="flex items-center gap-2 text-sm font-semibold px-4 py-3 rounded-xl border-2 text-gray-700 dark:text-gray-300"
+                          style={{ borderColor: color }}
+                        >
+                          <Phone className="w-4 h-4" style={{ color }} />
+                          {tenant.phone}
+                        </a>
+                      </div>
+                    </>
+                  )}
+                  {address && (
+                    <>
+                      <h3 className="font-black text-sm text-gray-900 dark:text-gray-100 pt-2">Endereço</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{address}</p>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {!instagram && !address && !tenant.phone && (
+                <p className="text-sm text-gray-400">Informações de contato não configuradas.</p>
+              )}
+            </div>
+          )}
+
+          {tab === 'horario' && (
+            businessHours.length > 0 ? (
+              <div className="divide-y divide-gray-100 dark:divide-gray-800">
                 {businessHours.map((h) => (
-                  <div key={h.dayOfWeek} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-700 dark:text-gray-300 w-20">{DAYS[h.dayOfWeek]}</span>
+                  <div key={h.dayOfWeek} className="flex items-center justify-between text-sm py-3">
+                    <span className="text-gray-700 dark:text-gray-300">{DAYS[h.dayOfWeek]}</span>
                     {h.isOpen ? (
-                      <span className="text-gray-600 dark:text-gray-400">{h.openTime} – {h.closeTime}</span>
+                      <span className="font-bold text-gray-900 dark:text-gray-100">{h.openTime} às {h.closeTime}</span>
                     ) : (
-                      <span className="text-red-400 font-semibold">Fechado</span>
+                      <span className="font-bold text-gray-900 dark:text-gray-100">Fechado</span>
                     )}
                   </div>
                 ))}
               </div>
             ) : (
               <p className="text-sm text-gray-400">Horários não configurados.</p>
-            )}
-          </div>
+            )
+          )}
 
-          {/* Pagamentos */}
-          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 space-y-3">
-            <h3 className="font-black text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2">
-              <CreditCard className="w-4 h-4" style={{ color }} /> Formas de pagamento
-            </h3>
-            {acceptedPayments.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
+          {tab === 'pagamento' && (
+            acceptedPayments.length > 0 ? (
+              <div className="space-y-2">
                 {acceptedPayments.map((p) => (
-                  <span key={p} className="text-xs font-semibold px-3 py-1.5 rounded-xl text-white" style={{ background: color }}>
+                  <div key={p} className="flex items-center gap-3 text-sm font-semibold text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/50 rounded-xl px-4 py-3.5">
+                    <CreditCard className="w-4 h-4" style={{ color }} />
                     {p}
-                  </span>
+                  </div>
                 ))}
               </div>
             ) : (
               <p className="text-sm text-gray-400">PIX, Dinheiro, Cartão de Crédito/Débito</p>
-            )}
-          </div>
+            )
+          )}
         </div>
       </div>
     </div>
@@ -547,6 +599,27 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, vie
     return tenant.categories.flatMap((c) => c.products).filter((p) => p.isBestSeller).slice(0, 6)
   }, [searchQuery, tenant.categories])
 
+  // CORREÇÃO (feature #10 "peça de novo"): busca só os IDs mais pedidos
+  // pelo cliente (endpoint já usado pela aba de perfil) e cruza com os
+  // produtos JÁ carregados em tenant.categories — assim reaproveita
+  // preço/estoque/addons atuais em vez de duplicar essa lógica, e produtos
+  // excluídos desde a última compra somem naturalmente do resultado.
+  const [frequentProductIds, setFrequentProductIds] = useState<string[]>([])
+  useEffect(() => {
+    if (!customerPhone) { setFrequentProductIds([]); return }
+    fetch(`/api/storefront/customer?phone=${encodeURIComponent(customerPhone)}&tenantId=${tenant.id}`)
+      .then((r) => r.json())
+      .then((d) => setFrequentProductIds((d?.frequentProducts ?? []).map((p: any) => p.id)))
+      .catch(() => setFrequentProductIds([]))
+  }, [customerPhone, tenant.id])
+
+  const frequentProducts = useMemo(() => {
+    if (searchQuery || frequentProductIds.length === 0) return []
+    const allProducts = tenant.categories.flatMap((c) => c.products)
+    const byId = new Map(allProducts.map((p) => [p.id, p]))
+    return frequentProductIds.map((id) => byId.get(id)).filter((p): p is NonNullable<typeof p> => !!p)
+  }, [frequentProductIds, searchQuery, tenant.categories])
+
   const offerProducts = useMemo(() => {
     return tenant.categories
       .flatMap((c) => c.products)
@@ -875,6 +948,32 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, vie
                       onSelect={() => setSelectedProduct(product)}
                       disabled={!isOpen || product.isOutOfStock || viewOnly}
                       color={color}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* PEÇA DE NOVO — CORREÇÃO (feature #10): sugestão de recompra
+                baseada nas últimas compras do cliente logado. Só aparece
+                pra quem já está logado (customerPhone) e já tem histórico
+                de pedidos nesse tenant. */}
+            {frequentProducts.length > 0 && !searchQuery && (
+              <section>
+                <div className="flex items-center gap-2 mb-4">
+                  <h2 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-lg bg-brand-100 dark:bg-brand-900/40 flex items-center justify-center"><RotateCcw className="w-3.5 h-3.5 text-brand-600" /></span>
+                    Peça de novo
+                  </h2>
+                </div>
+                <div className="product-grid">
+                  {frequentProducts.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      onSelect={() => setSelectedProduct(product)}
+                      disabled={!isOpen || product.isOutOfStock || viewOnly}
+                      primaryColor={color}
                     />
                   ))}
                 </div>
