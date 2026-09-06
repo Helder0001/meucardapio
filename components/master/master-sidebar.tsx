@@ -11,13 +11,14 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Users, CreditCard, Settings, LogOut, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Users, CreditCard, Settings, LogOut, Menu, X, Activity } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { href: '/master/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/master/tenants',   icon: Users,           label: 'Estabelecimentos' },
-  { href: '/master/billing',   icon: CreditCard,      label: 'Faturamento' },
-  { href: '/master/settings',  icon: Settings,        label: 'Configurações' },
+  { href: '/master/dashboard',   icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/master/tenants',     icon: Users,           label: 'Estabelecimentos' },
+  { href: '/master/billing',     icon: CreditCard,      label: 'Faturamento' },
+  { href: '/master/monitoring',  icon: Activity,        label: 'Monitoramento' },
+  { href: '/master/settings',    icon: Settings,        label: 'Configurações' },
 ]
 
 export function MasterSidebar({ email }: { email: string }) {
