@@ -148,19 +148,25 @@ function formatDateBR(iso: string) {
 // Ícone de "?" que mostra, ao passar o mouse, qual período está sendo
 // comparado (o período imediatamente anterior, com a mesma duração do
 // período selecionado nos filtros).
-function InfoTooltip({ text }: { text: string }) {
+function InfoTooltip({ text, align = 'center' }: { text: string; align?: 'left' | 'right' | 'center' }) {
   return (
     <span className="group relative inline-flex ml-auto">
       <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 hover:text-muted-foreground cursor-help" />
-      {/* CORREÇÃO: estava centralizado sob o ícone (left-1/2 -translate-x-1/2).
-          Como o ícone normalmente já fica empurrado pro canto direito do
-          card (por causa do ml-auto acima), centralizar um tooltip de 224px
-          sob ele estourava a borda direita da tela em mobile — pior ainda
-          em cards da coluna direita de um grid 2 colunas (ex: "Clientes").
-          Ancorado pela direita agora: a ponta direita do tooltip alinha
-          com o ícone e ele cresce para a esquerda, ficando dentro da tela
-          na grande maioria dos casos. */}
-      <span className="pointer-events-none absolute right-0 top-5 z-20 w-56 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-popover text-popover-foreground text-[11px] leading-snug p-2 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
+      {/* CORREÇÃO 2: ancorar sempre pela direita (right-0) resolvia o
+          corte no ícone "Clientes" (coluna direita do grid), mas
+          quebrava os cards da coluna esquerda (ex: "Faturamento"), que
+          agora estouravam a borda ESQUERDA da tela. Como a posição do
+          ícone na tela depende de qual card ele está (esquerda/direita
+          do grid 2 colunas), a âncora agora é explícita por chamada:
+          align="left" cresce pra direita, align="right" cresce pra
+          esquerda, "center" (padrão) mantém o comportamento antigo pra
+          usos fora de um grid fixo de 2 colunas. */}
+      <span className={cn(
+        'pointer-events-none absolute top-5 z-20 w-56 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-popover text-popover-foreground text-[11px] leading-snug p-2 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity',
+        align === 'left' && 'left-0',
+        align === 'right' && 'right-0',
+        align === 'center' && 'left-1/2 -translate-x-1/2'
+      )}>
         {text}
       </span>
     </span>
@@ -371,7 +377,7 @@ export function ReportsClient({
               <DollarSign className="h-5 w-5 text-emerald-600" />
             </div>
             <span className="text-sm font-medium text-muted-foreground">Faturamento</span>
-            <InfoTooltip text={comparisonPeriodText} />
+            <InfoTooltip text={comparisonPeriodText} align="left" />
           </div>
           <p className="text-2xl font-bold text-foreground">{formatCurrency(summary.thisRevenue)}</p>
           <GrowthBadge value={summary.revenueGrowth} className="mt-1.5" />
@@ -384,7 +390,7 @@ export function ReportsClient({
               <ShoppingBag className="h-5 w-5 text-blue-600" />
             </div>
             <span className="text-sm font-medium text-muted-foreground">Pedidos</span>
-            <InfoTooltip text={comparisonPeriodText} />
+            <InfoTooltip text={comparisonPeriodText} align="right" />
           </div>
           <p className="text-2xl font-bold text-foreground">{summary.totalOrders}</p>
           {summary.prevOrders != null && (
@@ -404,7 +410,7 @@ export function ReportsClient({
               <Receipt className="h-5 w-5 text-purple-600" />
             </div>
             <span className="text-sm font-medium text-muted-foreground">Ticket médio</span>
-            <InfoTooltip text={comparisonPeriodText} />
+            <InfoTooltip text={comparisonPeriodText} align="left" />
           </div>
           <p className="text-2xl font-bold text-foreground">{formatCurrency(summary.avgTicket)}</p>
           {summary.prevAvgTicket != null && (
@@ -424,7 +430,7 @@ export function ReportsClient({
               <Users className="h-5 w-5 text-brand-500" />
             </div>
             <span className="text-sm font-medium text-muted-foreground">Clientes</span>
-            <InfoTooltip text="Total de clientes únicos que compraram dentro do período selecionado. O % de retorno indica quantos desses já eram clientes antes desse período." />
+            <InfoTooltip text="Total de clientes únicos que compraram dentro do período selecionado. O % de retorno indica quantos desses já eram clientes antes desse período." align="right" />
           </div>
           <p className="text-2xl font-bold text-foreground">{summary.totalClients ?? '—'}</p>
           {summary.returnRate != null && (
