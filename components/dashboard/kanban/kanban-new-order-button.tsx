@@ -239,6 +239,12 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
   // fechasse o modal e fosse conferir o pedido separadamente. Agora, com o
   // modal aberto, verifica a cada 4s se o cliente já pagou (via status —
   // o caixa já tem sessão, não precisa de token).
+  //
+  // CORREÇÃO: mesmo problema do polling do PIX direto logo abaixo — checar só
+  // `data.paymentStatus` (agregado do pedido) deixava a tela presa caso o
+  // valor pago não batesse exatamente com o total calculado no servidor.
+  // Agora confere também o pagamento em si (PIX ou cartão, que são os únicos
+  // métodos que o link do Checkout Pro gera).
   useEffect(() => {
     if (!linkData || linkPaymentConfirmed) return
     const interval = setInterval(async () => {
@@ -246,7 +252,8 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
         const res = await fetch(`/api/orders/${linkData.orderId}/status`)
         if (!res.ok) return
         const data = await res.json()
-        if (data.paymentStatus === 'PAID') {
+        const paid = data.payments?.some((p: any) => (p.method === 'PIX' || p.method === 'CREDIT_CARD') && p.status === 'PAID')
+        if (paid || data.paymentStatus === 'PAID') {
           setLinkPaymentConfirmed(true)
           router.refresh()
         }
@@ -260,6 +267,15 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
   // Mesma correção do bug acima, mas para a tela de QR Code do PIX direto —
   // esse polling nunca tinha sido implementado aqui, por isso a tela ficava
   // presa em "Aguardando pagamento PIX" mesmo depois do cliente pagar.
+  //
+  // CORREÇÃO: checava `data.paymentStatus` (status agregado do pedido), que só
+  // vira 'PAID' quando o valor pago cobre o total do pedido calculado no
+  // servidor — qualquer diferença de centavos entre o `total` calculado aqui
+  // no cliente (soma de preço × quantidade) e o total gravado no pedido deixa
+  // o pagamento como 'PARTIAL' pra sempre, e a tela nunca saía de "Aguardando
+  // pagamento PIX" mesmo com o PIX já pago. Agora verifica direto o registro
+  // do pagamento PIX em si (`data.payments`), igual ao padrão já usado em
+  // order-detail.tsx.
   useEffect(() => {
     if (!pixData || pixPaymentConfirmed) return
     const interval = setInterval(async () => {
@@ -267,7 +283,8 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
         const res = await fetch(`/api/orders/${pixData.orderId}/status`)
         if (!res.ok) return
         const data = await res.json()
-        if (data.paymentStatus === 'PAID') {
+        const pixPaid = data.payments?.some((p: any) => p.method === 'PIX' && p.status === 'PAID')
+        if (pixPaid || data.paymentStatus === 'PAID') {
           setPixPaymentConfirmed(true)
           router.refresh()
         }
