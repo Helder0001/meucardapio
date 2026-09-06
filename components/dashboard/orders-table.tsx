@@ -290,6 +290,10 @@ export function OrdersTable({ orders, total, page, pageSize, currentFilters }: O
                           {[...new Set(order.payments.map((p: any) => {
                             const m: Record<string, string> = {
                               PIX: '⚡ PIX',
+                              // CORREÇÃO: faltava PIX_MANUAL nesse mapa —
+                              // caía no fallback e mostrava o enum cru
+                              // ("PIX_MANUAL") na coluna Forma.
+                              PIX_MANUAL: '⚡ Pix Chave',
                               CREDIT_CARD: '💳 Crédito',
                               CREDIT_CARD_MANUAL: '💳 Crédito',
                               DEBIT_CARD: '💳 Débito',

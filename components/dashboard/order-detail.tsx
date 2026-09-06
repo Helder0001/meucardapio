@@ -68,6 +68,15 @@ const STATUS_PT: Record<string, string> = {
 // caso o webhook atrase/falhe. CREDIT_CARD_MANUAL é sempre manual (entrega/retirada).
 const MANUAL_METHODS = ['CASH', 'CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD', 'VOUCHER', 'TRANSFER', 'PIX_MANUAL']
 
+// Máscara de dinheiro estilo "centavos entram pela direita" (padrão de
+// apps bancários brasileiros) — evita a ambiguidade de digitar "500"
+// esperando R$5,00 e receber R$500,00. Mesma função em kanban-new-order-button.tsx.
+function formatCentsMask(amount: number): string {
+  if (amount === 0) return ''
+  const cents = Math.round(amount * 100)
+  return (cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
 const STATUS_FLOW = [
   { key: 'PENDING',           label: 'Recebido' },
   { key: 'CONFIRMED',         label: 'Confirmado' },
@@ -249,12 +258,15 @@ export function OrderDetail({
     ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'STAFF'].includes(userRole)
 
   const handleAddPayment = () => {
-    if (addPaymentsSum < stillOwed - 0.01) {
+    // CORREÇÃO: tolerância de 1 centavo — mesmo bug já corrigido em
+    // add-payment/route.ts e no PDV, mas essa checagem client-side
+    // (early return antes de chamar a API) ainda usava a margem antiga.
+    if (addPaymentsSum < stillOwed - 0.005) {
       toast.error(`Valor insuficiente. Ainda faltam ${formatCurrency(stillOwed - addPaymentsSum)}.`)
       return
     }
-    if (addPayments.some((p) => p.method === 'PIX') && !isValidCpf(addPaymentCpf)) {
-      toast.error('Informe um CPF válido para pagar com PIX')
+    if (addPayments.some((p) => p.method === 'PIX') && addPaymentCpf && !isValidCpf(addPaymentCpf)) {
+      toast.error('CPF inválido — deixe em branco ou corrija')
       return
     }
     startAddPayment(async () => {
@@ -859,24 +871,17 @@ export function OrderDetail({
                       <option value="TRANSFER">🏦 Transferência</option>
                     </select>
                     <input
-                      type="text" inputMode="decimal"
-                      // CORREÇÃO: type="number" com teclado numérico Android
-                      // em pt-BR mostra vírgula, mas o input HTML só aceita
-                      // ponto — o usuário digitava "0,02" e o valor ficava
-                      // vazio/inválido sem nenhum aviso. Aceita os dois
-                      // formatos e converte na hora de guardar o estado.
-                      value={p.amount === 0 ? '' : String(p.amount).replace('.', ',')}
+                      type="text" inputMode="numeric"
+                      // CORREÇÃO 2: a v1 aceitava vírgula livre, mas digitar
+                      // "500" achando que ia virar R$5,00 resultava em
+                      // R$500,00 — confuso. Agora usa a mesma máscara de
+                      // "dígitos = centavos, entram pela direita" que apps
+                      // bancários brasileiros usam (ver kanban-new-order-button.tsx).
+                      value={formatCentsMask(p.amount)}
                       onChange={(e) => {
-                        const cleaned = e.target.value.replace(/[^0-9,]/g, '')
-                        // Mantém só a primeira vírgula, caso o usuário digite mais de uma
-                        const firstComma = cleaned.indexOf(',')
-                        const raw = firstComma === -1
-                          ? cleaned
-                          : cleaned.slice(0, firstComma + 1) + cleaned.slice(firstComma + 1).replace(/,/g, '')
-                        const normalized = raw.replace(',', '.')
-                        const parsed = normalized === '' || normalized === '.' ? 0 : Number(normalized)
-                        if (Number.isNaN(parsed)) return
-                        setAddPayments((prev) => prev.map((x, i) => i === idx ? { ...x, amount: parsed } : x))
+                        const digits = e.target.value.replace(/\D/g, '')
+                        const cents = digits === '' ? 0 : parseInt(digits, 10)
+                        setAddPayments((prev) => prev.map((x, i) => i === idx ? { ...x, amount: cents / 100 } : x))
                       }}
                       placeholder="0,00"
                       className="w-24 px-2 py-1.5 text-xs border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
@@ -894,7 +899,11 @@ export function OrderDetail({
 
                 {addPayments.some((p) => p.method === 'PIX') && (
                   <div>
-                    <label className="block text-[10px] font-medium text-muted-foreground mb-1">CPF de quem vai pagar (obrigatório p/ PIX)</label>
+                    {/* CORREÇÃO: CPF virou opcional em todo o resto do
+                        sistema (create-order.ts, add-payment/route.ts) mas
+                        essa tela ainda bloqueava o envio exigindo CPF
+                        válido antes mesmo de chegar no servidor. */}
+                    <label className="block text-[10px] font-medium text-muted-foreground mb-1">CPF de quem vai pagar (opcional)</label>
                     <input
                       value={formatCpf(addPaymentCpf)}
                       onChange={(e) => setAddPaymentCpf(e.target.value)}
