@@ -16,6 +16,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
 import { getVerifiedPhoneForTenant } from '@/lib/security/customer-session'
+import { isOutOfStock } from '@/lib/utils/stock'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -60,6 +61,42 @@ export async function GET(request: Request) {
     return NextResponse.json({ customer: null, loyaltyConfig: null })
   }
 
+  // CORREÇÃO (feature #10 "peça de novo"): produtos mais pedidos por esse
+  // cliente nesse tenant, agregados por productId (não por nome — o
+  // produto pode ter sido renomeado desde a última compra). Traz junto os
+  // dados ATUAIS do produto (preço, imagem, disponibilidade), já que o
+  // OrderItem só guarda o snapshot de quando o pedido foi feito — um
+  // produto pode ter mudado de preço ou saído de estoque desde então.
+  const topItems = await prisma.orderItem.groupBy({
+    by: ['productId'],
+    where: { order: { customerId: customer.id, tenantId } },
+    _sum: { quantity: true },
+    orderBy: { _sum: { quantity: 'desc' } },
+    take: 8,
+  })
+
+  const products = await prisma.product.findMany({
+    where: { id: { in: topItems.map((t) => t.productId) }, tenantId },
+    select: { id: true, name: true, price: true, image: true, categoryId: true, stocks: { select: { quantity: true } } },
+  })
+  const productById = new Map(products.map((p) => [p.id, p]))
+
+  const frequentProducts = topItems
+    .map((t) => {
+      const p = productById.get(t.productId)
+      if (!p) return null // produto foi excluído desde então
+      return {
+        id: p.id,
+        name: p.name,
+        price: Number(p.price),
+        image: p.image,
+        isOutOfStock: isOutOfStock(p.stocks),
+        categoryId: p.categoryId,
+        timesOrdered: t._sum.quantity ?? 0,
+      }
+    })
+    .filter((p): p is NonNullable<typeof p> => p !== null)
+
   return NextResponse.json({
     loyaltyConfig: loyaltyConfig
       ? {
@@ -77,5 +114,6 @@ export async function GET(request: Request) {
         total: Number(o.total),
       })),
     },
+    frequentProducts,
   })
 }
