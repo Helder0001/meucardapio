@@ -42,6 +42,7 @@ const navSections: NavSection[] = [
       { label: 'Dashboard', href: '/dashboard',               icon: LayoutDashboard, allowedRoles: MANAGER_UP },
       { label: 'Pedidos',   href: '/dashboard/orders',        icon: ShoppingBag,     allowedRoles: ORDERS_ROLES },
       { label: 'Kanban',    href: '/dashboard/orders/kanban', icon: ClipboardList,   allowedRoles: ORDERS_ROLES },
+      { label: 'Minhas Entregas', href: '/dashboard/delivery/tracking', icon: Truck, allowedRoles: ['DELIVERY_PERSON', ...MANAGER_UP] },
       { label: 'Mesas',     href: '/dashboard/tables',        icon: Table2,          allowedRoles: MANAGER_UP },
       { label: 'Delivery',  href: '/dashboard/delivery',      icon: Truck,           minPlan: 'PRO', allowedRoles: MANAGER_UP },
     ],
@@ -82,7 +83,12 @@ const navSections: NavSection[] = [
 
 // Bottom nav items for mobile (most important 4)
 const bottomNavItems = (userRole: string) => {
-  const isOp = ['STAFF', 'DELIVERY_PERSON', 'ATTENDANT'].includes(userRole)
+  if (userRole === 'DELIVERY_PERSON') return [
+    { label: 'Entregas', href: '/dashboard/delivery/tracking', icon: Truck },
+    { label: 'Pedidos',  href: '/dashboard/orders',          icon: ShoppingBag },
+    { label: 'Kanban',   href: '/dashboard/orders/kanban',   icon: ClipboardList },
+  ]
+  const isOp = ['STAFF', 'ATTENDANT'].includes(userRole)
   if (isOp) return [
     { label: 'Pedidos',  href: '/dashboard/orders',          icon: ShoppingBag },
     { label: 'Kanban',   href: '/dashboard/orders/kanban',   icon: ClipboardList },
