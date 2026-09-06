@@ -18,6 +18,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/client'
 import { restockCancelledOrder, revalidateStorefrontForTenant } from '@/lib/utils/stock'
+import { processEfiPixWebhookEntries } from '@/lib/efi/pix-webhook-handler'
 import crypto from 'crypto'
 
 function generateStatusToken(orderId: string): string {
@@ -64,63 +65,100 @@ export async function GET(
       ? { tenantId: session!.user.tenantId! }
       : {}
 
-    const order = await prisma.order.findFirst({
-      where: { id, ...tenantFilter },
-      select: {
-        id: true,
-        tenantId: true,
-        status: true,
-        paymentStatus: true,
-        createdAt: true,
-        confirmedAt: true,
-        readyAt: true,
-        deliveredAt: true,
-        type: true,
-        courierLat: true,
-        courierLng: true,
-        courierUpdatedAt: true,
-        deliveryLat: true,
-        deliveryLng: true,
-        tenant: { select: { latitude: true, longitude: true } },
-        payments: {
-          // BUG CORRIGIDO: filtro restrito a `method: 'PIX'` e `take: 1` fazia
-          // sentido para o storefront (order-tracking.tsx só acompanha 1 PIX),
-          // mas esse mesmo endpoint também é usado pelo polling do dashboard
-          // (order-detail.tsx e kanban-new-order-button.tsx) para pagamentos
-          // "cobrar no final" — que podem ter PIX *e* cartão via link, e podem
-          // ter mais de um registro de pagamento (ex.: pagamento dividido).
-          // Com `take: 1` só o PIX mais recente aparecia; um pagamento em
-          // CREDIT_CARD (link) nunca era retornado aqui e ficava para sempre
-          // como PENDING na tela até um reload manual.
-          where: { method: { in: ['PIX', 'CREDIT_CARD'] } },
-          orderBy: { createdAt: 'desc' },
-          select: {
-            id: true, // BUG CORRIGIDO: faltava o id do pagamento — order-detail.tsx
-                       // casa a atualização do polling com `data.payments.find(dp =>
-                       // dp.id === p.id)`; sem `id` no retorno, `dp.id` é sempre
-                       // `undefined` e o `find` nunca casa com nada, então o pagamento
-                       // PIX registrado via "cobrar no final" nunca saía de
-                       // "Aguardando confirmação PIX" na tela, mesmo já pago (diferente
-                       // do fluxo de PDV/balcão, que compara pelo `paymentStatus` do
-                       // pedido como um todo em vez de por pagamento individual).
-            status: true,
-            method: true, // BUG CORRIGIDO: sem isso, o frontend (order-tracking.tsx)
-                           // perde a referência de que é um pagamento PIX assim que o
-                           // primeiro poll substitui o array de payments — a checagem
-                           // `pendingPayment?.method === 'PIX'` vira false e o
-                           // QR/copia-e-cola some da tela em ~5s (1º ciclo de polling).
-            pixQrCode: true,
-            pixQrCodeBase64: true,
-            pixExpiresAt: true,
-            checkoutUrl: true,
-            amount: true,
-          },
+    const orderSelect = {
+      id: true,
+      tenantId: true,
+      status: true,
+      paymentStatus: true,
+      createdAt: true,
+      confirmedAt: true,
+      readyAt: true,
+      deliveredAt: true,
+      type: true,
+      courierLat: true,
+      courierLng: true,
+      courierUpdatedAt: true,
+      deliveryLat: true,
+      deliveryLng: true,
+      tenant: { select: { latitude: true, longitude: true } },
+      payments: {
+        // BUG CORRIGIDO: filtro restrito a `method: 'PIX'` e `take: 1` fazia
+        // sentido para o storefront (order-tracking.tsx só acompanha 1 PIX),
+        // mas esse mesmo endpoint também é usado pelo polling do dashboard
+        // (order-detail.tsx e kanban-new-order-button.tsx) para pagamentos
+        // "cobrar no final" — que podem ter PIX *e* cartão via link, e podem
+        // ter mais de um registro de pagamento (ex.: pagamento dividido).
+        // Com `take: 1` só o PIX mais recente aparecia; um pagamento em
+        // CREDIT_CARD (link) nunca era retornado aqui e ficava para sempre
+        // como PENDING na tela até um reload manual.
+        where: { method: { in: ['PIX', 'CREDIT_CARD'] as const } },
+        orderBy: { createdAt: 'desc' as const },
+        select: {
+          id: true, // BUG CORRIGIDO: faltava o id do pagamento — order-detail.tsx
+                     // casa a atualização do polling com `data.payments.find(dp =>
+                     // dp.id === p.id)`; sem `id` no retorno, `dp.id` é sempre
+                     // `undefined` e o `find` nunca casa com nada, então o pagamento
+                     // PIX registrado via "cobrar no final" nunca saía de
+                     // "Aguardando confirmação PIX" na tela, mesmo já pago (diferente
+                     // do fluxo de PDV/balcão, que compara pelo `paymentStatus` do
+                     // pedido como um todo em vez de por pagamento individual).
+          status: true,
+          method: true, // BUG CORRIGIDO: sem isso, o frontend (order-tracking.tsx)
+                         // perde a referência de que é um pagamento PIX assim que o
+                         // primeiro poll substitui o array de payments — a checagem
+                         // `pendingPayment?.method === 'PIX'` vira false e o
+                         // QR/copia-e-cola some da tela em ~5s (1º ciclo de polling).
+          pixQrCode: true,
+          pixQrCodeBase64: true,
+          pixExpiresAt: true,
+          checkoutUrl: true,
+          amount: true,
+          provider: true,
+          providerReference: true,
         },
       },
+    } as const
+
+    let order = await prisma.order.findFirst({
+      where: { id, ...tenantFilter },
+      select: orderSelect,
     })
 
     if (!order) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+
+    // CORREÇÃO: um PIX via Efí só é confirmado quando a Efí notifica o
+    // nosso webhook (app/api/webhooks/efi-pix/pix/route.ts) — mas esse
+    // webhook depende de ter sido registrado corretamente pra chave Pix
+    // do tenant (configurePixWebhook). Se esse cadastro nunca "colou" do
+    // lado da Efí (falhou silenciosamente, foi feito antes de trocar de
+    // chave, etc.), a notificação simplesmente nunca chega e a tela fica
+    // presa em "Aguardando pagamento PIX" pra sempre — mesmo com o
+    // cliente já tendo pago de verdade — porque não existia nenhum outro
+    // lugar consultando a Efí proativamente. Agora, a cada poll de status
+    // com um PIX Efí ainda PENDING (e ainda não expirado), consultamos a
+    // cobrança direto na API da Efí como rede de segurança — mesma
+    // checagem autoritativa (status CONCLUIDA + valor batendo) já usada
+    // no próprio webhook, só que disparada por nós em vez de esperar a
+    // notificação.
+    const pendingEfiPix = order.payments.filter(
+      (p) =>
+        p.status === 'PENDING' &&
+        p.method === 'PIX' &&
+        p.provider === 'EFI' &&
+        p.providerReference &&
+        (!p.pixExpiresAt || p.pixExpiresAt > new Date())
+    )
+    if (pendingEfiPix.length > 0) {
+      await processEfiPixWebhookEntries(
+        pendingEfiPix.map((p) => ({ txid: p.providerReference as string }))
+      )
+      const refreshed = await prisma.order.findFirst({
+        where: { id, ...tenantFilter },
+        select: orderSelect,
+      })
+      if (refreshed) order = refreshed
     }
 
     const PENDING_PAYMENT_TIMEOUT_MS = 2 * 60 * 60 * 1000 // 2 horas
