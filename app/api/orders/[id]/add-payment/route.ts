@@ -276,7 +276,19 @@ export async function POST(
   const effectiveCpf = customerCpf ?? order.customer?.cpf ?? undefined
 
   // ── Criar pagamentos ──────────────────────────────────────────────────────
-  const createdPayments: Array<{ id: string; method: string; status: string; amount: number }> = []
+  // CORREÇÃO: faltava `pixQrCode` (e o resto do necessário pro polling)
+  // em cada item de `createdPayments` — o pixQrCode só ia solto lá fora
+  // na resposta (`...(pixQrCode ? { pixQrCode, pixQrCodeBase64 } : {})`).
+  // A tela (order-detail.tsx) guarda essa lista como está no estado local
+  // de `payments`, e o polling que verifica "tem PIX pendente aguardando
+  // pagamento?" depende de achar `p.pixQrCode` dentro do próprio pagamento
+  // — sem isso, nunca reconhecia esse PIX como pendente de gateway, e o
+  // polling nunca chegava a iniciar (ficava preso em "Aguardando PIX" pra
+  // sempre, mesmo o cliente já tendo pago e o webhook já tendo confirmado).
+  const createdPayments: Array<{
+    id: string; method: string; status: string; amount: number
+    pixQrCode?: string; pixQrCodeBase64?: string
+  }> = []
   let pixQrCode: string | undefined
   let pixQrCodeBase64: string | undefined
 
@@ -294,6 +306,8 @@ export async function POST(
           method: 'PIX',
           status: 'PENDING',
           amount: Number(pixResult.created.amount),
+          pixQrCode: pixResult.pixQrCode,
+          pixQrCodeBase64: pixResult.pixQrCodeBase64,
         })
         // Só guarda o QR do primeiro PIX (caso split)
         if (!pixQrCode) {
