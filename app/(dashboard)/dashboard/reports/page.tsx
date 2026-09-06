@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 interface PageProps {
   searchParams: Promise<{
     start?: string; end?: string
-    pdv?: string; payment?: string; product?: string; saleType?: string; user?: string
+    pdv?: string; payment?: string; product?: string; saleType?: string; user?: string; bairro?: string
   }>
 }
 
@@ -149,6 +149,7 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   const filterProduct  = params.product  || ''
   const filterSaleType = params.saleType || ''
   const filterUser     = params.user     || ''
+  const filterBairro   = params.bairro   || ''
 
   const baseWhere: any = {
     tenantId,
@@ -172,6 +173,7 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   // Filtros de pagamento e produto aplicados globalmente
   if (filterPayment) baseWhere.payments = { some: { method: filterPayment as any } }
   if (filterProduct) baseWhere.items    = { some: { productId: filterProduct } }
+  if (filterBairro)  baseWhere.deliveryBairro = filterBairro
 
   // Período anterior
   const periodLen = endDate.getTime() - startDate.getTime()
@@ -179,7 +181,7 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   const prevEnd   = new Date(startDate.getTime() - 1)
 
   // ── Listas para selects ──────────────────────────────────────────────────
-  const [pdvList, productList, userList] = await Promise.all([
+  const [pdvList, productList, userList, bairroList] = await Promise.all([
     prisma.pDV.findMany({
       where: { tenantId },
       select: { id: true, name: true },
@@ -204,6 +206,13 @@ export default async function ReportsPage({ searchParams }: PageProps) {
       },
       select: { id: true, name: true, role: true },
       orderBy: { name: 'asc' },
+    }),
+    // Lista de bairros pro filtro — NÃO restrita ao período/filtros atuais
+    // (senão o dropdown vira uma bola de neve: filtrar por um bairro faz
+    // ele sumir das opções na próxima vez que a página carregar).
+    prisma.order.groupBy({
+      by: ['deliveryBairro'],
+      where: { tenantId, deliveryBairro: { not: null } },
     }),
   ])
 
@@ -241,6 +250,16 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   const salesByType = await prisma.order.groupBy({
     by: ['type'],
     where: { ...baseWhere },
+    _sum: { total: true },
+    _count: { id: true },
+  })
+
+  // ── Vendas por bairro (feature #4 pt.2) — só pedidos de entrega têm
+  // deliveryBairro preenchido; os demais (retirada/mesa/PDV) ficam de
+  // fora naturalmente do agrupamento.
+  const salesByBairro = await prisma.order.groupBy({
+    by: ['deliveryBairro'],
+    where: { ...baseWhere, deliveryBairro: { not: null } },
     _sum: { total: true },
     _count: { id: true },
   })
@@ -324,6 +343,13 @@ export default async function ReportsPage({ searchParams }: PageProps) {
         total:  Number(s._sum.amount ?? 0),
         count:  s._count.id,
       }))}
+      salesByBairro={salesByBairro
+        .map((s) => ({
+          bairro: s.deliveryBairro ?? 'Não informado',
+          total:  Number(s._sum.total ?? 0),
+          count:  s._count.id,
+        }))
+        .sort((a, b) => b.total - a.total)}
       salesByHour={salesByHour}
       summary={{
         thisRevenue,
@@ -343,11 +369,13 @@ export default async function ReportsPage({ searchParams }: PageProps) {
       pdvList={pdvList}
       productList={productList}
       userList={userList}
+      bairroList={bairroList.map((b) => b.deliveryBairro!).sort((a, b) => a.localeCompare(b))}
       filterPdv={filterPdv}
       filterPayment={filterPayment}
       filterProduct={filterProduct}
       filterSaleType={filterSaleType}
       filterUser={filterUser}
+      filterBairro={filterBairro}
     />
   )
 }
