@@ -784,14 +784,16 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, vie
                 <MapPin className="w-3.5 h-3.5" /> {settings.address}
               </span>
             )}
-            {settings?.address && <span>•</span>}
-            <button onClick={() => setInfoModalOpen(true)} className="font-semibold text-gray-700 dark:text-gray-300 hover:underline">
-              Mais informações
-            </button>
-            <span>•</span>
+          </div>
+
+          <div className="flex items-center justify-center gap-2 mt-1 flex-wrap text-sm text-gray-500">
             <a href={`/menu/${tenant.slug}/avaliacoes`} className="flex items-center gap-1 font-semibold text-gray-700 dark:text-gray-300 hover:underline">
               <Star className="w-3.5 h-3.5" /> Avaliações
             </a>
+            <span>•</span>
+            <button onClick={() => setInfoModalOpen(true)} className="font-semibold text-gray-700 dark:text-gray-300 hover:underline">
+              Mais informações
+            </button>
           </div>
 
           <div className="mt-1.5 text-sm text-gray-600 dark:text-gray-400">
