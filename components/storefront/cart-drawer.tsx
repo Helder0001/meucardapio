@@ -183,7 +183,19 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
     const timer = setTimeout(async () => {
       setStreetSearching(true)
       try {
-        const cityHint = (tenant.settings as any)?.address?.split(',').slice(-2).join(',') ?? ''
+        const cityHint = (() => {
+          // CORREÇÃO (#4): esse campo é texto livre — o lojista pode
+          // preencher sem vírgula nenhuma (ex.: "Rua das Flores 155 -
+          // Centro"). Nesse caso o split(',') devolve um único item, e
+          // pegar os "últimos 2" acaba devolvendo o ENDEREÇO INTEIRO como
+          // se fosse a cidade, o que polui a busca na Nominatim e faz
+          // qualquer rua real não ser encontrada. Só usa como dica quando
+          // o endereço realmente tem vírgulas (formato "Rua, Bairro,
+          // Cidade - UF") — senão busca sem dica de cidade mesmo.
+          const parts = ((tenant.settings as any)?.address ?? '')
+            .split(',').map((s: string) => s.trim()).filter(Boolean)
+          return parts.length >= 2 ? parts[parts.length - 1] : ''
+        })()
         const res = await fetch(`/api/address/search?q=${encodeURIComponent(streetQuery)}&city=${encodeURIComponent(cityHint)}`)
         const data = await res.json()
         setStreetResults(data.results ?? [])
