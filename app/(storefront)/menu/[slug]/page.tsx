@@ -79,6 +79,14 @@ async function getTenantMenu(slug: string) {
   })
 }
 
+const DAY_NAMES = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado']
+
+// CORREÇÃO (#2): a versão antiga só cobria 2 casos — "fechado hoje" (sem
+// dizer quando reabre) e "abrimos às HH:MM" usando o horário de HOJE
+// mesmo quando o horário de hoje já passou (ex: 23h com expediente
+// 11h-21h dizia "abrimos às 11:00", como se fosse ainda hoje). Agora
+// procura de verdade o próximo dia configurado como aberto, olhando até
+// 7 dias à frente, e monta a mensagem com o nome do dia certo.
 function isOpenNow(businessHours: any[], settings: any): { open: boolean; message?: string } {
   if (settings?.manualOpen === true)  return { open: true }
   if (settings?.manualOpen === false) return { open: false, message: settings?.closedMessage ?? 'Fechado no momento.' }
@@ -89,9 +97,28 @@ function isOpenNow(businessHours: any[], settings: any): { open: boolean; messag
   const currentTime = brTime.toTimeString().slice(0, 5)
   const todayHours  = businessHours.find((h: any) => h.dayOfWeek === dayOfWeek)
 
-  if (!todayHours || !todayHours.isOpen) return { open: false, message: 'Fechado hoje.' }
-  if (currentTime >= todayHours.openTime && currentTime <= todayHours.closeTime) return { open: true }
-  return { open: false, message: `Fechado. Abrimos as ${todayHours.openTime}.` }
+  if (todayHours?.isOpen && currentTime >= todayHours.openTime && currentTime <= todayHours.closeTime) {
+    return { open: true }
+  }
+
+  // Ainda não abriu hoje (é dia de funcionamento, mas antes do horário)
+  if (todayHours?.isOpen && currentTime < todayHours.openTime) {
+    return { open: false, message: `Fechado. Abrimos hoje às ${todayHours.openTime}.` }
+  }
+
+  // Já fechou por hoje (ou hoje não funciona) — procura o próximo dia
+  // configurado como aberto, começando de amanhã.
+  for (let i = 1; i <= 7; i++) {
+    const nextDay = (dayOfWeek + i) % 7
+    const hours = businessHours.find((h: any) => h.dayOfWeek === nextDay)
+    if (hours?.isOpen) {
+      const dayLabel = i === 1 ? 'amanhã' : DAY_NAMES[nextDay]
+      return { open: false, message: `Fechado. Abrimos ${dayLabel} às ${hours.openTime}.` }
+    }
+  }
+
+  // Nenhum dia da semana está configurado como aberto
+  return { open: false, message: 'Fechado no momento.' }
 }
 
 function UnavailablePage() {
