@@ -175,8 +175,13 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   // de GPS que nem sempre está disponível/precisa.
   const [showStreetSearch, setShowStreetSearch] = useState(false)
   const [streetQuery, setStreetQuery] = useState('')
-  const [streetResults, setStreetResults] = useState<Array<{ label: string; logradouro: string; bairro: string; localidade: string; uf: string; cep: string | null }>>([])
+  const [streetResults, setStreetResults] = useState<Array<{ label: string; logradouro: string; bairro: string; localidade: string; uf: string; cep: string | null; lat: number | null; lng: number | null }>>([])
   const [streetSearching, setStreetSearching] = useState(false)
+  // Coordenada da sugestão de endereço selecionada no autocomplete — vai
+  // junto na criação do pedido como âncora pra geocodificação final feita
+  // no servidor (já com o número da casa). Ver actions/orders/create-order.ts.
+  const [selectedAddressLat, setSelectedAddressLat] = useState<number | null>(null)
+  const [selectedAddressLng, setSelectedAddressLng] = useState<number | null>(null)
 
   useEffect(() => {
     if (streetQuery.trim().length < 4) { setStreetResults([]); return }
@@ -208,13 +213,15 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
     return () => clearTimeout(timer)
   }, [streetQuery])
 
-  const selectStreetResult = (r: { logradouro: string; bairro: string; localidade: string; uf: string; cep: string | null }) => {
+  const selectStreetResult = (r: { logradouro: string; bairro: string; localidade: string; uf: string; cep: string | null; lat: number | null; lng: number | null }) => {
     setDeliveryAddress(r.logradouro)
     setDeliveryCityLine([r.bairro, r.localidade].filter(Boolean).join(', '))
     setAddressLockedByCep(true)
     setShowStreetSearch(false)
     setStreetQuery('')
     setStreetResults([])
+    setSelectedAddressLat(r.lat)
+    setSelectedAddressLng(r.lng)
 
     // Mesma checagem de zona de entrega usada no fluxo de CEP — sem isso,
     // um endereço achado por rua nunca teria a zona/taxa de entrega
@@ -436,6 +443,11 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
         deliveryAddress: deliveryAddress
           ? [`${deliveryAddress} ${deliveryNumber || 'S/N'}`, deliveryCityLine].filter(Boolean).join(', ')
           : undefined,
+        // Âncora de proximidade pra geocodificação final feita no servidor
+        // (ver actions/orders/create-order.ts) — coordenada da sugestão de
+        // rua que o cliente selecionou no autocomplete, quando houver.
+        deliveryLat: selectedAddressLat ?? undefined,
+        deliveryLng: selectedAddressLng ?? undefined,
         customerPhone: isTableOrder ? (customerPhone || phone || undefined) : (customerPhone || phone),
         customerName: name || undefined,
         // 'LINK' não é um método aceito na criação do pedido (só existe pro
@@ -873,7 +885,13 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                               {addressLockedByCep && (
                                 <button
                                   type="button"
-                                  onClick={() => setAddressLockedByCep(false)}
+                                  onClick={() => {
+                                    setAddressLockedByCep(false)
+                                    // Cliente vai editar o texto manualmente — a coordenada
+                                    // da sugestão selecionada não serve mais de âncora.
+                                    setSelectedAddressLat(null)
+                                    setSelectedAddressLng(null)
+                                  }}
                                   className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold underline"
                                   style={{ color }}
                                 >
