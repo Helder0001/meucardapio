@@ -16,6 +16,10 @@ export interface CartItem {
   productId:    string
   productName:  string
   productPrice: number
+  // CORREÇÃO (#4): carrinho não guardava a imagem do produto — a tela
+  // do carrinho ficava só com texto, sem nenhuma referência visual do
+  // que foi pedido.
+  productImage?: string | null
   quantity:     number
   notes?:       string
   addons:       CartAddon[]
