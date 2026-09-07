@@ -139,13 +139,13 @@ export default function HomePageClient() {
             ✦ Novo: IA para descrição de produtos
           </span>
 
-          <h1 className="animate-fade-up animate-fade-up-delay-1 mt-6 text-5xl sm:text-6xl lg:text-7xl font-black text-gray-900 dark:text-white leading-[1.05] tracking-tight">
+          <h1 className="animate-fade-up animate-fade-up-delay-1 mt-6 text-3xl sm:text-4xl lg:text-5xl font-black text-gray-900 dark:text-white leading-[1.1] tracking-tight">
             Seu restaurante{' '}
             <span className="text-gradient">vende mais</span>
             <br className="hidden sm:block" /> no automático
           </h1>
 
-          <p className="animate-fade-up animate-fade-up-delay-2 mt-6 text-lg sm:text-xl text-gray-500 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">
+          <p className="animate-fade-up animate-fade-up-delay-2 mt-6 text-base sm:text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">
             Cardápio digital com QR Code, pedidos online, Kanban em tempo real, WhatsApp automático, PIX e muito mais — tudo em uma plataforma só.
           </p>
 
@@ -225,7 +225,7 @@ export default function HomePageClient() {
           <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
             ⚡ Funcionalidades
           </span>
-          <h2 className="mt-4 text-4xl sm:text-5xl font-black text-gray-900 dark:text-white tracking-tight">
+          <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
             Tudo que você precisa,{' '}
             <span className="text-gradient">num só lugar</span>
           </h2>
@@ -285,7 +285,7 @@ export default function HomePageClient() {
             <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
               🛡 Planos e preços
             </span>
-            <h2 className="mt-4 text-4xl sm:text-5xl font-black text-gray-900 dark:text-white tracking-tight">
+            <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
               Simples e <span className="text-gradient">transparente</span>
             </h2>
             <p className="mt-4 text-gray-500 dark:text-gray-400">Sem taxas escondidas. Cancele quando quiser.</p>
@@ -330,7 +330,7 @@ export default function HomePageClient() {
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(249,115,22,0.15)_0%,_transparent_70%)] pointer-events-none" />
           <div className="relative">
             <span className="inline-flex items-center gap-1.5 bg-brand-500/20 text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">✦ Comece hoje</span>
-            <h2 className="mt-5 text-4xl sm:text-5xl font-black text-white leading-tight">
+            <h2 className="mt-5 text-2xl sm:text-3xl font-black text-white leading-tight">
               Pronto para vender mais<br />
               <span className="text-gradient">no automático?</span>
             </h2>
