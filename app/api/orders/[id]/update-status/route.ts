@@ -63,6 +63,7 @@ export async function PATCH(
       id: true, status: true, orderNumber: true, waiterId: true, type: true, pdvId: true,
       paymentStatus: true, courierId: true, deliveryAddress: true, deliveryLat: true, deliveryLng: true,
       payments: { select: { setAtOrderCreation: true, status: true } },
+      tenant: { select: { latitude: true, longitude: true } },
     },
   })
 
@@ -186,7 +187,11 @@ export async function PATCH(
       const addr = order.deliveryAddress as any
       const addressText = addr?.address ?? [addr?.street, addr?.number, addr?.district, addr?.city].filter(Boolean).join(', ')
       if (addressText) {
-        geocodeAddress(addressText)
+        const anchor =
+          order.tenant.latitude != null && order.tenant.longitude != null
+            ? { lat: order.tenant.latitude, lng: order.tenant.longitude }
+            : null
+        geocodeAddress(addressText, anchor)
           .then((point) => {
             if (!point) return
             return prisma.order.update({
