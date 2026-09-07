@@ -34,6 +34,7 @@ import { createTenantPixCharge } from '@/lib/efi/tenant-pix-client'
 import { createAsaasPixCharge } from '@/lib/asaas/tenant-payments'
 import { buildPixPayload, generatePixQrCodeBase64, type PixKeyType } from '@/lib/pix/manual-pix'
 import { sanitizeText } from '@/lib/security/sanitize'
+import { geocodeAddress } from '@/lib/utils/geocode'
 
 // VULN-NEW-03: gera um token HMAC de curta duração para autorizar
 // o polling público de status do pedido sem exigir login do cliente.
@@ -76,6 +77,14 @@ const createOrderSchema = z.object({
   cashbackToUse:  z.number().min(0).optional(),
   pointsToRedeem: z.number().int().min(0).optional(),
   deliveryAddress: z.string().max(300).optional(),
+  // Coordenada da sugestão de rua que o cliente selecionou no autocomplete
+  // (ver app/api/address/search/route.ts) — usada como âncora de
+  // proximidade para a geocodificação final abaixo, feita já com o número
+  // do imóvel. Sem isso (ex.: cliente digitou o endereço manualmente sem
+  // usar a busca), a geocodificação final ainda roda, só que sem uma
+  // âncora tão precisa quanto essa.
+  deliveryLat: z.number().optional(),
+  deliveryLng: z.number().optional(),
   notes: z.string().max(500).optional(),
 
   // Device ID do Mercado Pago (gerado pelo security.js no navegador do
@@ -152,7 +161,7 @@ export async function createOrderAction(
   // 2. Verificar se tenant existe e está ativo
   const tenant = await prisma.tenant.findFirst({
     where: { id: data.tenantId, isActive: true },
-    select: { id: true, subscriptionStatus: true },
+    select: { id: true, subscriptionStatus: true, latitude: true, longitude: true },
   })
 
   if (!tenant || tenant.subscriptionStatus === 'SUSPENDED') {
@@ -241,6 +250,34 @@ export async function createOrderAction(
   }
   // paymentsList vazio = "cobrar no final" para pedidos PDV
 
+  // CORREÇÃO: antes, o endereço de entrega só era geocodificado depois,
+  // quando o pedido saía "a caminho" (ver update-status/route.ts) — a
+  // partir do texto reconstruído do endereço. Isso podia cair num ponto
+  // aproximado da rua, diferente do que a busca original (autocomplete)
+  // já tinha encontrado, porque o texto reconstruído não é
+  // necessariamente igual ao que o Nominatim usou pra achar o resultado.
+  // Agora geocodificamos UMA VEZ, aqui, já com o endereço completo
+  // (rua + número + bairro + cidade, exatamente como o cliente confirmou),
+  // usando como âncora de proximidade a coordenada da sugestão que ele
+  // selecionou no autocomplete (mais precisa que só a loja, quando
+  // disponível). O resultado vai direto pro pedido — update-status só
+  // geocodifica de novo se isso aqui falhar (deliveryLat/Lng nulos).
+  let deliveryLat: number | null = null
+  let deliveryLng: number | null = null
+  if (data.type === 'DELIVERY' && data.deliveryAddress) {
+    const anchor =
+      data.deliveryLat != null && data.deliveryLng != null
+        ? { lat: data.deliveryLat, lng: data.deliveryLng }
+        : tenant.latitude != null && tenant.longitude != null
+          ? { lat: tenant.latitude, lng: tenant.longitude }
+          : null
+    const point = await geocodeAddress(data.deliveryAddress, anchor)
+    if (point) {
+      deliveryLat = point.lat
+      deliveryLng = point.lng
+    }
+  }
+
   // 5. Criar pedido em transação
   const orderNumber = await getNextOrderNumber(data.tenantId)
 
@@ -264,6 +301,8 @@ export async function createOrderAction(
         couponDiscount: calculation.couponDiscount,
         deliveryBairro: data.deliveryBairro,
         deliveryAddress: data.deliveryAddress ? { address: data.deliveryAddress } : undefined,
+        deliveryLat,
+        deliveryLng,
         notes: data.notes ?? undefined,
         // changeFor: apenas o primeiro pagamento em dinheiro (legado — mantém compatibilidade)
         changeFor: paymentsList.find((p) => p.method === 'CASH')?.changeFor,
