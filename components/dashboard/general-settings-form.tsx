@@ -177,12 +177,20 @@ export function GeneralSettingsForm({ tenant }: SettingsProps) {
           <div>
             <label className="block text-sm font-medium text-foreground mb-1.5">Cor principal</label>
             <div className="flex gap-2">
-              <input
-                name="primaryColor"
-                type="color"
-                defaultValue={tenant.primaryColor ?? '#f97316'}
-                className="w-12 h-10 border border-input rounded-lg cursor-pointer bg-background"
-              />
+              {/* CORREÇÃO: o quadrado colorido interno do <input type="color">
+                  ignora o border-radius do próprio input no Chrome/WebKit —
+                  ele preenche a caixa de ponta a ponta e "vaza" por cima da
+                  borda arredondada. Agora o arredondamento e a borda ficam
+                  no wrapper (com overflow-hidden cortando o excesso), e o
+                  swatch interno perde o próprio padding/borda. */}
+              <div className="w-12 h-10 rounded-lg border border-input overflow-hidden bg-background">
+                <input
+                  name="primaryColor"
+                  type="color"
+                  defaultValue={tenant.primaryColor ?? '#f97316'}
+                  className="w-full h-full cursor-pointer border-0 p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-0"
+                />
+              </div>
               <input
                 name="primaryColorHex"
                 defaultValue={tenant.primaryColor ?? '#f97316'}
