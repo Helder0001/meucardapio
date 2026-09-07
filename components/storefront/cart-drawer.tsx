@@ -437,11 +437,12 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
         // Número da casa concatenado no endereço — evita migração de
         // schema só pra isso, e mantém compatibilidade com quem já lê
         // deliveryAddress como texto único (impressão, WhatsApp, etc).
-        // CORREÇÃO: número fica logo depois da rua (antes do bairro/cidade)
-        // — ex.: "Rua Ana Batista 55, Jardim Iracema, Fortaleza" — em vez
-        // de cair no final do texto todo.
+        // CORREÇÃO: faltava vírgula entre rua e número ("Rua Ana Batista
+        // 55" em vez de "Rua Ana Batista, 55") — isso confunde o parser de
+        // endereço da API de geocodificação, que pode não separar direito
+        // nome da rua e número do imóvel.
         deliveryAddress: deliveryAddress
-          ? [`${deliveryAddress} ${deliveryNumber || 'S/N'}`, deliveryCityLine].filter(Boolean).join(', ')
+          ? [`${deliveryAddress}, ${deliveryNumber || 'S/N'}`, deliveryCityLine].filter(Boolean).join(', ')
           : undefined,
         // Âncora de proximidade pra geocodificação final feita no servidor
         // (ver actions/orders/create-order.ts) — coordenada da sugestão de
