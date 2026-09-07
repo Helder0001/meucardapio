@@ -3,7 +3,8 @@
 
 import { useState, useEffect } from 'react'
 import Script from 'next/script'
-import { X, Trash2, Plus, Minus, Tag, Loader2, ArrowRight, ShoppingBag, Truck, Store, MapPin, PlusCircle, MinusCircle } from 'lucide-react'
+import Image from 'next/image'
+import { X, Trash2, Plus, Minus, Tag, Loader2, ArrowRight, ShoppingBag, Truck, Store, MapPin, PlusCircle, MinusCircle, UtensilsCrossed } from 'lucide-react'
 import { useCartStore } from '@/lib/store/cart'
 import { formatCurrency } from '@/lib/utils/format'
 import { cn } from '@/lib/utils'
@@ -23,6 +24,12 @@ interface CartDrawerProps {
     cardEnabled?: boolean
     linkEnabled?: boolean
     manualPixEnabled?: boolean
+    // CORREÇÃO (#4): categorias/produtos, pra montar a seção "Peça
+    // também" dentro do carrinho.
+    categories?: Array<{ products: Array<{
+      id: string; name: string; price: number; image: string | null
+      isOutOfStock?: boolean; isFeatured: boolean; isBestSeller: boolean
+    }> }>
     deliveryZones: Array<{
       id: string
       bairro: string | null
@@ -92,7 +99,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const handleCepLookup = async (rawCep: string) => {
     const digits = rawCep.replace(/\D/g, '')
     setCep(rawCep)
-    if (digits.length !== 8) { setCepError(''); setCepZone(null); return }
+    if (digits.length !== 8) { setCepError(''); setCepZone(null); setAddressLockedByCep(false); return }
     setCepLoading(true); setCepError('')
 
     try {
@@ -101,6 +108,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
         setCepError('CEP não encontrado. Você pode digitar o endereço manualmente.')
         setCepZone(null)
         setCepLoading(false)
+        setAddressLockedByCep(false)
         return
       }
       const data = await res.json()
@@ -112,6 +120,9 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
       // em vez do número cair no fim de tudo.
       setDeliveryAddress(logradouro || '')
       setDeliveryCityLine([bairro, localidade].filter(Boolean).join(', '))
+      // Só trava se o CEP realmente devolveu um nome de rua — CEPs de
+      // "uso geral" (sem logradouro específico) deixam o campo editável.
+      setAddressLockedByCep(!!logradouro)
 
       const bairroNorm = (bairro || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       const zone = tenant.deliveryZones.find(z => {
@@ -152,6 +163,66 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const [cepLoading, setCepLoading] = useState(false)
   const [cepError, setCepError] = useState('')
   const [cepZone, setCepZone] = useState<typeof tenant.deliveryZones[0] | null>(null)
+  // CORREÇÃO (#3): trava o campo de rua quando ele veio preenchido
+  // automaticamente pelo CEP — evita a pessoa mudar sem querer pra um
+  // endereço que não bate com o CEP informado (e com a zona de entrega
+  // já validada). Só destrava se o CEP não for encontrado, permitindo
+  // digitação manual nesse caso.
+  const [addressLockedByCep, setAddressLockedByCep] = useState(false)
+
+  // CORREÇÃO (#3): busca alternativa por nome da rua — nem todo cliente
+  // sabe o próprio CEP de cabeça, e usar geolocalização exige permissão
+  // de GPS que nem sempre está disponível/precisa.
+  const [showStreetSearch, setShowStreetSearch] = useState(false)
+  const [streetQuery, setStreetQuery] = useState('')
+  const [streetResults, setStreetResults] = useState<Array<{ label: string; logradouro: string; bairro: string; localidade: string; uf: string; cep: string | null }>>([])
+  const [streetSearching, setStreetSearching] = useState(false)
+
+  useEffect(() => {
+    if (streetQuery.trim().length < 4) { setStreetResults([]); return }
+    const timer = setTimeout(async () => {
+      setStreetSearching(true)
+      try {
+        const cityHint = (tenant.settings as any)?.address?.split(',').slice(-2).join(',') ?? ''
+        const res = await fetch(`/api/address/search?q=${encodeURIComponent(streetQuery)}&city=${encodeURIComponent(cityHint)}`)
+        const data = await res.json()
+        setStreetResults(data.results ?? [])
+      } catch {
+        setStreetResults([])
+      } finally {
+        setStreetSearching(false)
+      }
+    }, 500) // debounce — evita 1 requisição por tecla digitada
+    return () => clearTimeout(timer)
+  }, [streetQuery])
+
+  const selectStreetResult = (r: { logradouro: string; bairro: string; localidade: string; uf: string; cep: string | null }) => {
+    setDeliveryAddress(r.logradouro)
+    setDeliveryCityLine([r.bairro, r.localidade].filter(Boolean).join(', '))
+    setAddressLockedByCep(true)
+    setShowStreetSearch(false)
+    setStreetQuery('')
+    setStreetResults([])
+
+    // Mesma checagem de zona de entrega usada no fluxo de CEP — sem isso,
+    // um endereço achado por rua nunca teria a zona/taxa de entrega
+    // calculada.
+    const bairroNorm = (r.bairro || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    const zone = tenant.deliveryZones.find(z => {
+      const zBairro = (z.bairro || z.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      return zBairro && bairroNorm.includes(zBairro)
+    })
+    if (zone) {
+      setCepZone(zone)
+      setDeliveryBairro(zone.bairro)
+      setCepError('')
+      if (r.cep) setCep(r.cep)
+    } else {
+      setCepZone(null)
+      setCepError('Esse endereço está fora da área de entrega.')
+      setDeliveryBairro(null)
+    }
+  }
 
   // ── Cashback / fidelidade ────────────────────────────────────────────────
   const [cashbackBalance, setCashbackBalance] = useState(0)
@@ -165,8 +236,20 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const {
     items, couponCode, deliveryType, deliveryBairro, tableId, customerPhone,
     removeItem, updateQuantity, setCoupon, setDeliveryType, setDeliveryBairro,
-    setCustomer, subtotal, clearCart,
+    setCustomer, subtotal, clearCart, addItem,
   } = useCartStore()
+
+  // CORREÇÃO (#4): "Peça também" — sugestão de mais produtos do cardápio
+  // logo abaixo da lista de itens do carrinho. Prioriza destaques/mais
+  // vendidos, exclui o que já está no carrinho e o que está esgotado.
+  const suggestedProducts = (() => {
+    const allProducts = (tenant.categories ?? []).flatMap((c) => c.products)
+    const inCartIds = new Set(items.map((i) => i.productId))
+    const available = allProducts.filter((p) => !inCartIds.has(p.id) && !p.isOutOfStock)
+    const featured = available.filter((p) => p.isFeatured || p.isBestSeller)
+    const rest = available.filter((p) => !p.isFeatured && !p.isBestSeller)
+    return [...featured, ...rest].slice(0, 6)
+  })()
 
   // Buscar saldo de cashback/pontos quando o cliente está identificado
   useEffect(() => {
@@ -461,6 +544,15 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                 <>
                   {items.map((item) => (
                     <div key={item.cartItemId} className="flex gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-2xl">
+                      {/* CORREÇÃO (#4): thumbnail do produto — carrinho era
+                          só texto antes, sem nenhuma referência visual. */}
+                      <div className="w-16 h-16 flex-shrink-0 rounded-xl overflow-hidden bg-gray-200 dark:bg-gray-700">
+                        {item.productImage ? (
+                          <Image src={item.productImage} alt={item.productName} width={64} height={64} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center"><UtensilsCrossed className="w-5 h-5 text-gray-400" /></div>
+                        )}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-bold text-sm text-gray-900 dark:text-gray-100 truncate">{item.productName}</p>
                         {item.addons.length > 0 && <p className="text-xs text-gray-400 mt-0.5 truncate">{item.addons.map((a) => a.name).join(', ')}</p>}
@@ -477,6 +569,39 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                       </div>
                     </div>
                   ))}
+
+                  {/* CORREÇÃO (#4): "Peça também" — sugestão rápida de mais
+                      itens do cardápio, adicionados direto ao carrinho
+                      (sem abrir modal de customização, pra ficar rápido). */}
+                  {suggestedProducts.length > 0 && (
+                    <div className="pt-2">
+                      <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Peça também</p>
+                      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                        {suggestedProducts.map((p) => (
+                          <button
+                            key={p.id}
+                            onClick={() => {
+                              addItem({ productId: p.id, productName: p.name, productPrice: p.price, productImage: p.image, quantity: 1, addons: [] })
+                              toast.success(`${p.name} adicionado`)
+                            }}
+                            className="flex-shrink-0 w-24 text-left bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden"
+                          >
+                            <div className="w-full h-16 bg-gray-100 dark:bg-gray-800">
+                              {p.image ? (
+                                <Image src={p.image} alt={p.name} width={96} height={64} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center"><UtensilsCrossed className="w-4 h-4 text-gray-400" /></div>
+                              )}
+                            </div>
+                            <div className="p-1.5">
+                              <p className="text-[10px] font-bold text-gray-900 dark:text-gray-100 line-clamp-2 leading-tight">{p.name}</p>
+                              <p className="text-[10px] font-black mt-0.5" style={{ color }}>{formatCurrency(p.price)}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Cupom */}
                   <div className="pt-2">
@@ -670,18 +795,80 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                               ✓ Entrega disponível — {cepZone.name ?? cepZone.bairro} · {cepZone.freeAbove && subtotal() >= cepZone.freeAbove ? 'Frete grátis 🎉' : formatCurrency(cepZone.fee)}
                             </div>
                           )}
+
+                          {/* CORREÇÃO (#3): alternativa pra quem não sabe o
+                              CEP — busca pelo nome da rua. */}
+                          {!showStreetSearch ? (
+                            <button
+                              type="button"
+                              onClick={() => setShowStreetSearch(true)}
+                              className="text-xs font-semibold underline text-gray-500 dark:text-gray-400"
+                            >
+                              Não sabe o CEP? Buscar pelo nome da rua
+                            </button>
+                          ) : (
+                            <div className="relative">
+                              <input
+                                type="text"
+                                value={streetQuery}
+                                onChange={(e) => setStreetQuery(e.target.value)}
+                                placeholder="Digite o nome da rua"
+                                autoFocus
+                                className="w-full px-3 py-2.5 text-sm border rounded-xl bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                              />
+                              {streetSearching && (
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-gray-300 border-t-brand-500 rounded-full animate-spin" />
+                              )}
+                              {streetResults.length > 0 && (
+                                <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg overflow-hidden">
+                                  {streetResults.map((r, i) => (
+                                    <button
+                                      key={i}
+                                      type="button"
+                                      onClick={() => selectStreetResult(r)}
+                                      className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 border-b border-gray-100 dark:border-gray-800 last:border-0"
+                                    >
+                                      {r.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                              {!streetSearching && streetQuery.trim().length >= 4 && streetResults.length === 0 && (
+                                <p className="text-xs text-gray-400 mt-1">Nenhum endereço encontrado.</p>
+                              )}
+                            </div>
+                          )}
                           {/* Endereço preenchido automaticamente ou manualmente */}
                           <div className="grid grid-cols-3 gap-2">
-                            <input
-                              type="text"
-                              value={deliveryAddress}
-                              onChange={(e) => setDeliveryAddress(e.target.value)}
-                              placeholder="Rua, complemento *"
-                              className={cn(
-                                'col-span-2 px-3 py-2.5 text-sm border rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500',
-                                !deliveryAddress.trim() ? 'border-brand-300 dark:border-brand-700' : 'border-gray-200 dark:border-gray-700'
+                            <div className="col-span-2 relative">
+                              <input
+                                type="text"
+                                value={deliveryAddress}
+                                onChange={(e) => setDeliveryAddress(e.target.value)}
+                                placeholder="Rua, complemento *"
+                                readOnly={addressLockedByCep}
+                                className={cn(
+                                  'w-full px-3 py-2.5 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500',
+                                  addressLockedByCep ? 'bg-gray-50 dark:bg-gray-800/60 text-gray-500 dark:text-gray-400 cursor-not-allowed' : 'bg-transparent',
+                                  !deliveryAddress.trim() ? 'border-brand-300 dark:border-brand-700' : 'border-gray-200 dark:border-gray-700'
+                                )}
+                              />
+                              {/* CORREÇÃO (#3): campo trava quando vem do
+                                  CEP pra não descasar do endereço validado
+                                  — mas dá pra destravar manualmente se
+                                  precisar corrigir algo (ex: CEP genérico
+                                  que trouxe a rua errada). */}
+                              {addressLockedByCep && (
+                                <button
+                                  type="button"
+                                  onClick={() => setAddressLockedByCep(false)}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold underline"
+                                  style={{ color }}
+                                >
+                                  editar
+                                </button>
                               )}
-                            />
+                            </div>
                             {/* CORREÇÃO: número da casa ficava dentro do
                                 mesmo texto corrido do endereço — cliente
                                 esquecia de digitar e o entregador não

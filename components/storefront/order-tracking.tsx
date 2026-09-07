@@ -462,7 +462,7 @@ export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey, c
   }, [order.id, statusToken])
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] dark:bg-gray-950">
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-950">
 
       {/* ── HEADER ── */}
       <header className="glass-card border-b border-gray-100/80 dark:border-gray-800 px-4 py-3.5">

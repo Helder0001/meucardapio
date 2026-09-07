@@ -578,7 +578,6 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, vie
   const { theme, setTheme } = useTheme()
   const settings = tenant.settings as any ?? {}
   const coverImage: string | null = settings?.coverImage ?? null
-  const bannerText: string | null = settings?.tagline ?? null
 
   useEffect(() => {
     setTenant(tenant.id)
@@ -693,7 +692,9 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, vie
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] dark:bg-gray-950 smooth-scroll">
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-950 smooth-scroll">
+      {/* CORREÇÃO (#6): fundo do modo claro trocado de creme (#FAF7F2) pra
+          cinza bem claro (gray-100), igual à referência do Cardápio Web. */}
 
       {/* ─── STICKY MINI HEADER (aparece após scroll) ─── */}
       <div
@@ -776,7 +777,10 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, vie
         {/* Info centralizada */}
         <div className="text-center px-4 pt-2 pb-4">
           <h1 className="text-xl font-black text-gray-900 dark:text-white">{tenant.name}</h1>
-          {bannerText && <p className="text-gray-500 text-sm mt-0.5">{bannerText}</p>}
+          {/* CORREÇÃO: tagline ("A melhor Lanchonete da Cidade") removida
+              daqui — ficava competindo visualmente com o endereço/status
+              logo abaixo. Continua disponível dentro de "Mais
+              informações" → aba Sobre. */}
 
           <div className="flex items-center justify-center gap-2 mt-1.5 flex-wrap text-sm text-gray-500">
             {settings?.address && (
@@ -1239,7 +1243,10 @@ function FeaturedCard({
       onClick={onSelect}
       disabled={disabled}
       className="group relative flex flex-col bg-white dark:bg-gray-900 rounded-3xl overflow-hidden border border-gray-100 dark:border-gray-800 text-left transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-gray-900/10 active:scale-[0.97] disabled:opacity-50 product-shine"
-      style={{ width: '200px' }}
+      // CORREÇÃO #1: card de destaque reduzido de 200px pra 152px de
+      // largura — ficava grande demais ocupando quase a tela toda no
+      // carrossel horizontal do mobile.
+      style={{ width: '152px' }}
     >
       <div className="relative w-full aspect-square overflow-hidden bg-gray-100 dark:bg-gray-800">
         {product.image ? (

@@ -85,7 +85,7 @@ export function ProductModal({ product, onClose, disabled, primaryColor }: Produ
         return { id: addon.id, name: addon.name, price: addon.price }
       })
     )
-    addItem({ productId: product.id, productName: product.name, productPrice: product.price, quantity, notes: notes.trim() || undefined, addons })
+    addItem({ productId: product.id, productName: product.name, productPrice: product.price, productImage: product.image, quantity, notes: notes.trim() || undefined, addons })
     toast.success(`${product.name} adicionado! 🛒`)
     onClose()
   }
