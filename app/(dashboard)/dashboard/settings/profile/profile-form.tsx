@@ -98,16 +98,16 @@ export function ProfileForm({ user }: ProfileFormProps) {
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
-          <div>
+          <div className="min-w-0">
             <span className="font-medium text-foreground block">Email</span>
-            {user.email}
+            <span className="block break-all">{user.email}</span>
           </div>
-          <div>
+          <div className="min-w-0">
             <span className="font-medium text-foreground block">Membro desde</span>
             {new Date(user.createdAt).toLocaleDateString('pt-BR')}
           </div>
           {user.lastLoginAt && (
-            <div>
+            <div className="min-w-0">
               <span className="font-medium text-foreground block">Último acesso</span>
               {new Date(user.lastLoginAt).toLocaleString('pt-BR')}
             </div>
