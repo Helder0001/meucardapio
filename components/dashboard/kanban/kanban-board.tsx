@@ -11,10 +11,10 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { KanbanColumn } from './kanban-column'
-import { formatOrderNumber } from '@/lib/utils/format'
 import { cn } from '@/lib/utils'
 import { Wifi, WifiOff, Volume2, VolumeX, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
+import { ensureAudioUnlocked, isSoundEnabled, setSoundEnabledPref } from '@/lib/utils/notification-sound'
 
 export type KanbanOrder = {
   id: string
@@ -65,62 +65,16 @@ export function KanbanBoard({ tenantId, userRole = '', lockedFilter }: KanbanBoa
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const isDeliveryPerson = userRole === 'DELIVERY_PERSON'
-  const audioRef = useRef<AudioContext | null>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
 
-  // Tocar som de notificação
-  const playNotification = useCallback(() => {
-    if (!soundEnabled) return
-    try {
-      if (!audioRef.current) {
-        audioRef.current = new AudioContext()
-      }
-      const ctx = audioRef.current
-      // Navegadores suspendem o AudioContext até haver um gesto do usuário
-      // na página; sem isso o oscillator "toca" mas nenhum som sai. Como o
-      // primeiro pedido pode chegar antes de qualquer clique, garantimos o
-      // resume aqui (best-effort) além do listener de desbloqueio abaixo.
-      if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => {})
-      }
-      const oscillator = ctx.createOscillator()
-      const gainNode = ctx.createGain()
-      oscillator.connect(gainNode)
-      gainNode.connect(ctx.destination)
-      oscillator.frequency.setValueAtTime(800, ctx.currentTime)
-      oscillator.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.1)
-      gainNode.gain.setValueAtTime(0.3, ctx.currentTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3)
-      oscillator.start(ctx.currentTime)
-      oscillator.stop(ctx.currentTime + 0.3)
-    } catch {
-      // AudioContext pode não estar disponível
-    }
-  }, [soundEnabled])
-
-  // Desbloqueia o áudio no primeiro clique/toque/tecla na página — sem
-  // isso o navegador recusa tocar som de eventos assíncronos (SSE) que
-  // não têm um gesto do usuário por perto, e o alerta fica mudo até que
-  // algo dispare um resume() manual.
+  // CORREÇÃO (#2 e #3): o beep de novo pedido agora é responsabilidade só
+  // do listener global do dashboard (components/dashboard/notification-
+  // listener.tsx + lib/utils/notification-sound.ts) — ele já roda em
+  // qualquer página, inclusive aqui no Kanban, então tocar de novo aqui
+  // duplicaria o som E o toast. O botão de mudo abaixo só controla a
+  // preferência compartilhada (localStorage) que aquele listener lê.
   useEffect(() => {
-    const unlockAudio = () => {
-      if (!audioRef.current) {
-        try {
-          audioRef.current = new AudioContext()
-        } catch {
-          return
-        }
-      }
-      if (audioRef.current.state === 'suspended') {
-        audioRef.current.resume().catch(() => {})
-      }
-    }
-    document.addEventListener('pointerdown', unlockAudio, { once: true })
-    document.addEventListener('keydown', unlockAudio, { once: true })
-    return () => {
-      document.removeEventListener('pointerdown', unlockAudio)
-      document.removeEventListener('keydown', unlockAudio)
-    }
+    setSoundEnabled(isSoundEnabled())
   }, [])
 
   // Conectar ao SSE
@@ -154,12 +108,10 @@ export function KanbanBoard({ tenantId, userRole = '', lockedFilter }: KanbanBoa
       setOrders((prev) => {
         switch (event.type) {
           case 'ORDER_CREATED': {
-            // Novo pedido chegou — adicionar à coluna PENDING
+            // Novo pedido chegou — adicionar à coluna PENDING.
+            // O beep + toast de aviso já ficam por conta do listener
+            // global do dashboard (evita duplicar som/toast aqui).
             if (!prev.find((o) => o.id === event.orderId)) {
-              playNotification()
-              toast.info(`Novo pedido ${formatOrderNumber(event.orderNumber)}!`, {
-                duration: 6000,
-              })
               // Buscar dados completos do pedido
               fetch(`/api/orders/${event.orderId}`)
                 .then((r) => r.json())
@@ -234,7 +186,7 @@ export function KanbanBoard({ tenantId, userRole = '', lockedFilter }: KanbanBoa
         // O onerror já trata reconexão. Esse interval é só um watchdog.
       } catch {}
     }, 60_000)
-  }, [playNotification])
+  }, [])
 
   useEffect(() => {
     connect()
@@ -328,15 +280,14 @@ export function KanbanBoard({ tenantId, userRole = '', lockedFilter }: KanbanBoa
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
-              setSoundEnabled((s) => !s)
-              // Clique é um gesto do usuário — aproveita pra desbloquear o
-              // áudio, caso o listener global ainda não tenha rodado.
-              if (!audioRef.current) {
-                try { audioRef.current = new AudioContext() } catch {}
-              }
-              if (audioRef.current?.state === 'suspended') {
-                audioRef.current.resume().catch(() => {})
-              }
+              setSoundEnabled((s) => {
+                const next = !s
+                setSoundEnabledPref(next)
+                return next
+              })
+              // Clique é um gesto do usuário — aproveita pra garantir que
+              // o desbloqueio global de áudio já rodou.
+              ensureAudioUnlocked()
             }}
             className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             title={soundEnabled ? 'Desativar som' : 'Ativar som'}
