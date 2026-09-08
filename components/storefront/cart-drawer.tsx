@@ -99,6 +99,17 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const handleCepLookup = async (rawCep: string) => {
     const digits = rawCep.replace(/\D/g, '')
     setCep(rawCep)
+    // CORREÇÃO CRÍTICA: esse `selectedAddressLat/Lng` só era limpo quando o
+    // cliente clicava em "editar" pra digitar manualmente — mas NUNCA
+    // quando o endereço mudava por causa de uma busca de CEP. Resultado:
+    // se em algum momento uma coordenada tinha sido selecionada (num
+    // endereço A, até de um pedido anterior, já que isso fica salvo no
+    // carrinho persistido), e depois o cliente buscava um CEP DIFERENTE
+    // (endereço B), o texto mudava pra B mas a coordenada antiga de A
+    // continuava lá — e era ela que ia pro pedido, plantando o pino
+    // sempre no mesmo lugar de antes, não importa o endereço novo digitado.
+    setSelectedAddressLat(null)
+    setSelectedAddressLng(null)
     if (digits.length !== 8) { setCepError(''); setCepZone(null); setAddressLockedByCep(false); return }
     setCepLoading(true); setCepError('')
 
