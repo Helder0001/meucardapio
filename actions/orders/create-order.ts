@@ -260,10 +260,12 @@ export async function createOrderAction(
   // Resultado: pino errado de novo, do mesmo jeito, só que mais difícil de
   // pegar porque parecia uma correspondência boa.
   //
-  // Agora: se o cliente selecionou uma sugestão (data.deliveryLat/Lng
-  // vieram do autocomplete), usamos ESSA coordenada direto — sem
-  // geocodificar de novo. Só fazemos a geocodificação por texto quando NÃO
-  // há coordenada de seleção (cliente digitou o endereço manualmente).
+  // ATUALIZAÇÃO: agora data.deliveryLat/Lng vem do mapa de confirmação de
+  // endereço no checkout (components/storefront/address-pin-picker.tsx) —
+  // o cliente arrasta o mapa até a posição certa da casa dele, então essa
+  // coordenada é definitiva e não deve ser re-geocodificada de jeito
+  // nenhum. Só fazemos a geocodificação por texto (menos confiável) quando
+  // NÃO há coordenada nenhuma vinda do cliente.
   let deliveryLat: number | null = null
   let deliveryLng: number | null = null
   if (data.type === 'DELIVERY' && data.deliveryAddress) {
