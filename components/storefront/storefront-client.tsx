@@ -36,7 +36,11 @@ interface StorefrontClientProps {
   tenant: {
     id: string; name: string; slug: string; logo: string | null
     primaryColor: string | null; phone: string | null; settings: any
-    latitude: number | null; longitude: number | null
+    // Opcional de propósito: se por algum motivo a query da página não
+    // buscar esses campos (ver app/(storefront)/menu/[slug]/page.tsx),
+    // o mapa de confirmação de endereço simplesmente cai pro centro
+    // neutro de Fortaleza em vez de quebrar o build inteiro.
+    latitude?: number | null; longitude?: number | null
     categories: Category[]
     deliveryZones: Array<{
       id: string; type: string; name: string | null; bairro: string | null
