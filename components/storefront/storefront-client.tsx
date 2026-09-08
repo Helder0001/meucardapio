@@ -36,6 +36,7 @@ interface StorefrontClientProps {
   tenant: {
     id: string; name: string; slug: string; logo: string | null
     primaryColor: string | null; phone: string | null; settings: any
+    latitude: number | null; longitude: number | null
     categories: Category[]
     deliveryZones: Array<{
       id: string; type: string; name: string | null; bairro: string | null

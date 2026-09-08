@@ -2,6 +2,7 @@
 // components/storefront/cart-drawer.tsx — pagamento múltiplo + endereço obrigatório
 
 import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import Script from 'next/script'
 import Image from 'next/image'
 import { X, Trash2, Plus, Minus, Tag, Loader2, ArrowRight, ShoppingBag, Truck, Store, MapPin, PlusCircle, MinusCircle, UtensilsCrossed } from 'lucide-react'
@@ -11,6 +12,17 @@ import { cn } from '@/lib/utils'
 import { createOrderAction } from '@/actions/orders/create-order'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+
+const AddressPinPicker = dynamic(
+  () => import('./address-pin-picker').then((m) => m.AddressPinPicker),
+  { ssr: false }
+)
+
+// Fortaleza-CE como centro neutro de último recurso — só usado se nem o
+// endereço buscado NEM a loja tiverem coordenada conhecida ainda, só pra
+// o mapa abrir em algum lugar minimamente plausível em vez de "0,0" (que
+// cairia no meio do oceano, na costa da África).
+const FALLBACK_CENTER = { lat: -3.7319, lng: -38.5267 }
 
 interface CartDrawerProps {
   open: boolean
@@ -24,6 +36,11 @@ interface CartDrawerProps {
     cardEnabled?: boolean
     linkEnabled?: boolean
     manualPixEnabled?: boolean
+    // Estimativa inicial pro mapa de confirmação de endereço (ver
+    // components/storefront/address-pin-picker.tsx) — usado como
+    // fallback quando ainda não há coordenada vinda de busca de rua/CEP.
+    latitude?: number | null
+    longitude?: number | null
     // CORREÇÃO (#4): categorias/produtos, pra montar a seção "Peça
     // também" dentro do carrinho.
     categories?: Array<{ products: Array<{
@@ -110,6 +127,8 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
     // sempre no mesmo lugar de antes, não importa o endereço novo digitado.
     setSelectedAddressLat(null)
     setSelectedAddressLng(null)
+    setPinLat(null)
+    setPinLng(null)
     if (digits.length !== 8) { setCepError(''); setCepZone(null); setAddressLockedByCep(false); return }
     setCepLoading(true); setCepError('')
 
@@ -188,11 +207,31 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const [streetQuery, setStreetQuery] = useState('')
   const [streetResults, setStreetResults] = useState<Array<{ label: string; logradouro: string; bairro: string; localidade: string; uf: string; cep: string | null; lat: number | null; lng: number | null }>>([])
   const [streetSearching, setStreetSearching] = useState(false)
-  // Coordenada da sugestão de endereço selecionada no autocomplete — vai
-  // junto na criação do pedido como âncora pra geocodificação final feita
-  // no servidor (já com o número da casa). Ver actions/orders/create-order.ts.
+  // Coordenada da sugestão de endereço selecionada no autocomplete — usada
+  // só como ESTIMATIVA INICIAL (seed) pra centralizar o mapa de confirmação
+  // abaixo. Não é mais o valor final enviado direto (ver histórico de
+  // correções nesse arquivo — geocodificação sozinha, mesmo com seleção de
+  // sugestão, repetidamente caiu no endereço errado pra ruas sem numeração
+  // predial na base do Nominatim/OpenCage).
   const [selectedAddressLat, setSelectedAddressLat] = useState<number | null>(null)
   const [selectedAddressLng, setSelectedAddressLng] = useState<number | null>(null)
+  // Posição FINAL confirmada pelo cliente arrastando o mapa (ver
+  // components/storefront/address-pin-picker.tsx) — essa é a coordenada
+  // que efetivamente vai pro pedido. Fica null até o cliente mexer no
+  // mapa; se ele nunca mexer, usamos a estimativa (selectedAddressLat)
+  // mesmo, que já é melhor que nada.
+  const [pinLat, setPinLat] = useState<number | null>(null)
+  const [pinLng, setPinLng] = useState<number | null>(null)
+  // Estimativa inicial pro mapa de confirmação: melhor coordenada que já
+  // temos (busca de rua) > localização da loja > centro neutro de
+  // Fortaleza. Propositalmente NÃO inclui pinLat/pinLng aqui — isso é o
+  // que o componente do mapa reporta de volta, e se entrasse nessa conta
+  // o mapa ficaria "brigando" com o dedo do cliente, recentralizando toda
+  // vez que ele arrasta.
+  const pinSeed = {
+    lat: selectedAddressLat ?? tenant.latitude ?? FALLBACK_CENTER.lat,
+    lng: selectedAddressLng ?? tenant.longitude ?? FALLBACK_CENTER.lng,
+  }
 
   useEffect(() => {
     if (streetQuery.trim().length < 4) { setStreetResults([]); return }
@@ -233,6 +272,10 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
     setStreetResults([])
     setSelectedAddressLat(r.lat)
     setSelectedAddressLng(r.lng)
+    // Novo endereço selecionado — qualquer confirmação de pino anterior
+    // (de um endereço diferente) não vale mais.
+    setPinLat(null)
+    setPinLng(null)
 
     // Mesma checagem de zona de entrega usada no fluxo de CEP — sem isso,
     // um endereço achado por rua nunca teria a zona/taxa de entrega
@@ -455,11 +498,15 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
         deliveryAddress: deliveryAddress
           ? [`${deliveryAddress}, ${deliveryNumber || 'S/N'}`, deliveryCityLine].filter(Boolean).join(', ')
           : undefined,
-        // Âncora de proximidade pra geocodificação final feita no servidor
-        // (ver actions/orders/create-order.ts) — coordenada da sugestão de
-        // rua que o cliente selecionou no autocomplete, quando houver.
-        deliveryLat: selectedAddressLat ?? undefined,
-        deliveryLng: selectedAddressLng ?? undefined,
+        // CORREÇÃO FINAL: depois de repetidos casos de geocodificação
+        // automática (mesmo com sugestão selecionada) caindo num endereço
+        // errado — porque a rua não tinha numeração predial na base da
+        // API — a coordenada definitiva agora é a que o cliente confirmou
+        // arrastando o mapa (pinLat/pinLng). Só usamos a estimativa da
+        // busca (selectedAddressLat/Lng) se ele nunca chegou a mexer no
+        // mapa, o que ainda é melhor que nada.
+        deliveryLat: pinLat ?? selectedAddressLat ?? undefined,
+        deliveryLng: pinLng ?? selectedAddressLng ?? undefined,
         customerPhone: isTableOrder ? (customerPhone || phone || undefined) : (customerPhone || phone),
         customerName: name || undefined,
         // 'LINK' não é um método aceito na criação do pedido (só existe pro
@@ -900,9 +947,12 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                                   onClick={() => {
                                     setAddressLockedByCep(false)
                                     // Cliente vai editar o texto manualmente — a coordenada
-                                    // da sugestão selecionada não serve mais de âncora.
+                                    // da sugestão selecionada não serve mais de âncora, e o
+                                    // pino confirmado no mapa (se houver) também não vale mais.
                                     setSelectedAddressLat(null)
                                     setSelectedAddressLng(null)
+                                    setPinLat(null)
+                                    setPinLng(null)
                                   }}
                                   className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold underline"
                                   style={{ color }}
@@ -928,6 +978,23 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                               )}
                             />
                           </div>
+                          {/* Mapa de confirmação: depois de repetidas
+                              tentativas de fazer a geocodificação automática
+                              (Nominatim/OpenCage) acertar sozinha a casa
+                              exata — sem sucesso pra ruas sem numeração
+                              predial na base delas — a decisão final da
+                              localização passa a ser do cliente, arrastando
+                              o mapa até a posição certa. Ver
+                              components/storefront/address-pin-picker.tsx. */}
+                          {deliveryAddress.trim() && (
+                            <div className="mt-2">
+                              <AddressPinPicker
+                                seedLat={pinSeed.lat}
+                                seedLng={pinSeed.lng}
+                                onChange={(lat, lng) => { setPinLat(lat); setPinLng(lng) }}
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
