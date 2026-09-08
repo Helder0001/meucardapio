@@ -250,31 +250,36 @@ export async function createOrderAction(
   }
   // paymentsList vazio = "cobrar no final" para pedidos PDV
 
-  // CORREÇÃO: antes, o endereço de entrega só era geocodificado depois,
-  // quando o pedido saía "a caminho" (ver update-status/route.ts) — a
-  // partir do texto reconstruído do endereço. Isso podia cair num ponto
-  // aproximado da rua, diferente do que a busca original (autocomplete)
-  // já tinha encontrado, porque o texto reconstruído não é
-  // necessariamente igual ao que o Nominatim usou pra achar o resultado.
-  // Agora geocodificamos UMA VEZ, aqui, já com o endereço completo
-  // (rua + número + bairro + cidade, exatamente como o cliente confirmou),
-  // usando como âncora de proximidade a coordenada da sugestão que ele
-  // selecionou no autocomplete (mais precisa que só a loja, quando
-  // disponível). O resultado vai direto pro pedido — update-status só
-  // geocodifica de novo se isso aqui falhar (deliveryLat/Lng nulos).
+  // CORREÇÃO 3: a versão anterior SEMPRE fazia uma segunda geocodificação
+  // aqui, mesmo quando o cliente já tinha selecionado uma sugestão precisa
+  // no autocomplete — usando aquela coordenada só como "dica" de
+  // proximidade. Só que, pra ruas sem numeração predial na base da API
+  // (comum no Brasil), essa segunda busca ignora a coordenada boa que já
+  // tínhamos e devolve outro ponto qualquer perto da loja — só que agora
+  // "confiante" o bastante pra passar no filtro de confidence/addresstype.
+  // Resultado: pino errado de novo, do mesmo jeito, só que mais difícil de
+  // pegar porque parecia uma correspondência boa.
+  //
+  // Agora: se o cliente selecionou uma sugestão (data.deliveryLat/Lng
+  // vieram do autocomplete), usamos ESSA coordenada direto — sem
+  // geocodificar de novo. Só fazemos a geocodificação por texto quando NÃO
+  // há coordenada de seleção (cliente digitou o endereço manualmente).
   let deliveryLat: number | null = null
   let deliveryLng: number | null = null
   if (data.type === 'DELIVERY' && data.deliveryAddress) {
-    const anchor =
-      data.deliveryLat != null && data.deliveryLng != null
-        ? { lat: data.deliveryLat, lng: data.deliveryLng }
-        : tenant.latitude != null && tenant.longitude != null
+    if (data.deliveryLat != null && data.deliveryLng != null) {
+      deliveryLat = data.deliveryLat
+      deliveryLng = data.deliveryLng
+    } else {
+      const anchor =
+        tenant.latitude != null && tenant.longitude != null
           ? { lat: tenant.latitude, lng: tenant.longitude }
           : null
-    const point = await geocodeAddress(data.deliveryAddress, anchor)
-    if (point) {
-      deliveryLat = point.lat
-      deliveryLng = point.lng
+      const point = await geocodeAddress(data.deliveryAddress, anchor)
+      if (point) {
+        deliveryLat = point.lat
+        deliveryLng = point.lng
+      }
     }
   }
 
