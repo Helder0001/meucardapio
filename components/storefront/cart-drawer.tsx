@@ -297,6 +297,48 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
     }
   }
 
+  // CORREÇÃO (#2): "usar minha localização" — GPS do navegador +
+  // geocodificação reversa pra preencher rua/bairro/cidade igual a busca
+  // por nome de rua, mas com a coordenada exata do cliente (mais precisa
+  // que qualquer busca por texto) já indo direto pro pino do mapa.
+  const [locatingMe, setLocatingMe] = useState(false)
+  const useMyLocation = () => {
+    if (!navigator.geolocation) {
+      setCepError('Seu navegador não suporta compartilhar localização.')
+      return
+    }
+    setLocatingMe(true)
+    setCepError('')
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords
+        try {
+          const res = await fetch(`/api/address/reverse?lat=${latitude}&lng=${longitude}`)
+          const data = await res.json()
+          if (data.result) {
+            selectStreetResult({ ...data.result, lat: latitude, lng: longitude })
+            // Sobrescreve com a coordenada real do GPS — mais precisa do
+            // que a geocodificação reversa (que só arredonda pro imóvel
+            // mais próximo conhecido).
+            setPinLat(latitude)
+            setPinLng(longitude)
+          } else {
+            setCepError('Não conseguimos identificar seu endereço. Tente buscar pelo nome da rua.')
+          }
+        } catch {
+          setCepError('Erro ao buscar seu endereço. Tente novamente.')
+        } finally {
+          setLocatingMe(false)
+        }
+      },
+      () => {
+        setLocatingMe(false)
+        setCepError('Não foi possível acessar sua localização — verifique a permissão do navegador.')
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    )
+  }
+
   // ── Cashback / fidelidade ────────────────────────────────────────────────
   const [cashbackBalance, setCashbackBalance] = useState(0)
   const [loyaltyPoints, setLoyaltyPoints]     = useState(0)
@@ -849,29 +891,61 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                       </div>
                       {deliveryType === 'DELIVERY' && (
                         <div className="mt-3 space-y-2">
-                          {/* CEP first — busca zona automaticamente */}
+                          {/* CORREÇÃO (#2): campo de CEP removido — a
+                              busca por nome da rua já cobre o mesmo caso
+                              de uso (achar a zona de entrega) sem exigir
+                              que o cliente saiba o CEP de cabeça, e sem a
+                              etapa extra de "não sabe o CEP?". Fica só a
+                              busca por rua + a opção de usar o GPS. */}
                           <div className="relative">
-                            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                             <input
                               type="text"
-                              inputMode="numeric"
-                              value={cep}
-                              onChange={(e) => {
-                                const v = e.target.value.replace(/\D/g, '').slice(0, 8)
-                                const fmt = v.length > 5 ? `${v.slice(0,5)}-${v.slice(5)}` : v
-                                handleCepLookup(fmt)
-                              }}
-                              placeholder="Digite seu CEP *"
-                              maxLength={9}
-                              className={cn(
-                                'w-full pl-9 pr-10 py-2.5 text-sm border rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500',
-                                cepError ? 'border-red-400 dark:border-red-600' : cepZone ? 'border-green-400 dark:border-green-600' : 'border-gray-200 dark:border-gray-700'
-                              )}
+                              value={streetQuery}
+                              onChange={(e) => setStreetQuery(e.target.value)}
+                              placeholder="Digite o nome da rua"
+                              className="w-full px-3 py-2.5 text-sm border rounded-xl bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
                             />
-                            {cepLoading && (
+                            {streetSearching && (
                               <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-gray-300 border-t-brand-500 rounded-full animate-spin" />
                             )}
+                            {streetResults.length > 0 && (
+                              <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg overflow-hidden">
+                                {streetResults.map((r, i) => (
+                                  <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => selectStreetResult(r)}
+                                    className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 border-b border-gray-100 dark:border-gray-800 last:border-0"
+                                  >
+                                    {r.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            {!streetSearching && streetQuery.trim().length >= 4 && streetResults.length === 0 && (
+                              <p className="text-xs text-gray-400 mt-1">Nenhum endereço encontrado.</p>
+                            )}
                           </div>
+
+                          {/* CORREÇÃO (#2): opção de compartilhar a
+                              localização do celular — preenche o endereço
+                              sozinho via GPS (mais preciso que buscar por
+                              nome de rua) e já posiciona o pino do mapa na
+                              coordenada exata. */}
+                          <button
+                            type="button"
+                            onClick={useMyLocation}
+                            disabled={locatingMe}
+                            className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-brand-400 hover:text-brand-600 disabled:opacity-60 transition-colors"
+                          >
+                            {locatingMe ? (
+                              <span className="w-3.5 h-3.5 border-2 border-gray-300 border-t-brand-500 rounded-full animate-spin" />
+                            ) : (
+                              <MapPin className="w-3.5 h-3.5" />
+                            )}
+                            {locatingMe ? 'Buscando sua localização…' : 'Usar minha localização'}
+                          </button>
+
                           {cepError && <p className="text-xs text-red-500">{cepError}</p>}
                           {cepZone && (
                             <div className="rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-3 py-2 text-xs text-green-700 dark:text-green-400">
@@ -879,48 +953,6 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                             </div>
                           )}
 
-                          {/* CORREÇÃO (#3): alternativa pra quem não sabe o
-                              CEP — busca pelo nome da rua. */}
-                          {!showStreetSearch ? (
-                            <button
-                              type="button"
-                              onClick={() => setShowStreetSearch(true)}
-                              className="text-xs font-semibold underline text-gray-500 dark:text-gray-400"
-                            >
-                              Não sabe o CEP? Buscar pelo nome da rua
-                            </button>
-                          ) : (
-                            <div className="relative">
-                              <input
-                                type="text"
-                                value={streetQuery}
-                                onChange={(e) => setStreetQuery(e.target.value)}
-                                placeholder="Digite o nome da rua"
-                                autoFocus
-                                className="w-full px-3 py-2.5 text-sm border rounded-xl bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                              />
-                              {streetSearching && (
-                                <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-gray-300 border-t-brand-500 rounded-full animate-spin" />
-                              )}
-                              {streetResults.length > 0 && (
-                                <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg overflow-hidden">
-                                  {streetResults.map((r, i) => (
-                                    <button
-                                      key={i}
-                                      type="button"
-                                      onClick={() => selectStreetResult(r)}
-                                      className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 border-b border-gray-100 dark:border-gray-800 last:border-0"
-                                    >
-                                      {r.label}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                              {!streetSearching && streetQuery.trim().length >= 4 && streetResults.length === 0 && (
-                                <p className="text-xs text-gray-400 mt-1">Nenhum endereço encontrado.</p>
-                              )}
-                            </div>
-                          )}
                           {/* Endereço preenchido automaticamente ou manualmente */}
                           <div className="grid grid-cols-3 gap-2">
                             <div className="col-span-2 relative">
