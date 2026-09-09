@@ -9,7 +9,7 @@ import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, Users, Table2,
   Truck, BarChart3, Settings, Tag, Star, MessageSquare, MessageCircle, Printer,
   QrCode, ShieldCheck, X, Menu,
-  Bell, ClipboardList, Boxes, Plug, Bot,
+  Bell, ClipboardList, Boxes, Plug, Bot, Wallet,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
@@ -71,6 +71,7 @@ const navSections: NavSection[] = [
   {
     label: 'Configurações',
     items: [
+      { label: 'Financeiro',    href: '/dashboard/financeiro',            icon: Wallet,     minPlan: 'PRO', allowedRoles: ADMIN_ROLES },
       { label: 'Relatórios',    href: '/dashboard/reports',               icon: BarChart3,  allowedRoles: MANAGER_UP },
       { label: 'Impressoras',   href: '/dashboard/printers',              icon: Printer,    allowedRoles: MANAGER_UP },
       { label: 'Pagamentos',    href: '/dashboard/settings/payments',     icon: QrCode,     allowedRoles: MANAGER_UP },
