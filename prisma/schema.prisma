@@ -1043,6 +1043,20 @@ model Payment {
   refundReason      String?
   refundedByUserId  String?       // quem clicou em "Estornar pagamento" (auditoria)
 
+  // ── Fluxo de recebimentos ────────────────────────────────────────────────
+  // Preenchidos só quando o pagamento é confirmado (paidAt setado) — ver
+  // lib/finance/compute-receipt.ts. Regras por método:
+  //   PIX / PIX_MANUAL / CASH  → fee=0, netAmount=amount, expectedReceiptDate=paidAt (D+0)
+  //   CREDIT_CARD (online)     → fee calculado, expectedReceiptDate=paidAt + prazo do provedor
+  //   CREDIT_CARD_MANUAL/DEBIT_CARD (maquininha) → fee e expectedReceiptDate
+  //     ficam NULL de propósito: a maquininha física não fala com nossa
+  //     API, não temos como saber a taxa real nem o prazo de repasse dela.
+  //     Esses pagamentos aparecem no fluxo de caixa só com o valor bruto,
+  //     numa seção separada, sem data prevista.
+  fee                 Decimal? @db.Decimal(10, 2)
+  netAmount           Decimal? @db.Decimal(10, 2)
+  expectedReceiptDate DateTime?
+
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
