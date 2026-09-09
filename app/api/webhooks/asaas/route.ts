@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
 import { decrypt, safeCompareHash } from '@/lib/security/crypto'
 import { createHash } from 'crypto'
+import { computeReceiptInfo } from '@/lib/finance/compute-receipt'
 
 interface AsaasWebhookPayload {
   event: string
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest) {
   try {
     const dbPayment = await prisma.payment.findFirst({
       where: { providerReference: payment.id, provider: 'ASAAS', tenantId },
-      select: { id: true, orderId: true, status: true, order: { select: { total: true } } },
+      select: { id: true, orderId: true, status: true, method: true, amount: true, order: { select: { total: true } } },
     })
 
     if (!dbPayment) {
@@ -91,7 +92,14 @@ export async function POST(req: NextRequest) {
       // exatamente uma vez).
       const updated = await tx.payment.updateMany({
         where: { id: dbPayment.id, status: { not: 'PAID' } },
-        data: { status: 'PAID', paidAt: new Date(), webhookData: body as any },
+        data: (() => {
+          const paidAt = new Date()
+          const receipt = computeReceiptInfo(dbPayment.method, Number(dbPayment.amount), paidAt)
+          return {
+            status: 'PAID' as const, paidAt, webhookData: body as any,
+            fee: receipt.fee, netAmount: receipt.netAmount, expectedReceiptDate: receipt.expectedReceiptDate,
+          }
+        })(),
       })
       if (updated.count === 0) return { processed: false as const }
 
