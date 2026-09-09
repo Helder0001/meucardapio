@@ -22,6 +22,7 @@ import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { applyCashback, applyLoyaltyPoints } from '@/lib/loyalty/apply-rewards'
 import { restockCancelledOrder, revalidateStorefrontForTenant } from '@/lib/utils/stock'
 import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
+import { computeReceiptInfo } from '@/lib/finance/compute-receipt'
 import type { PrismaClient } from '@prisma/client'
 import crypto from 'crypto'
 
@@ -285,17 +286,21 @@ export async function POST(request: Request) {
         // chegarem em paralelo (ou o MP reenviar), só um consiga transicionar
         // o pagamento para PAID. O outro recebe count === 0 e sai sem
         // duplicar cashback/pontos de fidelidade.
+        const paidAt = new Date()
+        const finalMethod = realMethod ?? payment.method
+        const receipt = computeReceiptInfo(finalMethod, Number(payment.amount), paidAt)
         const updated = await tx.payment.updateMany({
           where: { id: payment.id, status: { not: 'PAID' } },
           data: {
             status: 'PAID',
             mercadoPagoStatus: mpStatus,
-            paidAt: new Date(),
+            paidAt,
             webhookData: mpPayment as any,
             cardLastDigits: mpPayment.card?.last_four_digits ?? undefined,
             cardBrand: mpPayment.payment_method_id ?? undefined,
             installments: mpPayment.installments ?? undefined,
             ...(realMethod ? { method: realMethod as any } : {}),
+            fee: receipt.fee, netAmount: receipt.netAmount, expectedReceiptDate: receipt.expectedReceiptDate,
           },
         })
 
