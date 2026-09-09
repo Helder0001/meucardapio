@@ -22,6 +22,14 @@ interface AddressResult {
   localidade: string
   uf: string
   cep: string | null
+  // CORREÇÃO: o Nominatim já retorna a coordenada exata deste resultado
+  // específico (rua + número, quando ele tem o número). Antes isso era
+  // descartado e o pedido era geocodificado de novo, a partir do texto,
+  // na hora da entrega — podendo cair num ponto aproximado da rua em vez
+  // do imóvel certo. Guardando aqui, o cliente escolhe uma sugestão e a
+  // coordenada dela vai junto, sem precisar geocodificar de novo depois.
+  lat: number | null
+  lng: number | null
 }
 
 export async function GET(req: NextRequest) {
@@ -80,7 +88,15 @@ export async function GET(req: NextRequest) {
           localidade && uf ? `${localidade} - ${uf}` : localidade,
         ].filter(Boolean).join(', ')
 
-        return { label, logradouro, numero, bairro, localidade, uf, cep: addr.postcode ?? null }
+        const lat = item.lat != null ? parseFloat(item.lat) : NaN
+        const lng = item.lon != null ? parseFloat(item.lon) : NaN
+
+        return {
+          label, logradouro, numero, bairro, localidade, uf,
+          cep: addr.postcode ?? null,
+          lat: Number.isNaN(lat) ? null : lat,
+          lng: Number.isNaN(lng) ? null : lng,
+        }
       })
       .filter((r): r is AddressResult => r !== null)
       // Nominatim às vezes devolve a mesma rua repetida com pequenas
