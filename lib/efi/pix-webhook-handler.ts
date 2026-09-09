@@ -26,6 +26,7 @@ import { prisma } from '@/lib/db/client'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { applyCashback, applyLoyaltyPoints } from '@/lib/loyalty/apply-rewards'
 import { getTenantPixChargeStatus } from '@/lib/efi/tenant-pix-client'
+import { computeReceiptInfo } from '@/lib/finance/compute-receipt'
 import { after } from 'next/server'
 
 export interface PixWebhookEntry {
@@ -105,17 +106,20 @@ export async function processEfiPixWebhookEntries(entries: PixWebhookEntry[]): P
       // demais em pedido com pagamento dividido (parte PIX, parte outro
       // método).
       const result = await prisma.$transaction(async (tx) => {
+        const paidAt = new Date()
+        const receipt = computeReceiptInfo(payment.method, Number(payment.amount), paidAt)
         const updated = await tx.payment.updateMany({
           where: { id: payment.id, status: { not: 'PAID' } },
           data: {
             status: 'PAID',
-            paidAt: new Date(),
+            paidAt,
             webhookData: entry as any,
             // Guardado agora porque é a ÚNICA vez que a Efí nos manda o
             // e2eId — precisa dele depois pra solicitar estorno
             // (PUT /v2/pix/:e2eId/devolucao/:id). Vem da consulta
             // autoritativa, não do corpo do webhook.
             pixEndToEndId: confirmedEntry.endToEndId,
+            fee: receipt.fee, netAmount: receipt.netAmount, expectedReceiptDate: receipt.expectedReceiptDate,
           },
         })
         if (updated.count === 0) return { processed: false as const }
