@@ -11,6 +11,7 @@ import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db/client'
 import { FinanceiroClient } from '@/components/dashboard/financeiro-client'
 import type { Metadata } from 'next'
+import type { PaymentMethod } from '@prisma/client'
 
 export const metadata: Metadata = { title: 'Financeiro — Meu Cardápio' }
 export const dynamic = 'force-dynamic'
@@ -28,8 +29,8 @@ function startOfMonthSP(): Date {
   return toSpStart(`${sp.getFullYear()}-${String(sp.getMonth() + 1).padStart(2, '0')}-01`)
 }
 
-const CARD_METHODS = ['CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD']
-const INSTANT_METHODS = ['PIX', 'PIX_MANUAL', 'CASH']
+const CARD_METHODS: PaymentMethod[] = ['CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD']
+const INSTANT_METHODS: PaymentMethod[] = ['PIX', 'PIX_MANUAL', 'CASH']
 
 export default async function FinanceiroPage({ searchParams }: PageProps) {
   const session = await auth()
