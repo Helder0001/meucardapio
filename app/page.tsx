@@ -49,8 +49,8 @@ export default function HomePageClient() {
     <div className="min-h-screen bg-white dark:bg-gray-950 overflow-x-hidden">
 
       {/* Barra de topo */}
-      <div className="bg-brand-500 text-white text-xs text-center py-2 font-medium">
-        🎉 &nbsp;7 dias grátis · Cancele antes do trial · Sem contrato de fidelidade
+      <div className="bg-gray-900 dark:bg-black text-white text-xs text-center py-2 font-medium">
+        🎉 &nbsp;<span className="text-brand-400 font-bold">7 dias grátis</span> · Cancele antes do trial · Sem contrato de fidelidade
       </div>
 
       {/* Navbar */}
@@ -72,14 +72,14 @@ export default function HomePageClient() {
               />
               <span className="hidden text-white font-black text-sm">M</span>
             </div>
-            <span className="font-black text-gray-900 dark:text-white text-lg tracking-tight">
+            <span className="font-black text-gray-900 dark:text-white text-base tracking-tight">
               Meu <span className="text-brand-500">Cardápio</span>
             </span>
           </Link>
           <div className="hidden md:flex items-center gap-8">
-            {['#funcionalidades', '#planos'].map((href, i) => (
+            {['#funcionalidades', '#integracoes', '#planos', '#faq'].map((href, i) => (
               <a key={href} href={href} className="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-colors">
-                {['Funcionalidades', 'Planos'][i]}
+                {['Funcionalidades', 'Integrações', 'Planos', 'FAQ'][i]}
               </a>
             ))}
           </div>
@@ -114,7 +114,9 @@ export default function HomePageClient() {
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950 px-5 py-4 space-y-3">
             <a href="#funcionalidades" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-700 dark:text-gray-300 py-2">Funcionalidades</a>
+            <a href="#integracoes" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-700 dark:text-gray-300 py-2">Integrações</a>
             <a href="#planos" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-700 dark:text-gray-300 py-2">Planos</a>
+            <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-700 dark:text-gray-300 py-2">FAQ</a>
             <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-2">
               <Link href="/login" className="block text-center py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-xl">Entrar</Link>
               <button
@@ -149,12 +151,12 @@ export default function HomePageClient() {
             Cardápio digital com QR Code, pedidos online, Kanban em tempo real, WhatsApp automático, PIX e muito mais — tudo em uma plataforma só.
           </p>
 
-          <div className="animate-fade-up animate-fade-up-delay-3 mt-10 flex flex-col sm:flex-row gap-3 justify-center">
-            <Link href="/register" className="group inline-flex items-center justify-center gap-2 px-8 py-4 bg-brand-500 text-white font-bold rounded-2xl hover:bg-brand-600 active:scale-95 transition-all text-base shadow-lg shadow-brand-200 dark:shadow-brand-900/30">
+          <div className="animate-fade-up animate-fade-up-delay-3 mt-10 flex flex-col sm:flex-row gap-2.5 justify-center">
+            <Link href="/register" className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold rounded-2xl hover:bg-gray-800 dark:hover:bg-gray-100 active:scale-95 transition-all text-sm shadow-lg shadow-gray-300 dark:shadow-black/30">
               Criar conta grátis
               <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
             </Link>
-            <Link href="/menu/pizzaria-do-jose" className="inline-flex items-center justify-center gap-2 px-8 py-4 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-bold rounded-2xl hover:border-brand-300 hover:text-brand-600 dark:hover:border-brand-600 dark:hover:text-brand-400 active:scale-95 transition-all text-base">
+            <Link href="/menu/pizzaria-do-jose" className="inline-flex items-center justify-center gap-2 px-6 py-3 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-bold rounded-2xl hover:border-brand-300 hover:text-brand-600 dark:hover:border-brand-600 dark:hover:text-brand-400 active:scale-95 transition-all text-sm">
               🌐 Ver demo ao vivo
             </Link>
           </div>
@@ -201,14 +203,14 @@ export default function HomePageClient() {
               </div>
             </div>
             {/* floating notifications */}
-            <div className="absolute -left-1 sm:-left-4 top-1/3 animate-float flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 shadow-lg">
+            <div className="absolute left-2 sm:-left-4 -top-3 sm:top-1/3 animate-float flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 shadow-lg">
               <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center text-xs sm:text-sm">✓</div>
               <div>
                 <p className="text-[9px] sm:text-[10px] text-gray-500 leading-none">Pagamento confirmado</p>
                 <p className="text-[11px] sm:text-xs font-bold text-gray-900 dark:text-white">PIX · R$ 54,90</p>
               </div>
             </div>
-            <div className="absolute -right-1 sm:-right-4 bottom-1/4 animate-float-delay flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 shadow-lg">
+            <div className="absolute right-2 sm:-right-4 -bottom-3 sm:bottom-1/4 animate-float-delay flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 shadow-lg">
               <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-green-100 dark:bg-green-900/40 flex items-center justify-center text-xs sm:text-sm">💬</div>
               <div>
                 <p className="text-[9px] sm:text-[10px] text-gray-500 leading-none">WhatsApp enviado</p>
@@ -264,7 +266,7 @@ export default function HomePageClient() {
               <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
             </Link>
           </div>
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-500 to-amber-400 p-8 text-white">
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-500 p-8 text-white">
             <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-2xl" />
             <div className="text-3xl mb-4">💳</div>
             <h3 className="text-xl font-black mb-2">PIX + Cartão na mesma tela</h3>
@@ -291,23 +293,23 @@ export default function HomePageClient() {
             <p className="mt-4 text-gray-500 dark:text-gray-400">Sem taxas escondidas. Cancele quando quiser.</p>
           </div>
           {/* CORREÇÃO: apenas 2 planos (Premium removido) — grid centralizado */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 max-w-2xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
             {plans.map((plan) => (
-              <div key={plan.name} className={`relative rounded-3xl p-7 flex flex-col transition-all duration-300 ease-out ${plan.highlight ? 'bg-gradient-to-b from-brand-500 to-brand-600 text-white shadow-2xl shadow-brand-200 dark:shadow-brand-900/40 scale-[1.03]' : 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 hover:-translate-y-1 hover:shadow-xl hover:shadow-gray-900/10 dark:hover:shadow-black/30'}`}>
+              <div key={plan.name} className={`relative rounded-3xl p-5 flex flex-col transition-all duration-300 ease-out ${plan.highlight ? 'bg-gradient-to-b from-indigo-600 to-violet-700 text-white shadow-2xl shadow-indigo-200 dark:shadow-indigo-950/40 scale-[1.03]' : 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 hover:-translate-y-1 hover:shadow-xl hover:shadow-gray-900/10 dark:hover:shadow-black/30'}`}>
                 {plan.highlight && (
                   <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                    <span className="bg-white text-brand-600 text-[10px] font-black px-3 py-1.5 rounded-full shadow-sm tracking-wide uppercase">★ Mais popular</span>
+                    <span className="bg-white text-indigo-600 text-[10px] font-black px-3 py-1.5 rounded-full shadow-sm tracking-wide uppercase">★ Mais popular</span>
                   </div>
                 )}
-                <div className="mb-6">
-                  <p className={`text-sm font-semibold mb-1 ${plan.highlight ? 'text-brand-100' : 'text-gray-500 dark:text-gray-400'}`}>{plan.tagline}</p>
+                <div className="mb-4">
+                  <p className={`text-sm font-semibold mb-1 ${plan.highlight ? 'text-indigo-100' : 'text-gray-500 dark:text-gray-400'}`}>{plan.tagline}</p>
                   <h3 className={`text-2xl font-black ${plan.highlight ? 'text-white' : 'text-gray-900 dark:text-white'}`}>{plan.name}</h3>
                   <div className="flex items-baseline gap-1 mt-2">
-                    <span className={`text-4xl font-black ${plan.highlight ? 'text-white' : 'text-gray-900 dark:text-white'}`}>R$ {plan.price}</span>
-                    <span className={`text-sm ${plan.highlight ? 'text-brand-100' : 'text-gray-400'}`}>/mês</span>
+                    <span className={`text-3xl font-black ${plan.highlight ? 'text-white' : 'text-gray-900 dark:text-white'}`}>R$ {plan.price}</span>
+                    <span className={`text-sm ${plan.highlight ? 'text-indigo-100' : 'text-gray-400'}`}>/mês</span>
                   </div>
                 </div>
-                <ul className="space-y-3 flex-1 mb-8">
+                <ul className="space-y-2 flex-1 mb-6">
                   {plan.features.map((f) => (
                     <li key={f} className="flex items-start gap-2.5">
                       <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center mt-0.5 text-xs ${plan.highlight ? 'bg-white/20 text-white' : 'bg-brand-100 dark:bg-brand-950/40 text-brand-500'}`}>✓</div>
@@ -315,10 +317,108 @@ export default function HomePageClient() {
                     </li>
                   ))}
                 </ul>
-                <Link href="/register" className={`block text-center py-3.5 rounded-2xl text-sm font-bold active:scale-95 transition-all ${plan.highlight ? 'bg-white text-brand-600 hover:bg-brand-50' : 'bg-brand-500 text-white hover:bg-brand-600 shadow-sm shadow-brand-200 dark:shadow-none'}`}>
+                <Link href="/register" className={`block text-center py-3 rounded-2xl text-sm font-bold active:scale-95 transition-all ${plan.highlight ? 'bg-white text-indigo-600 hover:bg-indigo-50' : 'bg-brand-500 text-white hover:bg-brand-600 shadow-sm shadow-brand-200 dark:shadow-none'}`}>
                   {plan.cta}
                 </Link>
               </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* INTEGRAÇÕES */}
+      <section id="integracoes" className="py-24 max-w-6xl mx-auto px-5">
+        <div className="text-center mb-14">
+          <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
+            🔌 Integrações
+          </span>
+          <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+            Conectado com quem <span className="text-gradient">você já usa</span>
+          </h2>
+          <p className="mt-4 text-gray-500 dark:text-gray-400 max-w-xl mx-auto">
+            Escolha os parceiros que já fazem parte da sua operação — sem precisar trocar de fornecedor.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[
+            {
+              title: 'Pagamentos', icon: CreditCard,
+              items: ['Mercado Pago', 'Efí (Pix + cartão parcelado)', 'Asaas', 'Stripe'],
+            },
+            {
+              title: 'Marketing & Vendas', icon: MessageCircle,
+              items: ['WhatsApp automático (confirmação, status do pedido, cobrança)'],
+            },
+            {
+              title: 'Delivery & Marketplace', icon: Truck,
+              items: ['iFood', '99Food'],
+            },
+          ].map(({ title, icon: Icon, items }) => (
+            <div key={title} className="rounded-3xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 p-6">
+              <div className="w-10 h-10 rounded-2xl bg-brand-100 dark:bg-brand-950/40 flex items-center justify-center mb-4">
+                <Icon className="w-5 h-5 text-brand-600 dark:text-brand-400" />
+              </div>
+              <h3 className="font-bold text-gray-900 dark:text-white mb-3">{title}</h3>
+              <ul className="space-y-2">
+                {items.map((item) => (
+                  <li key={item} className="flex items-start gap-2 text-sm text-gray-500 dark:text-gray-400">
+                    <Check className="w-4 h-4 text-brand-500 mt-0.5 flex-shrink-0" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* PERGUNTAS FREQUENTES */}
+      <section id="faq" className="py-24 bg-gray-50/60 dark:bg-gray-900/30">
+        <div className="max-w-3xl mx-auto px-5">
+          <div className="text-center mb-14">
+            <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
+              ❓ Perguntas frequentes
+            </span>
+            <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+              Ainda com <span className="text-gradient">dúvidas?</span>
+            </h2>
+          </div>
+
+          <div className="space-y-3">
+            {[
+              {
+                q: 'Preciso instalar algum aplicativo?',
+                a: 'Não. O cardápio digital funciona direto no navegador do celular (PWA) — o cliente escaneia o QR Code e já faz o pedido, sem baixar nada. O dashboard também funciona em qualquer navegador, no computador ou celular.',
+              },
+              {
+                q: 'Como funciona o trial de 7 dias?',
+                a: 'Você cria a conta, cadastra o cartão (sem cobrança nenhuma nesse momento) e usa a plataforma completa por 7 dias. Se cancelar antes do fim do trial, não é cobrado nada. Sem contrato de fidelidade.',
+              },
+              {
+                q: 'Quais formas de pagamento posso oferecer aos clientes?',
+                a: 'Pix, cartão de crédito, cartão de débito e dinheiro — via Mercado Pago, Efí, Asaas ou Stripe, dependendo do provedor que você já usa ou preferir configurar.',
+              },
+              {
+                q: 'Dá pra usar em mais de um estabelecimento?',
+                a: 'Sim, cada estabelecimento tem sua própria conta e cardápio. Fale com o suporte se precisar gerenciar várias unidades numa mesma conta.',
+              },
+              {
+                q: 'Consigo migrar meu cardápio já pronto pra plataforma?',
+                a: 'Sim — nosso suporte te ajuda a importar produtos, preços e categorias na hora de começar, sem custo adicional.',
+              },
+              {
+                q: 'Posso cancelar quando quiser?',
+                a: 'Sim, sem multa e sem contrato de fidelidade. Você cancela direto pelo painel a qualquer momento.',
+              },
+            ].map(({ q, a }) => (
+              <details key={q} className="group rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <summary className="flex items-center justify-between gap-3 px-5 py-4 cursor-pointer list-none font-semibold text-sm text-gray-900 dark:text-white">
+                  {q}
+                  <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0 transition-transform group-open:rotate-180" />
+                </summary>
+                <p className="px-5 pb-4 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{a}</p>
+              </details>
             ))}
           </div>
         </div>
@@ -370,7 +470,7 @@ export default function HomePageClient() {
                   />
                   <span className="hidden text-white font-black text-sm">M</span>
                 </div>
-                <span className="font-black text-gray-900 dark:text-white text-lg tracking-tight">Meu <span className="text-brand-500">Cardápio</span></span>
+                <span className="font-black text-gray-900 dark:text-white text-base tracking-tight">Meu <span className="text-brand-500">Cardápio</span></span>
               </div>
               <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">Plataforma completa para restaurantes venderem mais com cardápio digital, delivery e automação.</p>
             </div>
@@ -379,7 +479,9 @@ export default function HomePageClient() {
                 <p className="font-bold text-gray-900 dark:text-white mb-3">Produto</p>
                 <ul className="space-y-2 text-gray-500 dark:text-gray-400">
                   <li><a href="#funcionalidades" className="hover:text-brand-500 transition-colors">Funcionalidades</a></li>
+                  <li><a href="#integracoes" className="hover:text-brand-500 transition-colors">Integrações</a></li>
                   <li><a href="#planos" className="hover:text-brand-500 transition-colors">Planos</a></li>
+                  <li><a href="#faq" className="hover:text-brand-500 transition-colors">FAQ</a></li>
                   <li><Link href="/menu/pizzaria-do-jose" className="hover:text-brand-500 transition-colors">Demo</Link></li>
                 </ul>
               </div>
@@ -400,7 +502,7 @@ export default function HomePageClient() {
             </div>
           </div>
           <div className="mt-10 pt-6 border-t border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-gray-400">
-            <p>© 2025 Meu Cardápio. Todos os direitos reservados.</p>
+            <p>© {new Date().getFullYear()} Meu Cardápio. Todos os direitos reservados.</p>
             <div className="flex items-center gap-1.5">
               <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span>Todos os sistemas operacionais</span>
