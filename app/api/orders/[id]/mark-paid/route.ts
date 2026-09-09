@@ -9,6 +9,7 @@ import { publishOrderEvent } from '@/lib/cache/redis'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { applyOrderRewards } from '@/lib/loyalty/apply-rewards'
 import { z } from 'zod'
+import { computeReceiptInfo } from '@/lib/finance/compute-receipt'
 
 const schema = z.object({
   paymentId: z.string().optional(), // se não informado, marca todos do pedido
@@ -94,9 +95,13 @@ export async function PATCH(
   // Atualizar pagamentos em transação
   await prisma.$transaction(async (tx) => {
     for (const p of toUpdate) {
+      const receipt = computeReceiptInfo(p.method, Number(p.amount), now)
       await tx.payment.update({
         where: { id: p.id },
-        data: { status: 'PAID', paidAt: now },
+        data: {
+          status: 'PAID', paidAt: now,
+          fee: receipt.fee, netAmount: receipt.netAmount, expectedReceiptDate: receipt.expectedReceiptDate,
+        },
       })
     }
 
