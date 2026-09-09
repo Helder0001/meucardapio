@@ -712,8 +712,8 @@ export function PaymentSettingsForm({ hasSecret, pixEnabled, cardEnabled, linkEn
       />
       <PaymentToggle
         field="linkEnabled"
-        label="Habilitar link de pagamento (Mercado Pago)"
-        description="Exibe a opção 'Link de pagamento' apenas no PDV/balcão — o cliente escolhe Pix ou cartão na própria página do Mercado Pago. Não aparece mais no cardápio digital."
+        label="Habilitar link de pagamento"
+        description="Exibe a opção 'Link de pagamento' apenas no PDV/balcão — gera um link de cartão (via Efí) onde o cliente pode parcelar a compra. Não aparece no cardápio digital."
         initialValue={linkEnabled}
       />
 

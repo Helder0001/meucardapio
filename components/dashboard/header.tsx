@@ -52,17 +52,20 @@ export function Header({ user }: HeaderProps) {
   useEffect(() => {
     const fetchPending = async () => {
       try {
-        const res = await fetch('/api/orders/kanban')
+        const res = await fetch('/api/orders/pending-count')
         if (res.ok) {
           const data = await res.json()
-          const pending = (data.PENDING?.length ?? 0) + (data.CONFIRMED?.length ?? 0)
-          setPendingCount(pending)
+          setPendingCount(data.pending ?? 0)
         }
       } catch {}
     }
     fetchPending()
     const interval = setInterval(fetchPending, 30000)
-    return () => clearInterval(interval)
+    window.addEventListener('meucardapio:new-order', fetchPending)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('meucardapio:new-order', fetchPending)
+    }
   }, [])
 
   const initials = user.name

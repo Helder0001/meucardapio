@@ -42,6 +42,9 @@ export function NotificationListener() {
         try {
           const data = JSON.parse(e.data)
           if (isSoundEnabled()) playNotificationBeep()
+          // Avisa o sininho do cabeçalho pra reconsultar a contagem na
+          // hora, em vez de esperar o próximo ciclo de 30s do polling.
+          window.dispatchEvent(new Event('meucardapio:new-order'))
           toast.info(`Novo pedido ${formatOrderNumber(data.orderNumber)}!`, {
             description: typeof data.total === 'number' ? formatCurrency(data.total) : undefined,
             duration: 6000,
