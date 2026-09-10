@@ -11,8 +11,8 @@ import Image from 'next/image'
 import { Poppins } from 'next/font/google'
 import {
   Smartphone, Truck, UtensilsCrossed, Zap, BarChart3, MessageCircle,
-  Printer, Sparkles, Check, ArrowRight, Star, ChevronDown, Globe,
-  QrCode, CreditCard, Package, TrendingUp, ShieldCheck, Moon, Sun,
+  Printer, Sparkles, ArrowRight, Star, ChevronDown, Globe,
+  QrCode, Package, TrendingUp, ShieldCheck, Moon, Sun,
 } from 'lucide-react'
 
 // CORREÇÃO (#7): a landing page usava a fonte padrão do site (GeistSans,
@@ -373,51 +373,24 @@ export function HomePageClient() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
+          {/* CORREÇÃO: seção deixou de agrupar por modalidade (Pagamentos /
+              Marketing & Vendas / Delivery & Marketplace) — hoje só a Efí
+              Bank e a Grok são parceiras de fato, então a seção mostra
+              direto as duas logos, sem prometer integrações que ainda não
+              existem (ex: iFood, 99Food). */}
           {[
-            {
-              title: 'Pagamentos', icon: CreditCard,
-              // CORREÇÃO (#2): antes listava 4 provedores (Mercado Pago,
-              // Efí, Asaas, Stripe) como se todos estivessem disponíveis —
-              // hoje só a Efí está integrada de fato. Renderizado à parte
-              // abaixo, com a logo, em vez de virar um item de lista igual
-              // aos outros.
-              logo: true,
-            },
-            {
-              title: 'Marketing & Vendas', icon: MessageCircle,
-              items: ['WhatsApp automático (confirmação, status do pedido, cobrança)'],
-            },
-            {
-              title: 'Delivery & Marketplace', icon: Truck,
-              items: ['iFood', '99Food'],
-            },
-          ].map(({ title, icon: Icon, items, logo }) => (
-            <div key={title} className="rounded-3xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 p-6">
-              <div className="w-10 h-10 rounded-2xl bg-brand-100 dark:bg-brand-950/40 flex items-center justify-center mb-4">
-                <Icon className="w-5 h-5 text-brand-600 dark:text-brand-400" />
+            { name: 'Efí Bank', logo: '/integrations/efi-bank-logo.png', desc: 'PIX + cartão parcelado' },
+            { name: 'Grok', logo: '/integrations/grok-logo.png', desc: 'IA para descrição de produtos' },
+          ].map(({ name, logo, desc }) => (
+            <div key={name} className="rounded-3xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 p-6 flex items-center gap-4">
+              <div className="relative w-14 h-14 flex-shrink-0 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-2">
+                <Image src={logo} alt={name} fill sizes="56px" className="object-contain p-1" />
               </div>
-              <h3 className="font-bold text-gray-900 dark:text-white mb-3">{title}</h3>
-              {logo ? (
-                <div className="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-3">
-                  <div className="relative w-12 h-12 flex-shrink-0">
-                    <Image src="/integrations/efi-bank-logo.png" alt="Efí Bank" fill sizes="48px" className="object-contain" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">Efí Bank</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">PIX + cartão parcelado</p>
-                  </div>
-                </div>
-              ) : (
-                <ul className="space-y-2">
-                  {items!.map((item) => (
-                    <li key={item} className="flex items-start gap-2 text-sm text-gray-500 dark:text-gray-400">
-                      <Check className="w-4 h-4 text-brand-500 mt-0.5 flex-shrink-0" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <div>
+                <p className="font-bold text-gray-900 dark:text-white">{name}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{desc}</p>
+              </div>
             </div>
           ))}
         </div>
