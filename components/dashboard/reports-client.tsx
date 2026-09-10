@@ -572,7 +572,14 @@ export function ReportsClient({
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={mergedChart} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+            {/* CORREÇÃO (#11): o rótulo "Melhor" (acima do ponto) e "Menor"
+                (dentro da área, abaixo do ponto) podiam ficar cortados nas
+                bordas do gráfico ou por trás da própria linha — o Recharts
+                não reserva espaço extra pra esses rótulos sozinho.
+                Aumentada a margem de cima/baixo do gráfico, e o rótulo do
+                "Menor" movido pra fora da área de plotagem (`bottom` em
+                vez de `insideBottom`), longe do traçado da linha. */}
+            <LineChart data={mergedChart} margin={{ top: 32, right: 20, left: 0, bottom: 18 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
                 tickFormatter={(v) => v.slice(5).replace('-', '/')} />
@@ -603,7 +610,7 @@ export function ReportsClient({
                 <ReferenceDot
                   x={worstDay.date} y={worstDay.revenue}
                   r={5} fill="#ef4444" stroke="#fff" strokeWidth={2}
-                  label={{ value: `↓ Menor\n${worstDay.date.slice(5).replace('-', '/')} – ${formatCurrency(worstDay.revenue)}`, position: 'insideBottom', fontSize: 10, fill: '#ef4444' }}
+                  label={{ value: `↓ Menor\n${worstDay.date.slice(5).replace('-', '/')} – ${formatCurrency(worstDay.revenue)}`, position: 'bottom', fontSize: 10, fill: '#ef4444' }}
                 />
               )}
             </LineChart>

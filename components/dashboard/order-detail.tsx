@@ -960,7 +960,15 @@ export function OrderDetail({
                           : 'border-border bg-muted/30'
                     )}>
                       <div className="flex items-start justify-between gap-2">
-                        <div>
+                        {/* CORREÇÃO (#10): faltava min-w-0 aqui — sem isso,
+                            um flex item não encolhe abaixo do tamanho do
+                            próprio conteúdo por padrão, então em telas/
+                            painéis mais estreitos esse bloco empurrava a
+                            linha inteira pra fora do card, e o botão
+                            "Confirmar" (que tem flex-shrink-0 de propósito,
+                            pra nunca ficar pequeno demais pra clicar)
+                            acabava vazando pra fora da borda. */}
+                        <div className="min-w-0">
                           <p className="text-sm font-medium text-foreground">
                             {paymentMethodLabel(p.method, order.type)}
                           </p>
