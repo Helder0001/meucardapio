@@ -30,16 +30,11 @@ export default async function LoginPage({
         {/* CORREÇÃO: marca "Meu Cardápio" + logo enviada pelo cliente */}
         <div className="relative"><AuthLogo variant="light" /></div>
 
-        <div className="relative">
-          <blockquote className="text-white">
-            <p className="text-2xl font-semibold leading-relaxed">
-              "Aumentamos nosso faturamento em 40% em 3 meses usando o cardápio digital."
-            </p>
-            <footer className="mt-4 text-brand-100">
-              <strong>João Silva</strong> — Hamburgueria do João, São Paulo
-            </footer>
-          </blockquote>
-        </div>
+        {/* CORREÇÃO (#12): depoimento removido — era um placeholder
+            fictício ("João Silva — Hamburgueria do João"), nunca um
+            depoimento real de cliente. Publicar um depoimento inventado é
+            enganoso; melhor não ter nenhum até haver um de verdade pra
+            colocar aqui. */}
 
         <div className="relative flex gap-4 text-brand-100 text-sm">
           <span className="flex items-center gap-1.5"><Lock className="h-3.5 w-3.5" /> SSL seguro</span>
