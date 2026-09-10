@@ -20,6 +20,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title:       `Cardapio - ${tenant.name}`,
     description: `Faca seu pedido online na ${tenant.name}`,
+    // CORREÇÃO (#9): sem isso, a aba do navegador sempre mostrava o ícone
+    // global "Meu Cardápio" (definido em app/layout.tsx) em vez da logo
+    // configurada pelo próprio estabelecimento.
+    icons: tenant.logo ? { icon: tenant.logo } : undefined,
     openGraph: {
       title: `Cardapio - ${tenant.name}`,
       description: `Faca seu pedido online na ${tenant.name}`,
