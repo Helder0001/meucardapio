@@ -5,11 +5,19 @@ import { useState } from 'react'
 import { useTheme } from 'next-themes'
 import Link from 'next/link'
 import Image from 'next/image'
+import { Poppins } from 'next/font/google'
 import {
   Smartphone, Truck, UtensilsCrossed, Zap, BarChart3, MessageCircle,
   Printer, Sparkles, Check, ArrowRight, Star, ChevronDown, Globe,
   QrCode, CreditCard, Package, TrendingUp, ShieldCheck, Moon, Sun,
 } from 'lucide-react'
+
+// CORREÇÃO (#7): a landing page usava a fonte padrão do site (GeistSans,
+// definida em app/layout.tsx), enquanto o cardápio digital
+// (app/(storefront)/menu/[slug]/layout.tsx) usa Poppins — mesma fonte
+// aplicada aqui agora, pra landing page e cardápio ficarem visualmente
+// consistentes.
+const poppins = Poppins({ subsets: ['latin'], weight: ['400', '500', '600', '700', '800', '900'] })
 
 // CORREÇÃO: ícones de emoji substituídos por ícones lucide-react (visual
 // mais profissional e consistente com o resto do produto).
@@ -46,31 +54,37 @@ export default function HomePageClient() {
   const { theme, setTheme } = useTheme()
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950 overflow-x-hidden">
+    <div className={`${poppins.className} min-h-screen bg-white dark:bg-gray-950 overflow-x-hidden`}>
 
       {/* Barra de topo */}
       <div className="bg-gray-900 dark:bg-black text-white text-xs text-center py-2 font-medium">
-        🎉 &nbsp;<span className="text-brand-400 font-bold">7 dias grátis</span> · Cancele antes do trial · Sem contrato de fidelidade
+        🎉 &nbsp;<span className="text-brand-400 font-bold">Cancele quando quiser</span> · Sem contrato de fidelidade
       </div>
 
       {/* Navbar */}
       <nav className="sticky top-0 z-50 bg-white/80 dark:bg-gray-950/80 backdrop-blur-xl border-b border-gray-100 dark:border-gray-800">
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
-          {/* CORREÇÃO: marca "Meu Cardápio" + logo enviada pelo cliente (com fallback) */}
+          {/* CORREÇÃO (#6): a caixa com fundo em degradê laranja atrás da
+              logo aparecia como uma "borda laranja" ao redor dela, porque
+              a logo enviada tem fundo transparente e não preenche o
+              quadrado inteiro. Tirado o fundo colorido — a logo agora
+              aparece limpa, sem nada atrás. `object-contain` no lugar de
+              `object-cover` evita cortar a imagem também. */}
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-gradient-to-br from-brand-500 to-amber-400 rounded-xl flex items-center justify-center shadow-sm overflow-hidden relative">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center relative">
               <Image
                 src="/logo-icon.png"
                 alt="Meu Cardápio"
                 fill
-                className="object-cover"
+                sizes="32px"
+                className="object-contain"
                 onError={(e) => {
                   const el = e.currentTarget as HTMLImageElement
                   el.style.display = 'none'
                   el.nextElementSibling?.classList.remove('hidden')
                 }}
               />
-              <span className="hidden text-white font-black text-sm">M</span>
+              <span className="hidden text-brand-500 font-black text-sm">M</span>
             </div>
             <span className="font-black text-gray-900 dark:text-white text-base tracking-tight">
               Meu <span className="text-brand-500">Cardápio</span>
@@ -185,13 +199,19 @@ export default function HomePageClient() {
                   { col: 'Preparando', color: 'bg-amber-500', count: 2, items: ['Lasanha Bolonhesa', 'Combo Família'] },
                   { col: 'Prontos', color: 'bg-emerald-500', count: 4, items: ['Hot-dog Especial', 'Suco Laranja', 'Calzone', '+1'] },
                 ].map(({ col, color, count, items }) => (
-                  <div key={col} className="rounded-2xl bg-gray-50 dark:bg-gray-800/60 p-3">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${color}`} />
-                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{col}</span>
+                  // CORREÇÃO (#3): em telas estreitas, o nome da coluna
+                  // ("Preparando") era mais largo que a própria coluna e o
+                  // conteúdo vazava por cima da coluna vizinha, fazendo os
+                  // contadores parecerem sobrepostos. `min-w-0` permite o
+                  // flex encolher de verdade, e `truncate` corta o texto
+                  // em vez de estourar a largura da coluna.
+                  <div key={col} className="min-w-0 overflow-hidden rounded-2xl bg-gray-50 dark:bg-gray-800/60 p-3">
+                    <div className="flex items-center justify-between gap-1 mb-3">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${color}`} />
+                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300 truncate">{col}</span>
                       </div>
-                      <span className={`text-[10px] font-bold text-white px-1.5 py-0.5 rounded-full ${color}`}>{count}</span>
+                      <span className={`flex-shrink-0 text-[10px] font-bold text-white px-1.5 py-0.5 rounded-full ${color}`}>{count}</span>
                     </div>
                     <div className="space-y-1.5">
                       {items.map((item, i) => (
@@ -266,7 +286,10 @@ export default function HomePageClient() {
               <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
             </Link>
           </div>
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-500 p-8 text-white">
+          {/* CORREÇÃO (#1): verde/teal muito claro e brilhante — escurecido
+              pra um tom mais sóbrio, consistente com o card escuro ao
+              lado. */}
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-700 to-teal-800 p-8 text-white">
             <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-2xl" />
             <div className="text-3xl mb-4">💳</div>
             <h3 className="text-xl font-black mb-2">PIX + Cartão na mesma tela</h3>
@@ -344,7 +367,12 @@ export default function HomePageClient() {
           {[
             {
               title: 'Pagamentos', icon: CreditCard,
-              items: ['Mercado Pago', 'Efí (Pix + cartão parcelado)', 'Asaas', 'Stripe'],
+              // CORREÇÃO (#2): antes listava 4 provedores (Mercado Pago,
+              // Efí, Asaas, Stripe) como se todos estivessem disponíveis —
+              // hoje só a Efí está integrada de fato. Renderizado à parte
+              // abaixo, com a logo, em vez de virar um item de lista igual
+              // aos outros.
+              logo: true,
             },
             {
               title: 'Marketing & Vendas', icon: MessageCircle,
@@ -354,20 +382,32 @@ export default function HomePageClient() {
               title: 'Delivery & Marketplace', icon: Truck,
               items: ['iFood', '99Food'],
             },
-          ].map(({ title, icon: Icon, items }) => (
+          ].map(({ title, icon: Icon, items, logo }) => (
             <div key={title} className="rounded-3xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 p-6">
               <div className="w-10 h-10 rounded-2xl bg-brand-100 dark:bg-brand-950/40 flex items-center justify-center mb-4">
                 <Icon className="w-5 h-5 text-brand-600 dark:text-brand-400" />
               </div>
               <h3 className="font-bold text-gray-900 dark:text-white mb-3">{title}</h3>
-              <ul className="space-y-2">
-                {items.map((item) => (
-                  <li key={item} className="flex items-start gap-2 text-sm text-gray-500 dark:text-gray-400">
-                    <Check className="w-4 h-4 text-brand-500 mt-0.5 flex-shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
+              {logo ? (
+                <div className="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-3">
+                  <div className="relative w-12 h-12 flex-shrink-0">
+                    <Image src="/integrations/efi-bank-logo.png" alt="Efí Bank" fill sizes="48px" className="object-contain" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">Efí Bank</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">PIX + cartão parcelado</p>
+                  </div>
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {items!.map((item) => (
+                    <li key={item} className="flex items-start gap-2 text-sm text-gray-500 dark:text-gray-400">
+                      <Check className="w-4 h-4 text-brand-500 mt-0.5 flex-shrink-0" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           ))}
         </div>
@@ -397,11 +437,7 @@ export default function HomePageClient() {
               },
               {
                 q: 'Quais formas de pagamento posso oferecer aos clientes?',
-                a: 'Pix, cartão de crédito, cartão de débito e dinheiro — via Mercado Pago, Efí, Asaas ou Stripe, dependendo do provedor que você já usa ou preferir configurar.',
-              },
-              {
-                q: 'Dá pra usar em mais de um estabelecimento?',
-                a: 'Sim, cada estabelecimento tem sua própria conta e cardápio. Fale com o suporte se precisar gerenciar várias unidades numa mesma conta.',
+                a: 'No PDV/balcão, o Pix já vem integrado. No cardápio digital, Pix e cartão são integrados via Efí Bank, com confirmação automática. Cartão (na maquineta) e dinheiro na entrega ou presencialmente ficam a critério de cada estabelecimento, fora da plataforma.',
               },
               {
                 q: 'Consigo migrar meu cardápio já pronto pra plataforma?',
@@ -436,11 +472,15 @@ export default function HomePageClient() {
             </h2>
             <p className="mt-5 text-gray-400 max-w-lg mx-auto">Configure seu cardápio digital em menos de 10 minutos. 7 dias grátis com cartão — sem cobranças no trial.</p>
             <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
-              <Link href="/register" className="group inline-flex items-center justify-center gap-2 px-8 py-4 bg-brand-500 text-white font-bold rounded-2xl hover:bg-brand-400 active:scale-95 transition-all text-base shadow-lg shadow-brand-500/25">
+              {/* CORREÇÃO (#5): tamanho (px-6 py-3, text-sm) e cor (fundo
+                  claro sólido) agora batem com o botão do topo da página —
+                  antes esse aqui era maior (px-8 py-4, text-base) e laranja
+                  em vez de escuro/claro sólido. */}
+              <Link href="/register" className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-gray-900 font-bold rounded-2xl hover:bg-gray-100 active:scale-95 transition-all text-sm shadow-lg shadow-black/20">
                 Criar conta grátis
                 <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
               </Link>
-              <Link href="/menu/pizzaria-do-jose" className="inline-flex items-center justify-center gap-2 px-8 py-4 border border-gray-600 text-gray-300 font-bold rounded-2xl hover:border-gray-400 hover:text-white active:scale-95 transition-all text-base">
+              <Link href="/menu/pizzaria-do-jose" className="inline-flex items-center justify-center gap-2 px-6 py-3 border-2 border-gray-600 text-gray-300 font-bold rounded-2xl hover:border-gray-400 hover:text-white active:scale-95 transition-all text-sm">
                 🌐 Ver cardápio demo
               </Link>
             </div>
@@ -456,19 +496,20 @@ export default function HomePageClient() {
           <div className="flex flex-col md:flex-row justify-between items-start gap-10">
             <div className="max-w-xs">
               <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-8 h-8 bg-gradient-to-br from-brand-500 to-amber-400 rounded-xl flex items-center justify-center overflow-hidden relative">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center relative">
                   <Image
                     src="/logo-icon.png"
                     alt="Meu Cardápio"
                     fill
-                    className="object-cover"
+                    sizes="32px"
+                    className="object-contain"
                     onError={(e) => {
                       const el = e.currentTarget as HTMLImageElement
                       el.style.display = 'none'
                       el.nextElementSibling?.classList.remove('hidden')
                     }}
                   />
-                  <span className="hidden text-white font-black text-sm">M</span>
+                  <span className="hidden text-brand-500 font-black text-sm">M</span>
                 </div>
                 <span className="font-black text-gray-900 dark:text-white text-base tracking-tight">Meu <span className="text-brand-500">Cardápio</span></span>
               </div>
