@@ -20,15 +20,19 @@ export function AuthLogo({ variant = 'dark', className }: AuthLogoProps) {
 
   return (
     <div className={cn('flex items-center gap-2', className)}>
-      <div className={cn(
-        'w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden relative flex-shrink-0',
-        isLight ? 'bg-white' : 'bg-brand-500'
-      )}>
+      {/* CORREÇÃO (#12): a caixa com fundo sólido (branco no variant
+          "light") atrás da logo aparecia como um quadrado/borda em volta
+          dela, já que a logo tem fundo transparente. Fundo removido —
+          a logo agora fica direto sobre o gradiente da tela de login,
+          sem nenhuma caixa atrás. `object-contain` no lugar de
+          `object-cover` evita cortar a imagem. */}
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center relative flex-shrink-0">
         <Image
           src="/logo-icon.png"
           alt="Meu Cardápio"
           fill
-          className="object-cover"
+          sizes="32px"
+          className="object-contain"
           onError={(e) => {
             const el = e.currentTarget as HTMLImageElement
             el.style.display = 'none'
@@ -37,7 +41,7 @@ export function AuthLogo({ variant = 'dark', className }: AuthLogoProps) {
         />
         <span className={cn(
           'hidden font-bold text-sm',
-          isLight ? 'text-brand-600' : 'text-white'
+          isLight ? 'text-white' : 'text-brand-500'
         )}>
           M
         </span>
