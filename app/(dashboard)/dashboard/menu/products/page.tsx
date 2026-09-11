@@ -51,13 +51,21 @@ export default async function ProductsPage() {
             {products.length} produto{products.length !== 1 ? 's' : ''} cadastrado{products.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <Link
-          href="/dashboard/menu/products/new"
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium text-sm rounded-lg hover:bg-primary/90 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Novo produto
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/dashboard/menu/import-ia"
+            className="flex items-center gap-2 px-4 py-2 border border-border text-foreground font-medium text-sm rounded-lg hover:bg-muted transition-colors"
+          >
+            ✨ Importar com IA
+          </Link>
+          <Link
+            href="/dashboard/menu/products/new"
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium text-sm rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Novo produto
+          </Link>
+        </div>
       </div>
 
       <ProductsList products={serialized} categories={categories} />
