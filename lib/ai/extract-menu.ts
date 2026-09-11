@@ -79,7 +79,12 @@ async function extractWithXaiPdf(buffer: Buffer): Promise<ImportedMenu | null> {
   const form = new FormData()
   form.append('purpose', 'assistants')
   form.append('expires_after', '3600') // expira em 1h — é só pra essa análise
-  form.append('file', new Blob([buffer], { type: 'application/pdf' }), 'cardapio.pdf')
+  // new Uint8Array(buffer) em vez de usar `buffer` direto: com o
+  // @types/node do Node 22, Buffer é tipado como Uint8Array<ArrayBufferLike>
+  // (o ArrayBufferLike inclui SharedArrayBuffer), que o TypeScript não aceita
+  // como BlobPart (que exige especificamente ArrayBuffer). Copiar para um
+  // Uint8Array novo resolve — sem custo real aqui, PDF de cardápio é pequeno.
+  form.append('file', new Blob([new Uint8Array(buffer)], { type: 'application/pdf' }), 'cardapio.pdf')
 
   const uploadRes = await fetch('https://api.x.ai/v1/files', {
     method: 'POST',
