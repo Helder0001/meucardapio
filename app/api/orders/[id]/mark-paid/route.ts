@@ -9,7 +9,7 @@ import { publishOrderEvent } from '@/lib/cache/redis'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { applyOrderRewards } from '@/lib/loyalty/apply-rewards'
 import { z } from 'zod'
-import { computeReceiptInfo } from '@/lib/finance/compute-receipt'
+import { computeReceiptInfo, type FinanceRatesConfig } from '@/lib/finance/compute-receipt'
 
 const schema = z.object({
   paymentId: z.string().optional(), // se não informado, marca todos do pedido
@@ -55,7 +55,7 @@ export async function PATCH(
       total: true,
       customerId: true,
       payments: {
-        select: { id: true, method: true, status: true, amount: true },
+        select: { id: true, method: true, status: true, amount: true, provider: true, installments: true },
       },
     },
   })
@@ -78,6 +78,11 @@ export async function PATCH(
 
   const now = new Date()
 
+  // Taxas/prazos configurados pelo tenant pra Efí e maquininha — ver
+  // lib/finance/compute-receipt.ts.
+  const tenantRow = await prisma.tenant.findFirst({ where: { id: tenantId }, select: { settings: true } })
+  const financeRates = ((tenantRow?.settings as any)?.financeRates ?? {}) as FinanceRatesConfig
+
   // Determinar quais pagamentos marcar como PAID
   const toUpdate = order.payments.filter((p) => {
     if (p.status === 'PAID') return false
@@ -95,7 +100,7 @@ export async function PATCH(
   // Atualizar pagamentos em transação
   await prisma.$transaction(async (tx) => {
     for (const p of toUpdate) {
-      const receipt = computeReceiptInfo(p.method, Number(p.amount), now)
+      const receipt = computeReceiptInfo(p.method, Number(p.amount), now, financeRates, p.provider, p.installments)
       await tx.payment.update({
         where: { id: p.id },
         data: {
