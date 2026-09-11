@@ -1,17 +1,21 @@
 // app/(dashboard)/dashboard/financeiro/page.tsx
 //
-// Fluxo de Recebimentos — combina pagamentos já confirmados (PIX, PIX
-// Chave e Dinheiro entram na hora, sem taxa) com os pagamentos em
-// cartão (maquininha ou online), que aparecem numa seção separada só
-// com o valor bruto, sem taxa nem data prevista (ver justificativa em
-// lib/finance/compute-receipt.ts).
+// Fluxo de Recebimentos — separa pagamentos confirmados em duas seções:
+//   • "Com valor calculado": netAmount não é null — inclui PIX/Pix Chave/
+//     Dinheiro (sempre), Mercado Pago e Asaas (dado real do provedor), e
+//     Efí/maquininha SE o tenant tiver configurado a taxa deles.
+//   • "Sem cálculo automático": netAmount é null — Efí/maquininha sem
+//     taxa configurada ainda. Aparece só o valor bruto, com um aviso pra
+//     configurar a taxa (ver FinanceRatesForm).
+// Agrupar por "tem netAmount" em vez de por método fixo é o que permite
+// cartão via Efí/maquininha aparecerem na seção calculada assim que o
+// tenant configurar a taxa deles, sem mexer nessa página de novo.
 
 import { auth } from '@/lib/auth/session'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db/client'
 import { FinanceiroClient } from '@/components/dashboard/financeiro-client'
 import type { Metadata } from 'next'
-import type { PaymentMethod } from '@prisma/client'
 
 export const metadata: Metadata = { title: 'Financeiro — Meu Cardápio' }
 export const dynamic = 'force-dynamic'
@@ -29,9 +33,6 @@ function startOfMonthSP(): Date {
   return toSpStart(`${sp.getFullYear()}-${String(sp.getMonth() + 1).padStart(2, '0')}-01`)
 }
 
-const CARD_METHODS: PaymentMethod[] = ['CREDIT_CARD', 'CREDIT_CARD_MANUAL', 'DEBIT_CARD']
-const INSTANT_METHODS: PaymentMethod[] = ['PIX', 'PIX_MANUAL', 'CASH']
-
 export default async function FinanceiroPage({ searchParams }: PageProps) {
   const session = await auth()
   if (!session?.user?.tenantId) redirect('/login')
@@ -45,46 +46,43 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
 
   const dateWhere = { paidAt: { gte: toSpStart(startDate), lte: toSpEnd(endDate) } }
 
-  // ── Recebidos na hora (PIX, PIX Chave, Dinheiro) — com taxa/líquido/data ──
-  const instantPayments = await prisma.payment.findMany({
-    where: { tenantId, status: 'PAID', method: { in: INSTANT_METHODS }, ...dateWhere },
-    select: {
-      id: true, method: true, amount: true, fee: true, netAmount: true,
-      expectedReceiptDate: true, paidAt: true,
-      order: { select: { orderNumber: true, customer: { select: { name: true } } } },
-    },
-    orderBy: { paidAt: 'desc' },
-  })
+  const [allPayments, tenantRow] = await Promise.all([
+    prisma.payment.findMany({
+      where: { tenantId, status: 'PAID', ...dateWhere },
+      select: {
+        id: true, method: true, provider: true, amount: true, fee: true, netAmount: true,
+        expectedReceiptDate: true, paidAt: true,
+        order: { select: { orderNumber: true, customer: { select: { name: true } } } },
+      },
+      orderBy: { paidAt: 'desc' },
+    }),
+    prisma.tenant.findFirst({ where: { id: tenantId }, select: { settings: true } }),
+  ])
 
-  // ── Cartão (maquininha ou online) — só valor bruto, sem taxa/data ──
-  const cardPayments = await prisma.payment.findMany({
-    where: { tenantId, status: 'PAID', method: { in: CARD_METHODS }, ...dateWhere },
-    select: {
-      id: true, method: true, amount: true, paidAt: true,
-      order: { select: { orderNumber: true, customer: { select: { name: true } } } },
-    },
-    orderBy: { paidAt: 'desc' },
-  })
+  const calculatedPayments = allPayments.filter((p) => p.netAmount !== null)
+  const uncalculatedPayments = allPayments.filter((p) => p.netAmount === null)
 
-  const instantTotal = instantPayments.reduce((s, p) => s + Number(p.netAmount ?? p.amount), 0)
-  const cardTotal     = cardPayments.reduce((s, p) => s + Number(p.amount), 0)
+  const calculatedTotal   = calculatedPayments.reduce((s, p) => s + Number(p.netAmount), 0)
+  const uncalculatedTotal = uncalculatedPayments.reduce((s, p) => s + Number(p.amount), 0)
+
+  const financeRates = (tenantRow?.settings as any)?.financeRates ?? {}
 
   return (
     <FinanceiroClient
       startDate={startDate}
       endDate={endDate}
-      instantPayments={instantPayments.map((p) => ({
+      instantPayments={calculatedPayments.map((p) => ({
         id: p.id,
         method: p.method,
         amount: Number(p.amount),
         fee: p.fee !== null ? Number(p.fee) : null,
-        netAmount: p.netAmount !== null ? Number(p.netAmount) : null,
+        netAmount: Number(p.netAmount),
         expectedReceiptDate: p.expectedReceiptDate?.toISOString() ?? null,
         paidAt: p.paidAt!.toISOString(),
         orderNumber: p.order.orderNumber,
         customerName: p.order.customer?.name ?? null,
       }))}
-      cardPayments={cardPayments.map((p) => ({
+      cardPayments={uncalculatedPayments.map((p) => ({
         id: p.id,
         method: p.method,
         amount: Number(p.amount),
@@ -92,8 +90,9 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
         orderNumber: p.order.orderNumber,
         customerName: p.order.customer?.name ?? null,
       }))}
-      instantTotal={instantTotal}
-      cardTotal={cardTotal}
+      instantTotal={calculatedTotal}
+      cardTotal={uncalculatedTotal}
+      financeRates={financeRates}
     />
   )
 }
