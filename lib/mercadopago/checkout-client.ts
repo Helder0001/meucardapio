@@ -153,6 +153,11 @@ export interface CardPaymentResult {
   installments: number
   // Somente se 'approved'
   approvedAt?: string
+  // CORREÇÃO (fluxo de recebimentos): o MP já devolve o valor líquido
+  // real e a data de liberação do dinheiro na própria resposta da
+  // cobrança — não tem por que estimar isso com uma taxa fixa.
+  netReceivedAmount?: number
+  moneyReleaseDate?: string
 }
 
 export async function createCardPayment(
@@ -210,5 +215,7 @@ export async function createCardPayment(
     cardBrand: data.payment_method_id,
     installments: data.installments ?? params.installments,
     approvedAt: data.date_approved,
+    netReceivedAmount: data.transaction_details?.net_received_amount,
+    moneyReleaseDate: data.money_release_date,
   }
 }
