@@ -85,7 +85,7 @@ export function Header({ user }: HeaderProps) {
     >
       {/* Mobile: show app name; Desktop: empty left side */}
       <div className="flex items-center gap-2 md:hidden">
-        <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center overflow-hidden flex-shrink-0">
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
           <Image src="/logo-icon.png" alt="" width={28} height={28} className="object-cover w-full h-full"
             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display='none' }} />
         </div>

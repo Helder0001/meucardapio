@@ -203,7 +203,7 @@ export function Sidebar({ userRole, tenantSlug, plan }: SidebarProps) {
       <aside className="hidden md:flex flex-col w-64 border-r border-sidebar-border bg-sidebar shrink-0">
         {/* Logo */}
         <div className="flex items-center gap-3 h-16 px-4 border-b border-sidebar-border">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden bg-primary">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
             <Image src="/logo-icon.png" alt="Meu Cardápio" width={32} height={32} className="object-cover w-full h-full"
               onError={(e) => {
                 const el = e.currentTarget as HTMLImageElement
@@ -247,7 +247,7 @@ export function Sidebar({ userRole, tenantSlug, plan }: SidebarProps) {
             {/* Header */}
             <div className="flex items-center justify-between h-16 px-4 border-b border-sidebar-border">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden bg-primary">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
                   <Image src="/logo-icon.png" alt="" width={32} height={32} className="object-cover w-full h-full"
                     onError={(e) => { (e.currentTarget as HTMLImageElement).style.display='none' }} />
                 </div>
