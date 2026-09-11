@@ -26,7 +26,7 @@ import { prisma } from '@/lib/db/client'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { applyCashback, applyLoyaltyPoints } from '@/lib/loyalty/apply-rewards'
 import { getTenantPixChargeStatus } from '@/lib/efi/tenant-pix-client'
-import { computeReceiptInfo } from '@/lib/finance/compute-receipt'
+import { computeReceiptInfo, type FinanceRatesConfig } from '@/lib/finance/compute-receipt'
 import { after } from 'next/server'
 
 export interface PixWebhookEntry {
@@ -58,6 +58,14 @@ export async function processEfiPixWebhookEntries(entries: PixWebhookEntry[]): P
       }
 
       if (payment.status === 'PAID') continue // idempotência — já processado
+
+      // Taxa/prazo configurados pelo tenant pra PIX via Efí — ver
+      // lib/finance/compute-receipt.ts.
+      const tenantRow = await prisma.tenant.findFirst({
+        where: { id: payment.order.tenantId },
+        select: { settings: true },
+      })
+      const financeRates = ((tenantRow?.settings as any)?.financeRates ?? {}) as FinanceRatesConfig
 
       // ── Confirmação autoritativa: nunca confiar só no corpo do POST ──
       let confirmedEntry: { endToEndId: string; valor: string; horario: string }
@@ -107,7 +115,7 @@ export async function processEfiPixWebhookEntries(entries: PixWebhookEntry[]): P
       // método).
       const result = await prisma.$transaction(async (tx) => {
         const paidAt = new Date()
-        const receipt = computeReceiptInfo(payment.method, Number(payment.amount), paidAt)
+        const receipt = computeReceiptInfo(payment.method, Number(payment.amount), paidAt, financeRates, payment.provider)
         const updated = await tx.payment.updateMany({
           where: { id: payment.id, status: { not: 'PAID' } },
           data: {
