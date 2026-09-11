@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Wallet, Zap, Banknote, CreditCard, HelpCircle, Calendar } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils/format'
 import { cn } from '@/lib/utils'
+import { FinanceRatesForm, type FinanceRatesFormProps } from './finance-rates-form'
 
 interface InstantPayment {
   id: string
@@ -43,7 +44,7 @@ const METHOD_ICON: Record<string, any> = {
 }
 
 export function FinanceiroClient({
-  startDate, endDate, instantPayments, cardPayments, instantTotal, cardTotal,
+  startDate, endDate, instantPayments, cardPayments, instantTotal, cardTotal, financeRates,
 }: {
   startDate: string
   endDate: string
@@ -51,6 +52,7 @@ export function FinanceiroClient({
   cardPayments: CardPayment[]
   instantTotal: number
   cardTotal: number
+  financeRates: FinanceRatesFormProps
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -93,14 +95,14 @@ export function FinanceiroClient({
       {/* Totais */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-card border border-border rounded-2xl p-5">
-          <p className="text-sm text-muted-foreground">Recebido na hora (líquido)</p>
+          <p className="text-sm text-muted-foreground">Recebido (com valor líquido calculado)</p>
           <p className="text-2xl font-bold text-foreground mt-1">{formatCurrency(instantTotal)}</p>
-          <p className="text-xs text-muted-foreground mt-1">PIX, Pix Chave e Dinheiro — sem taxa, D+0</p>
+          <p className="text-xs text-muted-foreground mt-1">PIX, Pix Chave, Dinheiro, Mercado Pago, Asaas — e Efí/maquininha se a taxa estiver configurada</p>
         </div>
         <div className="bg-card border border-border rounded-2xl p-5">
-          <p className="text-sm text-muted-foreground">Cartão (bruto)</p>
+          <p className="text-sm text-muted-foreground">Sem cálculo automático (bruto)</p>
           <p className="text-2xl font-bold text-foreground mt-1">{formatCurrency(cardTotal)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Maquininha ou online — sem taxa/data conhecida</p>
+          <p className="text-xs text-muted-foreground mt-1">Efí ou maquininha sem taxa configurada ainda</p>
         </div>
         <div className="bg-card border border-border rounded-2xl p-5">
           <p className="text-sm text-muted-foreground">Total do período</p>
@@ -110,8 +112,8 @@ export function FinanceiroClient({
 
       {/* Recebidos na hora */}
       <div className="bg-card border border-border rounded-2xl p-5">
-        <h2 className="font-semibold text-foreground mb-1">Recebidos na hora</h2>
-        <p className="text-xs text-muted-foreground mb-4">PIX (gateway), Pix Chave e Dinheiro entram no caixa assim que confirmados, sem taxa.</p>
+        <h2 className="font-semibold text-foreground mb-1">Com valor líquido calculado</h2>
+        <p className="text-xs text-muted-foreground mb-4">PIX, Pix Chave, Dinheiro (sempre) — Mercado Pago e Asaas (dado real do provedor) — Efí e maquininha (se a taxa estiver configurada abaixo).</p>
         {instantPayments.length === 0 ? (
           <p className="text-sm text-muted-foreground py-6 text-center">Nenhum recebimento nesse período.</p>
         ) : (
@@ -156,7 +158,7 @@ export function FinanceiroClient({
       {/* Cartão — separado, sem taxa/data prevista */}
       <div className="bg-card border border-border rounded-2xl p-5">
         <div className="flex items-start gap-2 mb-1">
-          <h2 className="font-semibold text-foreground">Cartão (maquininha e online)</h2>
+          <h2 className="font-semibold text-foreground">Sem cálculo automático</h2>
           <span className="group relative inline-flex">
             <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help mt-0.5" />
             <span className="pointer-events-none absolute left-0 top-5 z-20 w-72 rounded-lg border border-border bg-popover text-popover-foreground text-[11px] leading-snug p-2 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity">
@@ -196,6 +198,8 @@ export function FinanceiroClient({
           </div>
         )}
       </div>
+
+      <FinanceRatesForm {...financeRates} />
     </div>
   )
 }
