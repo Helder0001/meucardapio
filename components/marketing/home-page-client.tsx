@@ -10,9 +10,9 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Poppins } from 'next/font/google'
 import {
-  Smartphone, Truck, UtensilsCrossed, Zap, BarChart3, MessageCircle,
-  Printer, Sparkles, ArrowRight, Star, ChevronDown, Globe,
-  QrCode, Package, TrendingUp, ShieldCheck, Moon, Sun,
+  Smartphone, Truck, UtensilsCrossed, BarChart3, MessageCircle,
+  Printer, Sparkles, ChevronDown, QrCode, ShoppingBag, Columns3,
+  Ticket, Heart, Users, Store, CreditCard, ShieldCheck, Moon, Sun,
 } from 'lucide-react'
 
 // CORREÇÃO (#7): a landing page usava a fonte padrão do site (GeistSans,
@@ -22,34 +22,83 @@ import {
 // consistentes.
 const poppins = Poppins({ subsets: ['latin'], weight: ['400', '500', '600', '700', '800', '900'] })
 
-// CORREÇÃO: ícones de emoji substituídos por ícones lucide-react (visual
-// mais profissional e consistente com o resto do produto).
+// CORREÇÃO: a landing page vendia "lista de funcionalidades" (isso, isso e
+// isso). Esse array agora só monta a grade "Tudo que seu restaurante
+// precisa" (13 itens, seção final de funcionalidades) — a demonstração de
+// cada funcionalidade principal (Kanban, WhatsApp, Cardápio/QR, Pagamentos,
+// IA) ganhou seção própria mais acima na página, focada no problema que
+// resolve em vez de só listar o recurso.
 const features = [
-  { icon: Smartphone,     title: 'Cardápio Digital', desc: 'PWA instalável com QR Code por mesa. Atualize preços em tempo real, sem reimprimir nada.', color: 'from-brand-500 to-amber-400', bg: 'bg-brand-50 dark:bg-brand-950/20' },
-  { icon: Truck,          title: 'Delivery Completo', desc: 'Zonas por bairro, taxa automática e frete grátis acima de valor. Tudo configurável.', color: 'from-blue-500 to-cyan-400', bg: 'bg-blue-50 dark:bg-blue-950/20' },
-  { icon: UtensilsCrossed,title: 'Sistema de Mesas', desc: 'QR Code exclusivo por mesa. O cliente pede direto pelo celular, sem esperar garçom.', color: 'from-violet-500 to-purple-400', bg: 'bg-violet-50 dark:bg-violet-950/20' },
-  { icon: Zap,            title: 'Pagamento PIX', desc: 'QR Code automático com confirmação instantânea via webhook. Zero taxa manual.', color: 'from-emerald-500 to-green-400', bg: 'bg-emerald-50 dark:bg-emerald-950/20' },
-  { icon: BarChart3,      title: 'Kanban em Tempo Real', desc: 'Arraste pedidos entre colunas. Atualização instantânea para toda a equipe.', color: 'from-pink-500 to-rose-400', bg: 'bg-pink-50 dark:bg-pink-950/20' },
-  { icon: MessageCircle,  title: 'WhatsApp Integrado', desc: 'Notificações automáticas de status do pedido. O cliente sempre sabe onde está o pedido.', color: 'from-green-500 to-emerald-400', bg: 'bg-green-50 dark:bg-green-950/20' },
-  { icon: Printer,        title: 'Impressão Automática', desc: 'Envio automático para impressoras térmicas ao confirmar pedido. Sem digitação na cozinha.', color: 'from-slate-500 to-gray-400', bg: 'bg-slate-50 dark:bg-slate-950/20' },
-  { icon: Sparkles,       title: 'IA nos Produtos', desc: 'Gere descrições irresistíveis com IA. Mais clique = mais pedido.', color: 'from-fuchsia-500 to-pink-400', bg: 'bg-fuchsia-50 dark:bg-fuchsia-950/20' },
+  { icon: Smartphone,   title: 'Cardápio digital',  desc: 'Seu cardápio online, responsivo e personalizado.' },
+  { icon: QrCode,       title: 'QR Code',           desc: 'Um QR Code para cada mesa, balcão ou divulgação.' },
+  { icon: ShoppingBag,  title: 'Pedidos online',     desc: 'Receba e acompanhe os pedidos em tempo real.' },
+  { icon: Columns3,     title: 'Kanban',             desc: 'Organize cada pedido por etapa, do novo ao entregue.' },
+  { icon: MessageCircle,title: 'WhatsApp',           desc: 'Mantenha o cliente informado sobre o pedido.' },
+  { icon: CreditCard,   title: 'Pagamentos',         desc: 'Organize as formas de pagamento da sua operação.' },
+  { icon: Truck,        title: 'Delivery',           desc: 'Configure sua operação de entrega e retirada.' },
+  { icon: Ticket,       title: 'Cupons',             desc: 'Crie promoções e incentive novos pedidos.' },
+  { icon: Heart,        title: 'Fidelidade',         desc: 'Crie motivos para seus clientes voltarem.' },
+  { icon: BarChart3,    title: 'Relatórios',         desc: 'Acompanhe as informações da sua operação.' },
+  { icon: Sparkles,     title: 'IA',                 desc: 'Crie descrições melhores para seus produtos.' },
+  { icon: Users,        title: 'Equipe',             desc: 'Defina permissões para cada funcionário.' },
+  { icon: Printer,      title: 'Impressão',          desc: 'Recursos para integrar a impressão à operação.' },
 ]
 
-// CORREÇÃO: plano Premium removido da oferta — apenas Starter e Pro.
-const plans = [
-  { name: 'Starter', price: 49, tagline: 'Para quem está começando', highlight: false, features: ['Até 50 produtos', '1 usuário operador', 'Cardápio digital PWA', 'QR Code de mesa', 'Relatórios básicos'], cta: 'Começar grátis' },
-  { name: 'Pro', price: 99, tagline: 'O favorito dos restaurantes', highlight: true, features: ['Produtos ilimitados', 'Até 5 usuários (com permissões por função)', 'Delivery completo', 'Cupons e fidelidade', 'WhatsApp integrado', 'Multi-PDV', 'IA para descrições de produtos', 'Suporte prioritário'], cta: 'Assinar Pro' },
+// CORREÇÃO: Starter/Pro (2 planos) trocado por um único plano com tudo
+// incluído — mais simples de vender e de entender. O valor abaixo é um
+// placeholder (mesmo preço do antigo Pro): troque PLAN_PRICE pelo valor
+// definitivo antes de publicar.
+const PLAN_PRICE = 99
+const planFeatures = [
+  'Cardápio digital', 'QR Code', 'Pedidos online', 'Kanban', 'WhatsApp',
+  'Delivery', 'PIX', 'Cupons', 'Fidelidade', 'Relatórios',
+  'IA para produtos', 'Gestão de equipe', 'Todos os recursos incluídos',
 ]
 
-// CORREÇÃO: pergunta sobre migrar/integrar com outros sistemas removida.
-// FoodSaaS → Meu Cardápio nas respostas.
+// Papéis de acesso — cada pessoa da equipe vê só o que precisa.
+const team = [
+  { icon: ShieldCheck,  role: 'Gerente',    desc: 'Tem visão completa da operação.' },
+  { icon: MessageCircle,role: 'Atendente',  desc: 'Foca no atendimento e nos pedidos.' },
+  { icon: Columns3,     role: 'Operador',   desc: 'Ajuda no controle dos pedidos e pagamentos.' },
+  { icon: Truck,        role: 'Entregador', desc: 'Acessa só o que precisa pra realizar sua função.' },
+]
+
+const businessTypes = [
+  { emoji: '🍕', label: 'Pizzarias' }, { emoji: '🍔', label: 'Hamburguerias' },
+  { emoji: '🥤', label: 'Açaíterias' }, { emoji: '🍱', label: 'Restaurantes' },
+  { emoji: '🌮', label: 'Lanchonetes' }, { emoji: '🍰', label: 'Docerias' },
+  { emoji: '🍗', label: 'Espetarias' }, { emoji: '☕', label: 'Cafeterias' },
+  { emoji: '🥡', label: 'Delivery' },
+]
+
+// CORREÇÃO: seção de prova social não usa depoimentos inventados nem
+// números sem dado real (ex: "+38% pedidos") — em vez disso, mostra telas
+// reais do produto em uso.
+const socialShots = [
+  { src: '/screenshots/cardapio-cliente.png', label: 'Cardápio do cliente' },
+  { src: '/screenshots/kanban.png',           label: 'Kanban de pedidos' },
+  { src: '/screenshots/pedidos.png',          label: 'Lista de pedidos' },
+  { src: '/screenshots/relatorios.png',       label: 'Relatórios' },
+  { src: '/screenshots/clientes.png',         label: 'Clientes' },
+]
+
+// CORREÇÃO: pergunta sobre migrar/integrar com outros sistemas removida da
+// versão antiga; lista agora combina as perguntas já existentes (mais
+// específicas, sobre pagamento e permissões) com as sugeridas na proposta
+// nova (instalação de app, delivery/retirada, impressora etc.), sem
+// duplicar conteúdo.
 const faqs = [
-  { q: 'Preciso de site ou app para usar?', a: 'Não. O Meu Cardápio cria seu cardápio digital como PWA — os clientes acessam por link ou QR Code, sem baixar nada.' },
-  { q: 'O período de teste é realmente grátis?', a: 'Sim, 7 dias completos com acesso às funcionalidades do plano escolhido. Precisamos de um cartão para ativar o trial — nenhuma cobrança é feita durante o período gratuito.' },
-  { q: 'Funciona em celular e computador?', a: 'Em qualquer dispositivo com navegador — nenhum app para instalar, nem para você, nem para seus clientes.' },
-  { q: 'Posso personalizar as cores e logo?', a: 'Sim! Cada restaurante tem sua identidade visual: logo, cor primária e URL no formato /menu/seu-restaurante.' },
-  { q: 'Como funciona o pagamento com cartão e dinheiro?', a: 'Além do PIX (confirmado automaticamente pelo Mercado Pago), você aceita cartão de crédito, débito e dinheiro. O atendente confirma o recebimento manualmente no painel quando o cliente paga.' },
-  { q: 'Posso criar contas para garçons?', a: 'Sim. Você pode criar contas com permissões reduzidas para garçons — eles acessam apenas o kanban de pedidos para confirmar, cancelar ou marcar pedidos como entregues, sem ver relatórios ou configurações.' },
+  { q: 'Preciso instalar algum aplicativo?', a: 'Não. O cardápio digital funciona direto no navegador do celular (PWA) — o cliente escaneia o QR Code e já faz o pedido, sem baixar nada. O dashboard também funciona em qualquer navegador, no computador ou celular.' },
+  { q: 'O cliente precisa criar uma conta?', a: 'Não. O objetivo é tornar o pedido rápido e simples, sem cadastro nem senha.' },
+  { q: 'Como funciona o trial de 7 dias?', a: 'Você cria a conta, cadastra o cartão (sem cobrança nenhuma nesse momento) e usa a plataforma completa por 7 dias. Se cancelar antes do fim do trial, não é cobrado nada. Sem contrato de fidelidade.' },
+  { q: 'Posso usar QR Code nas mesas?', a: 'Sim. Você pode gerar um QR Code exclusivo para cada mesa, balcão ou divulgação.' },
+  { q: 'Funciona no celular e computador?', a: 'Sim, em qualquer dispositivo com navegador — nenhum app para instalar, nem para você, nem para seus clientes.' },
+  { q: 'Posso cadastrar funcionários com permissões diferentes?', a: 'Sim. Você pode criar contas para garçom, atendente ou entregador com permissões reduzidas — cada um acessa só o que precisa pra sua função, sem ver relatórios ou configurações se não for o caso.' },
+  { q: 'Posso trabalhar com delivery e retirada?', a: 'Sim. A plataforma foi pensada pra diferentes formas de operação.' },
+  { q: 'Quais formas de pagamento posso oferecer aos clientes?', a: 'No PDV/balcão, o Pix já vem integrado. No cardápio digital, Pix e cartão são integrados via Efí Bank, com confirmação automática. Cartão (na maquineta) e dinheiro na entrega ou presencialmente ficam a critério de cada estabelecimento, fora da plataforma.' },
+  { q: 'Preciso ter uma impressora?', a: 'Não. A impressão é um recurso opcional para sua operação.' },
+  { q: 'Posso cancelar quando quiser?', a: 'Sim, sem multa e sem contrato de fidelidade. Você cancela direto pelo painel a qualquer momento.' },
+  { q: 'Consigo migrar meu cardápio já pronto pra plataforma?', a: 'Sim — nosso suporte te ajuda a importar produtos, preços e categorias na hora de começar, sem custo adicional.' },
 ]
 
 export function HomePageClient() {
@@ -61,7 +110,7 @@ export function HomePageClient() {
 
       {/* Barra de topo */}
       <div className="bg-gray-900 dark:bg-black text-white text-xs text-center py-2 font-medium">
-        🎉 &nbsp;<span className="text-brand-400 font-bold">Cancele quando quiser</span> · Sem contrato de fidelidade
+        🎉 &nbsp;<span className="text-brand-400 font-bold">7 dias grátis</span> · Sem fidelidade · Cancele quando quiser
       </div>
 
       {/* Navbar */}
@@ -94,9 +143,9 @@ export function HomePageClient() {
             </span>
           </Link>
           <div className="hidden md:flex items-center gap-8">
-            {['#funcionalidades', '#integracoes', '#planos', '#faq'].map((href, i) => (
+            {['#funcionalidades', '#como-funciona', '#planos', '#faq'].map((href, i) => (
               <a key={href} href={href} className="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-colors">
-                {['Funcionalidades', 'Integrações', 'Planos', 'FAQ'][i]}
+                {['Funcionalidades', 'Como funciona', 'Planos', 'FAQ'][i]}
               </a>
             ))}
           </div>
@@ -131,7 +180,7 @@ export function HomePageClient() {
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950 px-5 py-4 space-y-3">
             <a href="#funcionalidades" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-700 dark:text-gray-300 py-2">Funcionalidades</a>
-            <a href="#integracoes" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-700 dark:text-gray-300 py-2">Integrações</a>
+            <a href="#como-funciona" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-700 dark:text-gray-300 py-2">Como funciona</a>
             <a href="#planos" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-700 dark:text-gray-300 py-2">Planos</a>
             <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-700 dark:text-gray-300 py-2">FAQ</a>
             <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-2">
@@ -159,18 +208,17 @@ export function HomePageClient() {
           </span>
 
           <h1 className="animate-fade-up animate-fade-up-delay-1 mt-6 text-3xl sm:text-4xl lg:text-5xl font-black text-gray-900 dark:text-white leading-[1.1] tracking-tight">
-            Seu restaurante{' '}
-            <span className="text-gradient">vende mais</span>
-            <br className="hidden sm:block" /> no automático
+            Seu restaurante no controle.{' '}
+            <span className="text-gradient">Seus pedidos organizados.</span>
           </h1>
 
           <p className="animate-fade-up animate-fade-up-delay-2 mt-6 text-base sm:text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">
-            Cardápio digital com QR Code, pedidos online, Kanban em tempo real, WhatsApp automático, PIX e muito mais — tudo em uma plataforma só.
+            Cardápio digital + pedidos + Kanban + WhatsApp + pagamentos em uma única plataforma. Seu cliente pede pelo celular e sua equipe acompanha tudo, do pedido até a entrega.
           </p>
 
           <div className="animate-fade-up animate-fade-up-delay-3 mt-10 flex flex-col sm:flex-row items-center gap-3 justify-center">
             <Link href="/register" className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold rounded-2xl hover:bg-gray-800 dark:hover:bg-gray-100 active:scale-95 transition-all text-sm shadow-lg shadow-gray-300 dark:shadow-black/30">
-              Criar conta grátis
+              Começar grátis
               <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
             </Link>
             {/* CORREÇÃO: CTA secundário rebaixado para link de texto — antes
@@ -180,16 +228,17 @@ export function HomePageClient() {
                 de criar conta), só que agora com peso visual claramente
                 menor. */}
             <Link href="/menu/pizzaria-do-jose" className="group inline-flex items-center justify-center gap-1.5 px-4 py-3 text-gray-500 dark:text-gray-400 font-semibold hover:text-brand-600 dark:hover:text-brand-400 transition-colors text-sm underline decoration-gray-300 dark:decoration-gray-600 underline-offset-4 hover:decoration-brand-400">
-              Ver demo ao vivo
+              Ver demonstração
               <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
             </Link>
           </div>
-          <p className="animate-fade-up animate-fade-up-delay-4 mt-4 text-xs text-gray-400">
-            Trial com cartão · Sem contrato · Cancele quando quiser
+          <p className="animate-fade-up animate-fade-up-delay-4 mt-4 text-xs text-gray-400 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+            <span>✓ 7 dias grátis</span><span>✓ Sem fidelidade</span><span>✓ Cancele quando quiser</span>
           </p>
 
-          {/* Kanban mock */}
-          <div className="animate-fade-up animate-fade-up-delay-4 mt-16 relative mx-auto max-w-3xl">
+          {/* Kanban mock — CORREÇÃO: imagem do produto ampliada
+              (max-w-3xl → max-w-4xl) pra ganhar mais destaque no hero. */}
+          <div className="animate-fade-up animate-fade-up-delay-4 mt-16 relative mx-auto max-w-4xl">
             <div className="rounded-3xl border border-gray-200/80 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl shadow-gray-900/10 dark:shadow-black/40 overflow-hidden">
               <div className="flex items-center gap-2 px-5 py-3.5 border-b border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/50">
                 <div className="flex gap-1.5">
@@ -251,110 +300,202 @@ export function HomePageClient() {
         </div>
       </section>
 
-      {/* FUNCIONALIDADES */}
-      <section id="funcionalidades" className="py-24 max-w-6xl mx-auto px-5">
+      {/* PROBLEMA → SOLUÇÃO */}
+      <section className="py-24 max-w-5xl mx-auto px-5">
         <div className="text-center mb-14">
-          <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
-            ⚡ Funcionalidades
-          </span>
-          <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-            Tudo que você precisa,{' '}
-            <span className="text-gradient">num só lugar</span>
+          <h2 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+            Chega de pedidos <span className="text-gradient">espalhados</span>
           </h2>
           <p className="mt-4 text-gray-500 dark:text-gray-400 max-w-xl mx-auto">
-            Do cardápio digital ao kanban de cozinha — uma plataforma conectada de ponta a ponta.
+            Quando o movimento aumenta, fica fácil perder pedido, esquecer uma observação ou deixar o cliente esperando. O Meu Cardápio coloca sua operação em um só lugar.
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {features.map((f) => {
-            const Icon = f.icon
-            return (
-              <div
-                key={f.title}
-                className={`group ${f.bg} rounded-3xl p-5 border border-white/60 dark:border-gray-700/60 cursor-default
-                  transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-gray-900/10 dark:hover:shadow-black/30`}
-              >
-                <div className={`inline-flex w-11 h-11 rounded-2xl bg-gradient-to-br ${f.color} items-center justify-center mb-4 shadow-sm`}>
-                  <Icon className="w-5 h-5 text-white" />
-                </div>
-                <h3 className="font-bold text-gray-900 dark:text-white mb-1.5">{f.title}</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{f.desc}</p>
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Highlight cards */}
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-gray-900 to-gray-800 dark:from-gray-800 dark:to-gray-900 p-8 text-white border border-gray-700">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-brand-500/10 rounded-full blur-2xl" />
-            <div className="text-3xl mb-4">📱</div>
-            <h3 className="text-xl font-black mb-2">QR Code por mesa ou balcão</h3>
-            <p className="text-gray-400 text-sm leading-relaxed">Gere um QR único para cada mesa, balcão ou delivery. O cliente escaneia, faz o pedido e paga — sem app, sem cadastro.</p>
-            <Link href="/register" className="mt-6 inline-flex items-center gap-2 text-brand-400 text-sm font-semibold group">
-              <span>Experimentar grátis</span>
-              <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
-            </Link>
-          </div>
-          {/* CORREÇÃO (#1): verde/teal muito claro e brilhante — escurecido
-              pra um tom mais sóbrio, consistente com o card escuro ao
-              lado. */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-700 to-teal-800 p-8 text-white">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-2xl" />
-            <div className="text-3xl mb-4">💳</div>
-            <h3 className="text-xl font-black mb-2">PIX + Cartão na mesma tela</h3>
-            <p className="text-white/80 text-sm leading-relaxed">Webhook instantâneo de confirmação, cashback automático no programa de fidelidade e relatório financeiro integrado.</p>
-            <div className="mt-6 flex gap-2 flex-wrap">
-              {['PIX', 'Crédito', 'Débito', 'Dinheiro'].map(m => (
-                <span key={m} className="bg-white/20 backdrop-blur-sm text-xs font-bold px-2.5 py-1 rounded-full">{m}</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="rounded-3xl bg-red-50/60 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 p-6">
+            <p className="text-xs font-black uppercase tracking-wide text-red-500 mb-4">Antes</p>
+            <ul className="space-y-3">
+              {[
+                'Pedidos espalhados no WhatsApp',
+                'Cliente perguntando pelo status',
+                'Cozinha sem saber o que preparar',
+                'Cardápio desatualizado',
+                'Controle manual da operação',
+              ].map((t) => (
+                <li key={t} className="flex items-start gap-2.5 text-sm text-gray-600 dark:text-gray-400">
+                  <span className="text-red-400 font-bold">✗</span>{t}
+                </li>
               ))}
-            </div>
+            </ul>
+          </div>
+          <div className="rounded-3xl bg-emerald-50/60 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30 p-6">
+            <p className="text-xs font-black uppercase tracking-wide text-emerald-600 mb-4">Com o Meu Cardápio</p>
+            <ul className="space-y-3">
+              {[
+                'Pedidos organizados',
+                'Status do pedido em tempo real',
+                'Kanban para toda a equipe',
+                'Cardápio atualizado instantaneamente',
+                'Operação centralizada',
+              ].map((t) => (
+                <li key={t} className="flex items-start gap-2.5 text-sm text-gray-700 dark:text-gray-300">
+                  <span className="text-emerald-500 font-bold">✓</span>{t}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </section>
 
-      {/* PLANOS */}
-      <section id="planos" className="py-24 bg-gray-50/60 dark:bg-gray-900/30">
+      {/* COMO FUNCIONA */}
+      <section id="como-funciona" className="py-24 bg-gray-50/60 dark:bg-gray-900/30">
         <div className="max-w-5xl mx-auto px-5">
           <div className="text-center mb-14">
             <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
-              🛡 Planos e preços
+              🧭 Como funciona
             </span>
             <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-              Simples e <span className="text-gradient">transparente</span>
+              Do cliente ao pedido em <span className="text-gradient">4 passos</span>
             </h2>
-            <p className="mt-4 text-gray-500 dark:text-gray-400">Sem taxas escondidas. Cancele quando quiser.</p>
           </div>
-          {/* CORREÇÃO: apenas 2 planos (Premium removido) — grid centralizado */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
-            {plans.map((plan) => (
-              <div key={plan.name} className={`relative rounded-3xl p-5 flex flex-col transition-all duration-300 ease-out ${plan.highlight ? 'bg-gradient-to-b from-indigo-600 to-violet-700 text-white shadow-2xl shadow-indigo-200 dark:shadow-indigo-950/40 scale-[1.03]' : 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 hover:-translate-y-1 hover:shadow-xl hover:shadow-gray-900/10 dark:hover:shadow-black/30'}`}>
-                {plan.highlight && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                    <span className="bg-white text-indigo-600 text-[10px] font-black px-3 py-1.5 rounded-full shadow-sm tracking-wide uppercase">★ Mais popular</span>
-                  </div>
-                )}
-                <div className="mb-4">
-                  <p className={`text-sm font-semibold mb-1 ${plan.highlight ? 'text-indigo-100' : 'text-gray-500 dark:text-gray-400'}`}>{plan.tagline}</p>
-                  <h3 className={`text-2xl font-black ${plan.highlight ? 'text-white' : 'text-gray-900 dark:text-white'}`}>{plan.name}</h3>
-                  <div className="flex items-baseline gap-1 mt-2">
-                    <span className={`text-3xl font-black ${plan.highlight ? 'text-white' : 'text-gray-900 dark:text-white'}`}>R$ {plan.price}</span>
-                    <span className={`text-sm ${plan.highlight ? 'text-indigo-100' : 'text-gray-400'}`}>/mês</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { n: '01', icon: QrCode, title: 'Seu cliente acessa', desc: 'Pelo QR Code, Instagram, WhatsApp ou link do seu restaurante.' },
+              { n: '02', icon: UtensilsCrossed, title: 'Escolhe o que quer', desc: 'Visualiza produtos, adicionais, observações e opções de entrega ou retirada.' },
+              { n: '03', icon: ShoppingBag, title: 'Faz o pedido', desc: 'O pedido chega organizado diretamente para sua equipe.' },
+              { n: '04', icon: Columns3, title: 'Sua equipe acompanha', desc: 'Gerencie cada pedido do início ao fim: Novo → Confirmado → Preparando → Pronto → Entregue.' },
+            ].map(({ n, icon: Icon, title, desc }) => (
+              <div key={n} className="rounded-3xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-2xl font-black text-gray-200 dark:text-gray-700">{n}</span>
+                  <div className="w-9 h-9 rounded-xl bg-brand-100 dark:bg-brand-950/40 flex items-center justify-center">
+                    <Icon className="w-4 h-4 text-brand-600 dark:text-brand-400" />
                   </div>
                 </div>
-                <ul className="space-y-2 flex-1 mb-6">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2.5">
-                      <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center mt-0.5 text-xs ${plan.highlight ? 'bg-white/20 text-white' : 'bg-brand-100 dark:bg-brand-950/40 text-brand-500'}`}>✓</div>
-                      <span className={`text-sm ${plan.highlight ? 'text-white/90' : 'text-gray-600 dark:text-gray-400'}`}>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Link href="/register" className={`block text-center py-3 rounded-2xl text-sm font-bold active:scale-95 transition-all ${plan.highlight ? 'bg-white text-indigo-600 hover:bg-indigo-50' : 'bg-brand-500 text-white hover:bg-brand-600 shadow-sm shadow-brand-200 dark:shadow-none'}`}>
-                  {plan.cta}
-                </Link>
+                <h3 className="font-bold text-gray-900 dark:text-white mb-1.5">{title}</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{desc}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* KANBAN EM DESTAQUE */}
+      <section className="py-24 max-w-5xl mx-auto px-5">
+        <div className="text-center mb-14">
+          <h2 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+            Do pedido à entrega, <span className="text-gradient">todo mundo sabe o que fazer</span>
+          </h2>
+          <p className="mt-4 text-gray-500 dark:text-gray-400 max-w-xl mx-auto">
+            Seu atendimento, cozinha e operação acompanham o mesmo pedido em tempo real.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          {[
+            { col: 'Novos', color: 'bg-blue-500', count: 3 },
+            { col: 'Confirmados', color: 'bg-indigo-500', count: 2 },
+            { col: 'Preparando', color: 'bg-amber-500', count: 4 },
+            { col: 'Prontos', color: 'bg-emerald-500', count: 2 },
+            { col: 'Entregues', color: 'bg-gray-400', count: 1 },
+          ].map(({ col, color, count }) => (
+            <div key={col} className="rounded-2xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 p-4 text-center">
+              <div className={`w-2 h-2 rounded-full mx-auto mb-2 ${color}`} />
+              <p className="text-xs font-bold text-gray-700 dark:text-gray-300">{col}</p>
+              <p className="text-2xl font-black text-gray-900 dark:text-white mt-1">{count}</p>
+              <p className="text-[10px] text-gray-400">pedidos</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">Menos confusão no horário de pico. Mais controle para sua equipe.</p>
+      </section>
+
+      {/* WHATSAPP */}
+      <section className="py-24 bg-gray-50/60 dark:bg-gray-900/30">
+        <div className="max-w-4xl mx-auto px-5 grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+          <div>
+            <span className="inline-flex items-center gap-1.5 bg-green-100 dark:bg-green-950/40 text-green-600 dark:text-green-400 text-xs font-semibold px-3 py-1.5 rounded-full">
+              <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+            </span>
+            <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+              Seu cliente não precisa ficar <span className="text-gradient">perguntando pelo pedido</span>
+            </h2>
+            <p className="mt-4 text-gray-500 dark:text-gray-400">
+              Com as atualizações de status, você pode manter o cliente informado durante o processo. Mais transparência para o cliente, menos interrupções para sua equipe.
+            </p>
+          </div>
+          <div className="rounded-3xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-5 space-y-3 shadow-xl shadow-gray-900/5">
+            {[
+              ['🟢', 'Pedido recebido'],
+              ['💳', 'Pagamento confirmado'],
+              ['👨‍🍳', 'Pedido em preparação'],
+              ['📦', 'Pedido pronto'],
+              ['🛵', 'Saiu para entrega'],
+            ].map(([emoji, label]) => (
+              <div key={label} className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800/60 rounded-xl px-3.5 py-2.5">
+                <span className="text-lg">{emoji}</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CARDÁPIO / QR CODE */}
+      <section className="py-24 max-w-5xl mx-auto px-5">
+        <div className="text-center mb-14">
+          <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
+            📱 Cardápio digital
+          </span>
+          <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+            Seu cardápio está <span className="text-gradient">sempre atualizado</span>
+          </h2>
+          <p className="mt-4 text-gray-500 dark:text-gray-400 max-w-xl mx-auto">
+            Altere produtos, preços, fotos, descrições e disponibilidade sem precisar reimprimir o cardápio. Sem aplicativo para o cliente baixar.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { icon: QrCode, title: 'QR Code', desc: 'O cliente escaneia.' },
+            { icon: UtensilsCrossed, title: 'Cardápio', desc: 'Escolhe os produtos.' },
+            { icon: ShoppingBag, title: 'Pedido', desc: 'Confirma a compra.' },
+            { icon: Store, title: 'Restaurante', desc: 'Recebe e organiza.' },
+          ].map(({ icon: Icon, title, desc }, i) => (
+            <div key={title} className="relative rounded-3xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 p-5 text-center">
+              <div className="w-11 h-11 rounded-2xl bg-brand-100 dark:bg-brand-950/40 flex items-center justify-center mx-auto mb-3">
+                <Icon className="w-5 h-5 text-brand-600 dark:text-brand-400" />
+              </div>
+              <h3 className="font-bold text-sm text-gray-900 dark:text-white">{title}</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{desc}</p>
+              {i < 3 && <span className="hidden sm:block absolute top-1/2 -right-3 -translate-y-1/2 text-gray-300 dark:text-gray-700">→</span>}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* PAGAMENTOS */}
+      <section className="py-24 bg-gray-50/60 dark:bg-gray-900/30">
+        <div className="max-w-4xl mx-auto px-5 grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+          <div className="order-2 md:order-1 relative rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-800 shadow-xl shadow-gray-900/5 bg-white dark:bg-gray-900">
+            <Image src="/screenshots/pagamento.png" alt="Formas de pagamento no cardápio digital" width={720} height={900} className="w-full h-auto" />
+          </div>
+          <div className="order-1 md:order-2">
+            <span className="inline-flex items-center gap-1.5 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-full">
+              <CreditCard className="w-3.5 h-3.5" /> Pagamentos
+            </span>
+            <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+              Facilite o pagamento <span className="text-gradient">dos pedidos</span>
+            </h2>
+            {/* CORREÇÃO: promessa de "PIX + Cartão na mesma tela" com
+                webhook/cashback automático removida — ainda estamos
+                validando cenários de pagamento em produção, então o texto
+                não afirma mais automação que não está 100% garantida. */}
+            <p className="mt-4 text-gray-500 dark:text-gray-400">
+              Ofereça as formas de pagamento disponíveis para sua operação e acompanhe o status diretamente no pedido.
+            </p>
+            <div className="mt-6 flex gap-2 flex-wrap">
+              {['PIX', 'Cartão', 'Dinheiro'].map(m => (
+                <span key={m} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold px-3 py-1.5 rounded-full">{m}</span>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -396,6 +537,160 @@ export function HomePageClient() {
         </div>
       </section>
 
+      {/* IA */}
+      <section className="py-24 bg-gray-50/60 dark:bg-gray-900/30">
+        <div className="max-w-4xl mx-auto px-5 text-center">
+          <span className="inline-flex items-center gap-1.5 bg-fuchsia-100 dark:bg-fuchsia-950/40 text-fuchsia-600 dark:text-fuchsia-400 text-xs font-semibold px-3 py-1.5 rounded-full">
+            <Sparkles className="w-3.5 h-3.5" /> IA
+          </span>
+          <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+            Deixe seus produtos mais <span className="text-gradient">atrativos com IA</span>
+          </h2>
+          <p className="mt-4 text-gray-500 dark:text-gray-400 max-w-lg mx-auto">
+            Não sabe como descrever aquele produto novo? A IA ajuda você a criar descrições mais interessantes em poucos segundos.
+          </p>
+          <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
+            <div className="rounded-3xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-6">
+              <p className="text-xs font-black uppercase tracking-wide text-gray-400 mb-3">Antes</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Hambúrguer com carne, queijo e molho.</p>
+            </div>
+            <div className="rounded-3xl bg-gradient-to-br from-fuchsia-50 to-pink-50 dark:from-fuchsia-950/20 dark:to-pink-950/10 border border-fuchsia-100 dark:border-fuchsia-900/30 p-6">
+              <p className="text-xs font-black uppercase tracking-wide text-fuchsia-500 mb-3">Depois</p>
+              <p className="text-sm text-gray-700 dark:text-gray-300">Hambúrguer artesanal preparado com carne suculenta, queijo cremoso e molho especial da casa.</p>
+            </div>
+          </div>
+          <p className="mt-6 text-sm text-gray-500 dark:text-gray-400">Mais facilidade para cadastrar. Mais qualidade na apresentação dos seus produtos.</p>
+        </div>
+      </section>
+
+      {/* FUNCIONALIDADES COMPLETAS */}
+      <section id="funcionalidades" className="py-24 max-w-6xl mx-auto px-5">
+        <div className="text-center mb-14">
+          <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
+            ⚡ Funcionalidades
+          </span>
+          <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+            Tudo que seu <span className="text-gradient">restaurante precisa</span>
+          </h2>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {features.map((f) => {
+            const Icon = f.icon
+            return (
+              <div
+                key={f.title}
+                className="group bg-gray-50 dark:bg-gray-900/50 rounded-3xl p-5 border border-gray-100 dark:border-gray-800 cursor-default
+                  transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-gray-900/10 dark:hover:shadow-black/30"
+              >
+                <div className="inline-flex w-11 h-11 rounded-2xl bg-brand-100 dark:bg-brand-950/40 items-center justify-center mb-4">
+                  <Icon className="w-5 h-5 text-brand-600 dark:text-brand-400" />
+                </div>
+                <h3 className="font-bold text-gray-900 dark:text-white mb-1.5">{f.title}</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{f.desc}</p>
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
+      {/* EQUIPE / PERMISSÕES */}
+      <section className="py-24 bg-gray-50/60 dark:bg-gray-900/30">
+        <div className="max-w-5xl mx-auto px-5">
+          <div className="text-center mb-14">
+            <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
+              <Users className="w-3.5 h-3.5" /> Equipe
+            </span>
+            <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+              Um sistema para <span className="text-gradient">toda a sua equipe</span>
+            </h2>
+            <p className="mt-4 text-gray-500 dark:text-gray-400">Cada pessoa com acesso ao que realmente precisa.</p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {team.map(({ icon: Icon, role, desc }) => (
+              <div key={role} className="rounded-3xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-5 text-center">
+                <div className="w-11 h-11 rounded-2xl bg-brand-100 dark:bg-brand-950/40 flex items-center justify-center mx-auto mb-3">
+                  <Icon className="w-5 h-5 text-brand-600 dark:text-brand-400" />
+                </div>
+                <h3 className="font-bold text-sm text-gray-900 dark:text-white">{role}</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* TIPOS DE NEGÓCIO */}
+      <section className="py-24 max-w-5xl mx-auto px-5 text-center">
+        <h2 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+          Feito para diferentes <span className="text-gradient">tipos de negócio</span>
+        </h2>
+        <div className="mt-10 flex flex-wrap justify-center gap-3">
+          {businessTypes.map(({ emoji, label }) => (
+            <span key={label} className="inline-flex items-center gap-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300 px-4 py-2 rounded-full">
+              <span>{emoji}</span>{label}
+            </span>
+          ))}
+        </div>
+        <p className="mt-8 text-gray-500 dark:text-gray-400">Se você vende comida, o Meu Cardápio pode ajudar a organizar sua operação.</p>
+      </section>
+
+      {/* PROVA SOCIAL — telas reais, sem depoimento inventado nem número sem dado real */}
+      <section className="py-24 bg-gray-50/60 dark:bg-gray-900/30">
+        <div className="max-w-6xl mx-auto px-5">
+          <div className="text-center mb-14">
+            <h2 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+              Feito para a <span className="text-gradient">operação real</span> do seu restaurante
+            </h2>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            {socialShots.map(({ src, label }) => (
+              <div key={label} className="rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
+                <div className="relative w-full aspect-[4/3]">
+                  <Image src={src} alt={label} fill sizes="240px" className="object-cover object-top" />
+                </div>
+                <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 text-center py-2 px-1">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* PLANOS */}
+      <section id="planos" className="py-24 max-w-5xl mx-auto px-5">
+        <div className="text-center mb-14">
+          <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
+            🛡 Um plano. Tudo incluído.
+          </span>
+          <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+            Simples e <span className="text-gradient">transparente</span>
+          </h2>
+          <p className="mt-4 text-gray-500 dark:text-gray-400">Sem taxas escondidas. Sem fidelidade. Cancele quando quiser.</p>
+        </div>
+        {/* CORREÇÃO: Starter + Pro trocados por um único plano com tudo
+            incluído — mais fácil de vender e de entender. */}
+        <div className="max-w-md mx-auto rounded-3xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-xl shadow-gray-900/5 p-8">
+          <div className="text-center mb-6">
+            <h3 className="text-xl font-black text-gray-900 dark:text-white">Meu Cardápio</h3>
+            <div className="flex items-baseline justify-center gap-1 mt-2">
+              <span className="text-4xl font-black text-gray-900 dark:text-white">R$ {PLAN_PRICE}</span>
+              <span className="text-sm text-gray-400">/mês</span>
+            </div>
+          </div>
+          <ul className="space-y-2.5 mb-8">
+            {planFeatures.map((f) => (
+              <li key={f} className="flex items-start gap-2.5">
+                <div className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center mt-0.5 text-xs bg-brand-100 dark:bg-brand-950/40 text-brand-500">✓</div>
+                <span className="text-sm text-gray-600 dark:text-gray-400">{f}</span>
+              </li>
+            ))}
+          </ul>
+          <Link href="/register" className="block text-center py-3.5 rounded-2xl text-sm font-bold active:scale-95 transition-all bg-brand-500 text-white hover:bg-brand-600 shadow-sm shadow-brand-200 dark:shadow-none">
+            Começar 7 dias grátis
+          </Link>
+          <p className="mt-4 text-center text-xs text-gray-400">Sem fidelidade. Cancele quando quiser.</p>
+        </div>
+      </section>
+
       {/* PERGUNTAS FREQUENTES */}
       <section id="faq" className="py-24 bg-gray-50/60 dark:bg-gray-900/30">
         <div className="max-w-3xl mx-auto px-5">
@@ -409,28 +704,7 @@ export function HomePageClient() {
           </div>
 
           <div className="space-y-3">
-            {[
-              {
-                q: 'Preciso instalar algum aplicativo?',
-                a: 'Não. O cardápio digital funciona direto no navegador do celular (PWA) — o cliente escaneia o QR Code e já faz o pedido, sem baixar nada. O dashboard também funciona em qualquer navegador, no computador ou celular.',
-              },
-              {
-                q: 'Como funciona o trial de 7 dias?',
-                a: 'Você cria a conta, cadastra o cartão (sem cobrança nenhuma nesse momento) e usa a plataforma completa por 7 dias. Se cancelar antes do fim do trial, não é cobrado nada. Sem contrato de fidelidade.',
-              },
-              {
-                q: 'Quais formas de pagamento posso oferecer aos clientes?',
-                a: 'No PDV/balcão, o Pix já vem integrado. No cardápio digital, Pix e cartão são integrados via Efí Bank, com confirmação automática. Cartão (na maquineta) e dinheiro na entrega ou presencialmente ficam a critério de cada estabelecimento, fora da plataforma.',
-              },
-              {
-                q: 'Consigo migrar meu cardápio já pronto pra plataforma?',
-                a: 'Sim — nosso suporte te ajuda a importar produtos, preços e categorias na hora de começar, sem custo adicional.',
-              },
-              {
-                q: 'Posso cancelar quando quiser?',
-                a: 'Sim, sem multa e sem contrato de fidelidade. Você cancela direto pelo painel a qualquer momento.',
-              },
-            ].map(({ q, a }) => (
+            {faqs.map(({ q, a }) => (
               <details key={q} className="group rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <summary className="flex items-center justify-between gap-3 px-5 py-4 cursor-pointer list-none font-semibold text-sm text-gray-900 dark:text-white">
                   {q}
@@ -450,17 +724,17 @@ export function HomePageClient() {
           <div className="relative">
             <span className="inline-flex items-center gap-1.5 bg-brand-500/20 text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">✦ Comece hoje</span>
             <h2 className="mt-5 text-2xl sm:text-3xl font-black text-white leading-tight">
-              Pronto para vender mais<br />
-              <span className="text-gradient">no automático?</span>
+              Seu restaurante merece uma<br />
+              <span className="text-gradient">operação mais simples</span>
             </h2>
-            <p className="mt-5 text-gray-400 max-w-lg mx-auto">Configure seu cardápio digital em menos de 10 minutos. 7 dias grátis com cartão — sem cobranças no trial.</p>
+            <p className="mt-5 text-gray-400 max-w-lg mx-auto">Coloque seu cardápio online, organize seus pedidos e tenha mais controle da sua operação. Comece agora.</p>
             <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
               {/* CORREÇÃO (#5): tamanho (px-6 py-3, text-sm) e cor (fundo
                   claro sólido) agora batem com o botão do topo da página —
                   antes esse aqui era maior (px-8 py-4, text-base) e laranja
                   em vez de escuro/claro sólido. */}
               <Link href="/register" className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-gray-900 font-bold rounded-2xl hover:bg-gray-100 active:scale-95 transition-all text-sm shadow-lg shadow-black/20">
-                Criar conta grátis
+                Começar 7 dias grátis
                 <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
               </Link>
               <Link href="/menu/pizzaria-do-jose" className="inline-flex items-center justify-center gap-2 px-6 py-3 border-2 border-gray-600 text-gray-300 font-bold rounded-2xl hover:border-gray-400 hover:text-white active:scale-95 transition-all text-sm">
@@ -468,7 +742,7 @@ export function HomePageClient() {
               </Link>
             </div>
             {/* CORREÇÃO: removida a afirmação "+12 mil restaurantes já usam" */}
-            <p className="mt-5 text-xs text-gray-500">Cancele quando quiser · Suporte em português</p>
+            <p className="mt-5 text-xs text-gray-500">Sem fidelidade · Cancele quando quiser · Suporte em português</p>
           </div>
         </div>
       </section>
@@ -503,10 +777,10 @@ export function HomePageClient() {
                 <p className="font-bold text-gray-900 dark:text-white mb-3">Produto</p>
                 <ul className="space-y-2 text-gray-500 dark:text-gray-400">
                   <li><a href="#funcionalidades" className="hover:text-brand-500 transition-colors">Funcionalidades</a></li>
-                  <li><a href="#integracoes" className="hover:text-brand-500 transition-colors">Integrações</a></li>
+                  <li><a href="#como-funciona" className="hover:text-brand-500 transition-colors">Como funciona</a></li>
                   <li><a href="#planos" className="hover:text-brand-500 transition-colors">Planos</a></li>
                   <li><a href="#faq" className="hover:text-brand-500 transition-colors">FAQ</a></li>
-                  <li><Link href="/menu/pizzaria-do-jose" className="hover:text-brand-500 transition-colors">Demo</Link></li>
+                  <li><Link href="/menu/pizzaria-do-jose" className="hover:text-brand-500 transition-colors">Demonstração</Link></li>
                 </ul>
               </div>
               <div>
