@@ -22,7 +22,6 @@ import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { applyCashback, applyLoyaltyPoints } from '@/lib/loyalty/apply-rewards'
 import { restockCancelledOrder, revalidateStorefrontForTenant } from '@/lib/utils/stock'
 import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
-import { computeReceiptInfo } from '@/lib/finance/compute-receipt'
 import type { PrismaClient } from '@prisma/client'
 import crypto from 'crypto'
 
@@ -288,7 +287,18 @@ export async function POST(request: Request) {
         // duplicar cashback/pontos de fidelidade.
         const paidAt = new Date()
         const finalMethod = realMethod ?? payment.method
-        const receipt = computeReceiptInfo(finalMethod, Number(payment.amount), paidAt)
+        // CORREÇÃO: estava chamando computeReceiptInfo (a função pensada
+        // pra Efí/maquininha, que usa taxa configurada manualmente) — mas
+        // o Mercado Pago já manda o valor líquido real e a data de
+        // liberação dentro do próprio payment. Não tem por que estimar
+        // algo que o MP está nos dizendo com precisão.
+        const netReceived = mpPayment.transaction_details?.net_received_amount
+        const grossAmount = Number(payment.amount)
+        const receipt = {
+          fee: typeof netReceived === 'number' ? Math.round((grossAmount - netReceived) * 100) / 100 : null,
+          netAmount: typeof netReceived === 'number' ? netReceived : null,
+          expectedReceiptDate: mpPayment.money_release_date ? new Date(mpPayment.money_release_date) : null,
+        }
         const updated = await tx.payment.updateMany({
           where: { id: payment.id, status: { not: 'PAID' } },
           data: {
