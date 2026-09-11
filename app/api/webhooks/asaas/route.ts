@@ -18,7 +18,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
 import { decrypt, safeCompareHash } from '@/lib/security/crypto'
 import { createHash } from 'crypto'
-import { computeReceiptInfo } from '@/lib/finance/compute-receipt'
 
 interface AsaasWebhookPayload {
   event: string
@@ -26,6 +25,11 @@ interface AsaasWebhookPayload {
     id: string
     status: string
     externalReference?: string | null
+    // Asaas já manda o valor líquido real e a data de crédito prevista
+    // dentro do próprio evento — nada de estimar isso com taxa fixa.
+    value?: number
+    netValue?: number
+    estimatedCreditDate?: string | null
   }
 }
 
@@ -94,10 +98,18 @@ export async function POST(req: NextRequest) {
         where: { id: dbPayment.id, status: { not: 'PAID' } },
         data: (() => {
           const paidAt = new Date()
-          const receipt = computeReceiptInfo(dbPayment.method, Number(dbPayment.amount), paidAt)
+          // CORREÇÃO: estava chamando computeReceiptInfo (pensada pra
+          // Efí/maquininha, com taxa configurada manualmente) — o Asaas já
+          // manda o valor líquido real e a data de crédito prevista no
+          // próprio evento, não tem por que estimar isso.
+          const netValue = payment.netValue
+          const grossAmount = Number(dbPayment.amount)
+          const fee = typeof netValue === 'number' ? Math.round((grossAmount - netValue) * 100) / 100 : null
+          const netAmount = typeof netValue === 'number' ? netValue : null
+          const expectedReceiptDate = payment.estimatedCreditDate ? new Date(payment.estimatedCreditDate) : null
           return {
             status: 'PAID' as const, paidAt, webhookData: body as any,
-            fee: receipt.fee, netAmount: receipt.netAmount, expectedReceiptDate: receipt.expectedReceiptDate,
+            fee, netAmount, expectedReceiptDate,
           }
         })(),
       })
