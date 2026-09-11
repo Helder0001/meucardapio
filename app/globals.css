@@ -139,6 +139,8 @@
   .animate-float { animation: float 6s ease-in-out infinite; }
   .animate-float-delay { animation: float 6s ease-in-out 1.5s infinite; }
   .animate-pulse-slow { animation: pulseSlow 3s ease-in-out infinite; }
+  /* Faixa de logos de parceiros — rolagem contínua para a esquerda */
+  .animate-marquee { animation: marquee 28s linear infinite; }
 
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(16px); }
@@ -155,5 +157,9 @@
   @keyframes pulseSlow {
     0%, 100% { opacity: 1; }
     50%       { opacity: 0.6; }
+  }
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
   }
 }
