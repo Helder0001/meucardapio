@@ -12,6 +12,7 @@ import { prisma } from '@/lib/db/client'
 import { createCardPayment } from '@/lib/mercadopago/checkout-client'
 import { getPaymentProvider } from '@/lib/payments/provider-router'
 import { createTenantCardCharge } from '@/lib/efi/tenant-payments'
+import { computeReceiptInfo, type FinanceRatesConfig } from '@/lib/finance/compute-receipt'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { applyCashback, applyLoyaltyPoints } from '@/lib/loyalty/apply-rewards'
 import type { PrismaClient } from '@prisma/client'
@@ -118,6 +119,12 @@ export async function POST(
 
   const cardProvider = await getPaymentProvider(order.tenantId, 'card')
 
+  // Taxa/prazo configurados pelo tenant pra cartão via Efí — ver
+  // lib/finance/compute-receipt.ts. Mercado Pago não usa isso (dado real
+  // vem direto na resposta da cobrança, abaixo).
+  const tenantFinanceRow = await prisma.tenant.findFirst({ where: { id: order.tenantId }, select: { settings: true } })
+  const financeRates = ((tenantFinanceRow?.settings as any)?.financeRates ?? {}) as FinanceRatesConfig
+
   if (cardProvider === 'EFI') {
     try {
       const chargeResult = await createTenantCardCharge({
@@ -134,6 +141,10 @@ export async function POST(
 
       const isApproved = chargeResult.status === 'approved'
       const isRejected = chargeResult.status === 'unpaid' || chargeResult.status === 'refunded' || chargeResult.status === 'canceled'
+      const efiPaidAt = new Date()
+      const efiReceipt = isApproved
+        ? computeReceiptInfo('CREDIT_CARD', stillOwed, efiPaidAt, financeRates, 'EFI', body.installments ?? 1)
+        : null
 
       const existingEfiPayment = await prisma.payment.findFirst({
         where: { orderId: order.id, provider: 'EFI', providerReference: String(chargeResult.chargeId) },
@@ -164,8 +175,11 @@ export async function POST(
         provider: 'EFI' as const,
         providerReference: String(chargeResult.chargeId),
         cardLastDigits: chargeResult.cardMask?.slice(-4),
-        paidAt: isApproved ? new Date() : undefined,
+        paidAt: isApproved ? efiPaidAt : undefined,
         failedAt: isRejected ? new Date() : undefined,
+        fee: efiReceipt?.fee ?? undefined,
+        netAmount: efiReceipt?.netAmount ?? undefined,
+        expectedReceiptDate: efiReceipt?.expectedReceiptDate ?? undefined,
       }
 
       const targetPaymentId = existingEfiPayment?.id ?? placeholderPayment?.id
@@ -254,6 +268,11 @@ export async function POST(
         : 'PENDING' as const,
       paidAt: result.status === 'approved' ? new Date() : undefined,
       failedAt: result.status === 'rejected' ? new Date() : undefined,
+      fee: result.status === 'approved' && typeof result.netReceivedAmount === 'number'
+        ? Math.round((stillOwed - result.netReceivedAmount) * 100) / 100 : undefined,
+      netAmount: result.status === 'approved' ? result.netReceivedAmount : undefined,
+      expectedReceiptDate: result.status === 'approved' && result.moneyReleaseDate
+        ? new Date(result.moneyReleaseDate) : undefined,
     }
 
     // Criar ou atualizar o registro de pagamento
