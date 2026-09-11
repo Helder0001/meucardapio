@@ -91,6 +91,16 @@ export const reviewLimiter = new Ratelimit({
   prefix:  'rl:review:order',
 })
 
+// ── Importar cardápio com IA ─────────────────────────────────────────────
+// 10 análises por hora por tenant — cada chamada consome créditos de uma
+// API de IA paga (OpenAI/Anthropic), então o limite é mais apertado que o
+// de upload comum.
+export const aiImportLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, '1 h'),
+  prefix:  'rl:ai-import',
+})
+
 // ── Helper: verificar OTP com ambas as dimensões ──────────────────────────
 export async function checkOtpRateLimit(
   ip: string,
