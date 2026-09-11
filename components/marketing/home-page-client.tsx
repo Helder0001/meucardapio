@@ -55,6 +55,20 @@ const planFeatures = [
   'IA para produtos', 'Gestão de equipe', 'Todos os recursos incluídos',
 ]
 
+// CORREÇÃO: logos de parceiros/integrações — todas tratadas em cinza
+// uniforme com fundo transparente pra faixa de rolagem contínua.
+const partnerLogos = [
+  { name: 'Efí Bank', logo: '/integrations/efi-bank-logo-gray.png' },
+  { name: 'Groq', logo: '/integrations/partner-groq.png' },
+  { name: 'Resend', logo: '/integrations/partner-resend.png' },
+  { name: 'Novu', logo: '/integrations/partner-novu.png' },
+  { name: 'OpenCage', logo: '/integrations/partner-opencage.png' },
+  { name: 'Parceiro', logo: '/integrations/partner-1.png' },
+  { name: 'Parceiro', logo: '/integrations/partner-2.png' },
+  { name: 'Parceiro', logo: '/integrations/partner-3.png' },
+  { name: 'Parceiro', logo: '/integrations/partner-4.png' },
+]
+
 // Papéis de acesso — cada pessoa da equipe vê só o que precisa.
 const team = [
   { icon: ShieldCheck,  role: 'Gerente',    desc: 'Tem visão completa da operação.' },
@@ -69,17 +83,6 @@ const businessTypes = [
   { emoji: '🌮', label: 'Lanchonetes' }, { emoji: '🍰', label: 'Docerias' },
   { emoji: '🍗', label: 'Espetarias' }, { emoji: '☕', label: 'Cafeterias' },
   { emoji: '🥡', label: 'Delivery' },
-]
-
-// CORREÇÃO: seção de prova social não usa depoimentos inventados nem
-// números sem dado real (ex: "+38% pedidos") — em vez disso, mostra telas
-// reais do produto em uso.
-const socialShots = [
-  { src: '/screenshots/cardapio-cliente.png', label: 'Cardápio do cliente' },
-  { src: '/screenshots/kanban.png',           label: 'Kanban de pedidos' },
-  { src: '/screenshots/pedidos.png',          label: 'Lista de pedidos' },
-  { src: '/screenshots/relatorios.png',       label: 'Relatórios' },
-  { src: '/screenshots/clientes.png',         label: 'Clientes' },
 ]
 
 // CORREÇÃO: pergunta sobre migrar/integrar com outros sistemas removida da
@@ -254,7 +257,7 @@ export function HomePageClient() {
               </div>
               <div className="grid grid-cols-3 gap-3 p-5">
                 {[
-                  { col: 'Novos', color: 'bg-blue-500', count: 3, items: ['Pizza Margherita', 'X-Burguer + Batata', 'Açaí 500ml'] },
+                  { col: 'Novos', color: 'bg-blue-500', count: 3, items: ['Pizza Bacon', 'X-Burguer + Batata', 'Açaí 500ml'] },
                   { col: 'Preparando', color: 'bg-amber-500', count: 2, items: ['Lasanha Bolonhesa', 'Combo Família'] },
                   { col: 'Prontos', color: 'bg-emerald-500', count: 4, items: ['Hot-dog Especial', 'Suco Laranja', 'Calzone', '+1'] },
                 ].map(({ col, color, count, items }) => (
@@ -473,29 +476,25 @@ export function HomePageClient() {
 
       {/* PAGAMENTOS */}
       <section className="py-24 bg-gray-50/60 dark:bg-gray-900/30">
-        <div className="max-w-4xl mx-auto px-5 grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
-          <div className="order-2 md:order-1 relative rounded-3xl overflow-hidden border border-gray-200 dark:border-gray-800 shadow-xl shadow-gray-900/5 bg-white dark:bg-gray-900">
-            <Image src="/screenshots/pagamento.png" alt="Formas de pagamento no cardápio digital" width={720} height={900} className="w-full h-auto" />
-          </div>
-          <div className="order-1 md:order-2">
-            <span className="inline-flex items-center gap-1.5 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-full">
-              <CreditCard className="w-3.5 h-3.5" /> Pagamentos
-            </span>
-            <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-              Facilite o pagamento <span className="text-gradient">dos pedidos</span>
-            </h2>
-            {/* CORREÇÃO: promessa de "PIX + Cartão na mesma tela" com
-                webhook/cashback automático removida — ainda estamos
-                validando cenários de pagamento em produção, então o texto
-                não afirma mais automação que não está 100% garantida. */}
-            <p className="mt-4 text-gray-500 dark:text-gray-400">
-              Ofereça as formas de pagamento disponíveis para sua operação e acompanhe o status diretamente no pedido.
-            </p>
-            <div className="mt-6 flex gap-2 flex-wrap">
-              {['PIX', 'Cartão', 'Dinheiro'].map(m => (
-                <span key={m} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold px-3 py-1.5 rounded-full">{m}</span>
-              ))}
-            </div>
+        <div className="max-w-2xl mx-auto px-5 text-center">
+          <span className="inline-flex items-center gap-1.5 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-full">
+            <CreditCard className="w-3.5 h-3.5" /> Pagamentos
+          </span>
+          <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+            Facilite o pagamento <span className="text-gradient">dos pedidos</span>
+          </h2>
+          {/* CORREÇÃO: promessa de "PIX + Cartão na mesma tela" com
+              webhook/cashback automático removida — ainda estamos
+              validando cenários de pagamento em produção, então o texto
+              não afirma mais automação que não está 100% garantida.
+              CORREÇÃO: screenshot ao lado do texto removida a pedido. */}
+          <p className="mt-4 text-gray-500 dark:text-gray-400">
+            Ofereça as formas de pagamento disponíveis para sua operação e acompanhe o status diretamente no pedido.
+          </p>
+          <div className="mt-6 flex gap-2 flex-wrap justify-center">
+            {['PIX', 'Cartão', 'Dinheiro'].map(m => (
+              <span key={m} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold px-3 py-1.5 rounded-full">{m}</span>
+            ))}
           </div>
         </div>
       </section>
@@ -514,26 +513,21 @@ export function HomePageClient() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
-          {/* CORREÇÃO: seção deixou de agrupar por modalidade (Pagamentos /
-              Marketing & Vendas / Delivery & Marketplace) — hoje só a Efí
-              Bank e a Grok são parceiras de fato, então a seção mostra
-              direto as duas logos, sem prometer integrações que ainda não
-              existem (ex: iFood, 99Food). */}
-          {[
-            { name: 'Efí Bank', logo: '/integrations/efi-bank-logo.png', desc: 'PIX + cartão parcelado' },
-            { name: 'Grok', logo: '/integrations/grok-logo.png', desc: 'IA para descrição de produtos' },
-          ].map(({ name, logo, desc }) => (
-            <div key={name} className="rounded-3xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 p-6 flex items-center gap-4">
-              <div className="relative w-14 h-14 flex-shrink-0 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-2">
-                <Image src={logo} alt={name} fill sizes="56px" className="object-contain p-1" />
+        {/* CORREÇÃO: logo do Grok (xAI) trocada pela logo correta da Groq
+            (provedor de IA usado de fato pela plataforma), e a seção deixou
+            de ser 2 cards fixos pra virar uma faixa de logos em rolagem
+            contínua — todas em cinza uniforme e fundo transparente,
+            incluindo a da Efí. */}
+        <div className="relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
+          <div className="flex items-center w-max animate-marquee hover:[animation-play-state:paused]">
+            {[...partnerLogos, ...partnerLogos].map(({ name, logo }, i) => (
+              <div key={`${name}-${i}`} className="flex-shrink-0 w-40 h-20 mx-4 flex items-center justify-center">
+                <div className="relative w-28 h-12">
+                  <Image src={logo} alt={name} fill sizes="112px" className="object-contain" />
+                </div>
               </div>
-              <div>
-                <p className="font-bold text-gray-900 dark:text-white">{name}</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{desc}</p>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </section>
 
@@ -634,27 +628,6 @@ export function HomePageClient() {
         <p className="mt-8 text-gray-500 dark:text-gray-400">Se você vende comida, o Meu Cardápio pode ajudar a organizar sua operação.</p>
       </section>
 
-      {/* PROVA SOCIAL — telas reais, sem depoimento inventado nem número sem dado real */}
-      <section className="py-24 bg-gray-50/60 dark:bg-gray-900/30">
-        <div className="max-w-6xl mx-auto px-5">
-          <div className="text-center mb-14">
-            <h2 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-              Feito para a <span className="text-gradient">operação real</span> do seu restaurante
-            </h2>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-            {socialShots.map(({ src, label }) => (
-              <div key={label} className="rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
-                <div className="relative w-full aspect-[4/3]">
-                  <Image src={src} alt={label} fill sizes="240px" className="object-cover object-top" />
-                </div>
-                <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 text-center py-2 px-1">{label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* PLANOS */}
       <section id="planos" className="py-24 max-w-5xl mx-auto px-5">
         <div className="text-center mb-14">
@@ -729,16 +702,16 @@ export function HomePageClient() {
             </h2>
             <p className="mt-5 text-gray-400 max-w-lg mx-auto">Coloque seu cardápio online, organize seus pedidos e tenha mais controle da sua operação. Comece agora.</p>
             <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
-              {/* CORREÇÃO (#5): tamanho (px-6 py-3, text-sm) e cor (fundo
-                  claro sólido) agora batem com o botão do topo da página —
-                  antes esse aqui era maior (px-8 py-4, text-base) e laranja
-                  em vez de escuro/claro sólido. */}
+              {/* CORREÇÃO: os dois CTAs agora seguem exatamente o padrão do
+                  hero — botão sólido + link de texto sublinhado (sem caixa
+                  nem borda) como CTA secundário. */}
               <Link href="/register" className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-gray-900 font-bold rounded-2xl hover:bg-gray-100 active:scale-95 transition-all text-sm shadow-lg shadow-black/20">
                 Começar 7 dias grátis
                 <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
               </Link>
-              <Link href="/menu/pizzaria-do-jose" className="inline-flex items-center justify-center gap-2 px-6 py-3 border-2 border-gray-600 text-gray-300 font-bold rounded-2xl hover:border-gray-400 hover:text-white active:scale-95 transition-all text-sm">
-                🌐 Ver cardápio demo
+              <Link href="/menu/pizzaria-do-jose" className="group inline-flex items-center justify-center gap-1.5 px-4 py-3 text-gray-400 font-semibold hover:text-white transition-colors text-sm underline decoration-gray-600 underline-offset-4 hover:decoration-gray-400">
+                Ver cardápio demo
+                <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
               </Link>
             </div>
             {/* CORREÇÃO: removida a afirmação "+12 mil restaurantes já usam" */}
