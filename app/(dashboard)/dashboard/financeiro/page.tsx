@@ -16,6 +16,7 @@
 import { auth } from '@/lib/auth/session'
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/db/client'
+import { PaymentMethod } from '@prisma/client'
 import { FinanceiroClient } from '@/components/dashboard/financeiro-client'
 import type { Metadata } from 'next'
 
@@ -61,7 +62,19 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
   const endDate   = params.end   || new Date().toISOString().slice(0, 10)
   const dateField = params.dateField === 'credito' ? 'credito' : 'venda'
   const orderNumber = params.orderNumber?.trim() || ''
+  // CORREÇÃO: searchParams sempre chega como string solta — o Prisma
+  // exige o enum PaymentMethod, não `string`. Validamos contra os valores
+  // reais do enum aqui (em vez de um "as PaymentMethod" às cegas), assim
+  // um valor de query inválido/malicioso não passa pro Prisma e o erro de
+  // type-check ("Type 'string' is not assignable to type 'PaymentMethod'")
+  // não volta a acontecer. `method` (string, o valor bruto da query) segue
+  // pro FinanceiroClient — é só o que preenche o <select> — enquanto
+  // `validMethod` (o enum tipado, ou undefined se o valor não bater com
+  // nenhum PaymentMethod) é o único usado no `where` do Prisma.
   const method = params.method || ''
+  const validMethod = (Object.values(PaymentMethod) as string[]).includes(method)
+    ? (method as PaymentMethod)
+    : undefined
 
   // CORREÇÃO (#2): filtro de período agora pode ser aplicado em cima da
   // Data da Venda (paidAt) OU da Data do Crédito (expectedReceiptDate),
@@ -76,7 +89,7 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
     prisma.payment.findMany({
       where: {
         tenantId, status: 'PAID', ...dateWhere,
-        ...(method ? { method } : {}),
+        ...(validMethod ? { method: validMethod } : {}),
         ...(orderNumberInt !== null ? { order: { orderNumber: orderNumberInt } } : {}),
       },
       select: {
