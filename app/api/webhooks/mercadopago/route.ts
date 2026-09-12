@@ -20,6 +20,7 @@ import { prisma } from '@/lib/db/client'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { applyCashback, applyLoyaltyPoints } from '@/lib/loyalty/apply-rewards'
+import { registerPaidOrderForCustomer } from '@/lib/customers/register-paid-order'
 import { restockCancelledOrder, revalidateStorefrontForTenant } from '@/lib/utils/stock'
 import { resolveTenantMpAccessToken } from '@/lib/mercadopago/resolve-token'
 import type { PrismaClient } from '@prisma/client'
@@ -43,7 +44,7 @@ async function findPaymentByMpId(mercadoPagoId: string) {
       order: {
         select: {
           id: true, tenantId: true, orderNumber: true,
-          status: true, customerId: true, total: true,
+          status: true, customerId: true, total: true, paymentStatus: true,
         },
       },
     },
@@ -72,7 +73,7 @@ async function findPendingPaymentForTenant(tenantId: string, orderId: string | u
       order: {
         select: {
           id: true, tenantId: true, orderNumber: true,
-          status: true, customerId: true, total: true,
+          status: true, customerId: true, total: true, paymentStatus: true,
         },
       },
     },
@@ -229,7 +230,7 @@ export async function POST(request: Request) {
             order: {
               select: {
                 id: true, tenantId: true, orderNumber: true,
-                status: true, customerId: true, total: true,
+                status: true, customerId: true, total: true, paymentStatus: true,
               },
             },
           },
@@ -366,6 +367,12 @@ export async function POST(request: Request) {
         if (payment.order.customerId) {
           await applyCashback(tx, payment.order.tenantId, payment.order.customerId, payment.order.id, Number(payment.order.total))
           await applyLoyaltyPoints(tx, payment.order.tenantId, payment.order.customerId, payment.order.id, Number(payment.order.total))
+          // CORREÇÃO (#5): ver lib/customers/register-paid-order.ts
+          await registerPaidOrderForCustomer(tx, {
+            customerId: payment.order.customerId,
+            previousPaymentStatus: payment.order.paymentStatus,
+            total: Number(payment.order.total),
+          })
         }
 
         return { processed: true, isFullyPaid: true, remaining: 0 }
