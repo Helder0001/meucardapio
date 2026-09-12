@@ -58,15 +58,15 @@ const planFeatures = [
 // CORREÇÃO: logos de parceiros/integrações — todas tratadas em cinza
 // uniforme com fundo transparente pra faixa de rolagem contínua.
 const partnerLogos = [
-  { name: 'Efí Bank', logo: '/integrations/efi-bank-logo-gray.png' },
-  { name: 'Groq', logo: '/integrations/partner-groq.png' },
-  { name: 'Resend', logo: '/integrations/partner-resend.png' },
-  { name: 'Novu', logo: '/integrations/partner-novu.png' },
-  { name: 'OpenCage', logo: '/integrations/partner-opencage.png' },
-  { name: 'Parceiro', logo: '/integrations/partner-1.png' },
-  { name: 'Parceiro', logo: '/integrations/partner-2.png' },
-  { name: 'Parceiro', logo: '/integrations/partner-3.png' },
-  { name: 'Parceiro', logo: '/integrations/partner-4.png' },
+  { name: 'Efí Bank', logo: '/integrations/efi-bank-logo-gray.png', caption: 'PIX e pagamentos' },
+  { name: 'Groq', logo: '/integrations/partner-groq.png', caption: 'IA para descrições' },
+  { name: 'Resend', logo: '/integrations/partner-resend.png', caption: 'E-mails automáticos' },
+  { name: 'Novu', logo: '/integrations/partner-novu.png', caption: 'Notificações' },
+  { name: 'OpenCage', logo: '/integrations/partner-opencage.png', caption: 'Localização e endereços' },
+  { name: 'Parceiro', logo: '/integrations/partner-1.png', caption: null },
+  { name: 'Parceiro', logo: '/integrations/partner-2.png', caption: null },
+  { name: 'Parceiro', logo: '/integrations/partner-3.png', caption: null },
+  { name: 'Parceiro', logo: '/integrations/partner-4.png', caption: null },
 ]
 
 // Papéis de acesso — cada pessoa da equipe vê só o que precisa.
@@ -74,7 +74,7 @@ const team = [
   { icon: ShieldCheck,  role: 'Gerente',    desc: 'Tem visão completa da operação.' },
   { icon: MessageCircle,role: 'Atendente',  desc: 'Foca no atendimento e nos pedidos.' },
   { icon: Columns3,     role: 'Operador',   desc: 'Ajuda no controle dos pedidos e pagamentos.' },
-  { icon: Truck,        role: 'Entregador', desc: 'Acessa só o que precisa pra realizar sua função.' },
+  { icon: Truck,        role: 'Entregador', desc: 'Acessa apenas os pedidos destinados à entrega.' },
 ]
 
 const businessTypes = [
@@ -239,50 +239,19 @@ export function HomePageClient() {
             <span>✓ 7 dias grátis</span><span>✓ Sem fidelidade</span><span>✓ Cancele quando quiser</span>
           </p>
 
-          {/* Kanban mock — CORREÇÃO: imagem do produto ampliada
-              (max-w-3xl → max-w-4xl) pra ganhar mais destaque no hero. */}
+          {/* Screenshot real do produto (dashboard + cardápio no celular),
+              substituindo o mock desenhado em HTML/CSS que havia aqui antes. */}
           <div className="animate-fade-up animate-fade-up-delay-4 mt-16 relative mx-auto max-w-4xl">
-            <div className="rounded-3xl border border-gray-200/80 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl shadow-gray-900/10 dark:shadow-black/40 overflow-hidden">
-              <div className="flex items-center gap-2 px-5 py-3.5 border-b border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/50">
-                <div className="flex gap-1.5">
-                  <div className="w-3 h-3 rounded-full bg-red-400" />
-                  <div className="w-3 h-3 rounded-full bg-yellow-400" />
-                  <div className="w-3 h-3 rounded-full bg-green-400" />
-                </div>
-                <div className="flex-1 flex justify-center">
-                  <div className="bg-gray-200 dark:bg-gray-700 rounded-lg px-4 py-1 text-xs text-gray-500 dark:text-gray-400 font-mono">
-                    meucardapio.app/menu/meu-restaurante
-                  </div>
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-3 p-5">
-                {[
-                  { col: 'Novos', color: 'bg-blue-500', count: 3, items: ['Pizza Bacon', 'X-Burguer + Batata', 'Açaí 500ml'] },
-                  { col: 'Preparando', color: 'bg-amber-500', count: 2, items: ['Lasanha Bolonhesa', 'Combo Família'] },
-                  { col: 'Prontos', color: 'bg-emerald-500', count: 4, items: ['Hot-dog Especial', 'Suco Laranja', 'Calzone', '+1'] },
-                ].map(({ col, color, count, items }) => (
-                  // CORREÇÃO (#3): em telas estreitas, o nome da coluna
-                  // ("Preparando") era mais largo que a própria coluna e o
-                  // conteúdo vazava por cima da coluna vizinha, fazendo os
-                  // contadores parecerem sobrepostos. `min-w-0` permite o
-                  // flex encolher de verdade, e `truncate` corta o texto
-                  // em vez de estourar a largura da coluna.
-                  <div key={col} className="min-w-0 overflow-hidden rounded-2xl bg-gray-50 dark:bg-gray-800/60 p-3">
-                    <div className="flex items-center justify-between gap-1 mb-3">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${color}`} />
-                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300 truncate">{col}</span>
-                      </div>
-                      <span className={`flex-shrink-0 text-[10px] font-bold text-white px-1.5 py-0.5 rounded-full ${color}`}>{count}</span>
-                    </div>
-                    <div className="space-y-1.5">
-                      {items.map((item, i) => (
-                        <div key={i} className="bg-white dark:bg-gray-700 rounded-xl px-2.5 py-2 text-[11px] font-medium text-gray-700 dark:text-gray-300 shadow-sm border border-gray-100 dark:border-gray-600">{item}</div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-gray-900/10 dark:shadow-black/40">
+              <Image
+                src="/screenshots/hero-desktop-mobile.jpg"
+                alt="Dashboard do Meu Cardápio no notebook e cardápio digital no celular"
+                width={1536}
+                height={557}
+                priority
+                sizes="(max-width: 768px) 100vw, 896px"
+                className="w-full h-auto"
+              />
             </div>
             {/* floating notifications */}
             <div className="absolute left-2 sm:-left-4 -top-3 sm:top-1/3 animate-float flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 shadow-lg">
@@ -360,22 +329,26 @@ export function HomePageClient() {
               Do cliente ao pedido em <span className="text-gradient">4 passos</span>
             </h2>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {[
               { n: '01', icon: QrCode, title: 'Seu cliente acessa', desc: 'Pelo QR Code, Instagram, WhatsApp ou link do seu restaurante.' },
               { n: '02', icon: UtensilsCrossed, title: 'Escolhe o que quer', desc: 'Visualiza produtos, adicionais, observações e opções de entrega ou retirada.' },
               { n: '03', icon: ShoppingBag, title: 'Faz o pedido', desc: 'O pedido chega organizado diretamente para sua equipe.' },
               { n: '04', icon: Columns3, title: 'Sua equipe acompanha', desc: 'Gerencie cada pedido do início ao fim: Novo → Confirmado → Preparando → Pronto → Entregue.' },
             ].map(({ n, icon: Icon, title, desc }) => (
-              <div key={n} className="rounded-3xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-6">
-                <div className="flex items-center justify-between mb-4">
+              <div
+                key={n}
+                className="group rounded-3xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-5 cursor-default
+                  transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-gray-900/10 dark:hover:shadow-black/30"
+              >
+                <div className="flex items-center justify-between mb-3">
                   <span className="text-2xl font-black text-gray-200 dark:text-gray-700">{n}</span>
-                  <div className="w-9 h-9 rounded-xl bg-brand-100 dark:bg-brand-950/40 flex items-center justify-center">
+                  <div className="inline-flex w-9 h-9 rounded-xl bg-brand-100 dark:bg-brand-950/40 items-center justify-center">
                     <Icon className="w-4 h-4 text-brand-600 dark:text-brand-400" />
                   </div>
                 </div>
-                <h3 className="font-bold text-gray-900 dark:text-white mb-1.5">{title}</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{desc}</p>
+                <h3 className="font-bold text-sm text-gray-900 dark:text-white mb-1.5">{title}</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">{desc}</p>
               </div>
             ))}
           </div>
@@ -392,21 +365,15 @@ export function HomePageClient() {
             Seu atendimento, cozinha e operação acompanham o mesmo pedido em tempo real.
           </p>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          {[
-            { col: 'Novos', color: 'bg-blue-500', count: 3 },
-            { col: 'Confirmados', color: 'bg-indigo-500', count: 2 },
-            { col: 'Preparando', color: 'bg-amber-500', count: 4 },
-            { col: 'Prontos', color: 'bg-emerald-500', count: 2 },
-            { col: 'Entregues', color: 'bg-gray-400', count: 1 },
-          ].map(({ col, color, count }) => (
-            <div key={col} className="rounded-2xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 p-4 text-center">
-              <div className={`w-2 h-2 rounded-full mx-auto mb-2 ${color}`} />
-              <p className="text-xs font-bold text-gray-700 dark:text-gray-300">{col}</p>
-              <p className="text-2xl font-black text-gray-900 dark:text-white mt-1">{count}</p>
-              <p className="text-[10px] text-gray-400">pedidos</p>
-            </div>
-          ))}
+        <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-gray-900/10 dark:shadow-black/40 border border-gray-200/80 dark:border-gray-700">
+          <Image
+            src="/screenshots/kanban-desktop.jpg"
+            alt="Kanban de pedidos do Meu Cardápio, do pedido pendente até a entrega"
+            width={1536}
+            height={463}
+            sizes="(max-width: 768px) 100vw, 1024px"
+            className="w-full h-auto"
+          />
         </div>
         <p className="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">Menos confusão no horário de pico. Mais controle para sua equipe.</p>
       </section>
@@ -425,19 +392,20 @@ export function HomePageClient() {
               Com as atualizações de status, você pode manter o cliente informado durante o processo. Mais transparência para o cliente, menos interrupções para sua equipe.
             </p>
           </div>
-          <div className="rounded-3xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-5 space-y-3 shadow-xl shadow-gray-900/5">
-            {[
-              ['🟢', 'Pedido recebido'],
-              ['💳', 'Pagamento confirmado'],
-              ['👨‍🍳', 'Pedido em preparação'],
-              ['📦', 'Pedido pronto'],
-              ['🛵', 'Saiu para entrega'],
-            ].map(([emoji, label]) => (
-              <div key={label} className="flex items-center gap-3 bg-gray-50 dark:bg-gray-800/60 rounded-xl px-3.5 py-2.5">
-                <span className="text-lg">{emoji}</span>
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</span>
-              </div>
-            ))}
+          <div className="rounded-3xl bg-[#e5ddd5] dark:bg-gray-800 border border-gray-100 dark:border-gray-800 p-4 shadow-xl shadow-gray-900/5">
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <div className="w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-white text-xs font-black">M</div>
+              <span className="text-sm font-bold text-gray-800 dark:text-gray-100">Meu Cardápio</span>
+            </div>
+            <div className="bg-white dark:bg-gray-900 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm max-w-[92%] space-y-2">
+              <p className="text-sm text-gray-800 dark:text-gray-200">Olá, João! 👋</p>
+              <p className="text-sm text-gray-800 dark:text-gray-200">Seu pedido <span className="font-bold">#1042</span> foi confirmado.</p>
+              <p className="text-sm text-gray-800 dark:text-gray-200">🍔 2x X-Burguer<br />🍟 1x Batata</p>
+              <p className="text-sm font-bold text-gray-900 dark:text-white">💰 Total: R$ 54,90</p>
+            </div>
+            <div className="mt-2 bg-white dark:bg-gray-900 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm max-w-[92%]">
+              <p className="text-sm text-gray-800 dark:text-gray-200">👨‍🍳 Seu pedido está sendo preparado!</p>
+            </div>
           </div>
         </div>
       </section>
@@ -455,15 +423,19 @@ export function HomePageClient() {
             Altere produtos, preços, fotos, descrições e disponibilidade sem precisar reimprimir o cardápio. Sem aplicativo para o cliente baixar.
           </p>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {[
             { icon: QrCode, title: 'QR Code', desc: 'O cliente escaneia.' },
             { icon: UtensilsCrossed, title: 'Cardápio', desc: 'Escolhe os produtos.' },
             { icon: ShoppingBag, title: 'Pedido', desc: 'Confirma a compra.' },
             { icon: Store, title: 'Restaurante', desc: 'Recebe e organiza.' },
           ].map(({ icon: Icon, title, desc }, i) => (
-            <div key={title} className="relative rounded-3xl bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 p-5 text-center">
-              <div className="w-11 h-11 rounded-2xl bg-brand-100 dark:bg-brand-950/40 flex items-center justify-center mx-auto mb-3">
+            <div
+              key={title}
+              className="group relative bg-gray-50 dark:bg-gray-900/50 rounded-3xl p-5 border border-gray-100 dark:border-gray-800 text-center cursor-default
+                transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-gray-900/10 dark:hover:shadow-black/30"
+            >
+              <div className="inline-flex w-11 h-11 rounded-2xl bg-brand-100 dark:bg-brand-950/40 items-center justify-center mx-auto mb-3">
                 <Icon className="w-5 h-5 text-brand-600 dark:text-brand-400" />
               </div>
               <h3 className="font-bold text-sm text-gray-900 dark:text-white">{title}</h3>
@@ -472,6 +444,7 @@ export function HomePageClient() {
             </div>
           ))}
         </div>
+        <p className="mt-8 text-center text-sm font-medium text-gray-600 dark:text-gray-300">Atualize uma vez. Seus clientes veem a mudança imediatamente.</p>
       </section>
 
       {/* PAGAMENTOS */}
@@ -481,15 +454,19 @@ export function HomePageClient() {
             <CreditCard className="w-3.5 h-3.5" /> Pagamentos
           </span>
           <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-            Facilite o pagamento <span className="text-gradient">dos pedidos</span>
+            Ofereça as formas de pagamento <span className="text-gradient">que fazem sentido para sua operação</span>
           </h2>
           {/* CORREÇÃO: promessa de "PIX + Cartão na mesma tela" com
               webhook/cashback automático removida — ainda estamos
               validando cenários de pagamento em produção, então o texto
               não afirma mais automação que não está 100% garantida.
-              CORREÇÃO: screenshot ao lado do texto removida a pedido. */}
+              CORREÇÃO: screenshot ao lado do texto removida a pedido.
+              CORREÇÃO: texto principal deixa claro o que é integrado
+              (PIX e cartão online, via Efí Bank) e o que fica a critério
+              do estabelecimento (cartão na maquineta e dinheiro), pra não
+              criar expectativa de "pagamentos automáticos" sem escopo. */}
           <p className="mt-4 text-gray-500 dark:text-gray-400">
-            Ofereça as formas de pagamento disponíveis para sua operação e acompanhe o status diretamente no pedido.
+            PIX e cartão online integrados. Dinheiro e cartão na maquineta também podem fazer parte da operação.
           </p>
           <div className="mt-6 flex gap-2 flex-wrap justify-center">
             {['PIX', 'Cartão', 'Dinheiro'].map(m => (
@@ -499,17 +476,23 @@ export function HomePageClient() {
         </div>
       </section>
 
-      {/* INTEGRAÇÕES */}
+      {/* TECNOLOGIA */}
+      {/* CORREÇÃO: seção renomeada de "Integrações" para "Tecnologia" —
+          esses logos são serviços que o Meu Cardápio usa internamente na
+          arquitetura (pagamentos, IA, e-mail, notificações, geolocalização),
+          não integrações que o restaurante escolhe e já usa por conta
+          própria. Chamar de "integrações"/"parceiros que você já usa"
+          criava uma promessa comercial ambígua. */}
       <section id="integracoes" className="py-24 max-w-6xl mx-auto px-5">
         <div className="text-center mb-14">
           <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
-            🔌 Integrações
+            ⚙️ Tecnologia
           </span>
           <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-            Conectado com quem <span className="text-gradient">você já usa</span>
+            Tecnologia que faz <span className="text-gradient">tudo funcionar</span>
           </h2>
           <p className="mt-4 text-gray-500 dark:text-gray-400 max-w-xl mx-auto">
-            Escolha os parceiros que já fazem parte da sua operação — sem precisar trocar de fornecedor.
+            O Meu Cardápio utiliza tecnologias confiáveis para manter sua operação rápida, segura e conectada.
           </p>
         </div>
 
@@ -517,70 +500,79 @@ export function HomePageClient() {
             (provedor de IA usado de fato pela plataforma), e a seção deixou
             de ser 2 cards fixos pra virar uma faixa de logos em rolagem
             contínua — todas em cinza uniforme e fundo transparente,
-            incluindo a da Efí. */}
+            incluindo a da Efí. CORREÇÃO: cada logo com nome conhecido
+            ganhou uma legenda curta abaixo, explicando o benefício em vez
+            de deixar o visitante adivinhar o que cada logo faz. */}
         <div className="relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
           <div className="flex items-center w-max animate-marquee hover:[animation-play-state:paused]">
-            {[...partnerLogos, ...partnerLogos].map(({ name, logo }, i) => (
-              <div key={`${name}-${i}`} className="flex-shrink-0 w-40 h-20 mx-4 flex items-center justify-center">
+            {[...partnerLogos, ...partnerLogos].map(({ name, logo, caption }, i) => (
+              <div key={`${name}-${i}`} className="flex-shrink-0 w-40 mx-4 flex flex-col items-center justify-center gap-1.5">
                 <div className="relative w-28 h-12">
                   <Image src={logo} alt={name} fill sizes="112px" className="object-contain" />
                 </div>
+                {caption && <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 text-center leading-tight">{caption}</span>}
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* IA */}
-      <section className="py-24 bg-gray-50/60 dark:bg-gray-900/30">
-        <div className="max-w-4xl mx-auto px-5 text-center">
+      {/* IA — CORREÇÃO: seção reduzida (menos padding, título menor) pra
+          não competir com o diferencial real do produto — cardápio +
+          pedidos + Kanban + WhatsApp + gestão. A IA é um bônus, não o
+          motivo principal para contratar. */}
+      <section className="py-14 bg-gray-50/60 dark:bg-gray-900/30">
+        <div className="max-w-3xl mx-auto px-5 text-center">
           <span className="inline-flex items-center gap-1.5 bg-fuchsia-100 dark:bg-fuchsia-950/40 text-fuchsia-600 dark:text-fuchsia-400 text-xs font-semibold px-3 py-1.5 rounded-full">
-            <Sparkles className="w-3.5 h-3.5" /> IA
+            <Sparkles className="w-3.5 h-3.5" /> Bônus: IA
           </span>
-          <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+          <h2 className="mt-3 text-xl sm:text-2xl font-black text-gray-900 dark:text-white tracking-tight">
             Deixe seus produtos mais <span className="text-gradient">atrativos com IA</span>
           </h2>
-          <p className="mt-4 text-gray-500 dark:text-gray-400 max-w-lg mx-auto">
+          <p className="mt-3 text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
             Não sabe como descrever aquele produto novo? A IA ajuda você a criar descrições mais interessantes em poucos segundos.
           </p>
-          <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
-            <div className="rounded-3xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-6">
-              <p className="text-xs font-black uppercase tracking-wide text-gray-400 mb-3">Antes</p>
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+            <div className="rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-4">
+              <p className="text-[10px] font-black uppercase tracking-wide text-gray-400 mb-2">Antes</p>
               <p className="text-sm text-gray-600 dark:text-gray-400">Hambúrguer com carne, queijo e molho.</p>
             </div>
-            <div className="rounded-3xl bg-gradient-to-br from-fuchsia-50 to-pink-50 dark:from-fuchsia-950/20 dark:to-pink-950/10 border border-fuchsia-100 dark:border-fuchsia-900/30 p-6">
-              <p className="text-xs font-black uppercase tracking-wide text-fuchsia-500 mb-3">Depois</p>
+            <div className="rounded-2xl bg-gradient-to-br from-fuchsia-50 to-pink-50 dark:from-fuchsia-950/20 dark:to-pink-950/10 border border-fuchsia-100 dark:border-fuchsia-900/30 p-4">
+              <p className="text-[10px] font-black uppercase tracking-wide text-fuchsia-500 mb-2">Depois</p>
               <p className="text-sm text-gray-700 dark:text-gray-300">Hambúrguer artesanal preparado com carne suculenta, queijo cremoso e molho especial da casa.</p>
             </div>
           </div>
-          <p className="mt-6 text-sm text-gray-500 dark:text-gray-400">Mais facilidade para cadastrar. Mais qualidade na apresentação dos seus produtos.</p>
         </div>
       </section>
 
-      {/* FUNCIONALIDADES COMPLETAS */}
+      {/* FUNCIONALIDADES COMPLETAS — CORREÇÃO: seção renomeada de "Tudo
+          que seu restaurante precisa" para "E muito mais", já que Cardápio,
+          Kanban, WhatsApp, Pagamentos e IA já foram mostrados em seções
+          próprias antes desta. Cards menores (ícone e padding reduzidos)
+          pra não repetir o mesmo destaque visual das seções anteriores. */}
       <section id="funcionalidades" className="py-24 max-w-6xl mx-auto px-5">
         <div className="text-center mb-14">
           <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
-            ⚡ Funcionalidades
+            ⚡ E muito mais
           </span>
           <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
             Tudo que seu <span className="text-gradient">restaurante precisa</span>
           </h2>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {features.map((f) => {
             const Icon = f.icon
             return (
               <div
                 key={f.title}
-                className="group bg-gray-50 dark:bg-gray-900/50 rounded-3xl p-5 border border-gray-100 dark:border-gray-800 cursor-default
+                className="group bg-gray-50 dark:bg-gray-900/50 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 cursor-default
                   transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-gray-900/10 dark:hover:shadow-black/30"
               >
-                <div className="inline-flex w-11 h-11 rounded-2xl bg-brand-100 dark:bg-brand-950/40 items-center justify-center mb-4">
-                  <Icon className="w-5 h-5 text-brand-600 dark:text-brand-400" />
+                <div className="inline-flex w-9 h-9 rounded-xl bg-brand-100 dark:bg-brand-950/40 items-center justify-center mb-3">
+                  <Icon className="w-4 h-4 text-brand-600 dark:text-brand-400" />
                 </div>
-                <h3 className="font-bold text-gray-900 dark:text-white mb-1.5">{f.title}</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{f.desc}</p>
+                <h3 className="font-bold text-sm text-gray-900 dark:text-white mb-1">{f.title}</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">{f.desc}</p>
               </div>
             )
           })}
@@ -599,10 +591,14 @@ export function HomePageClient() {
             </h2>
             <p className="mt-4 text-gray-500 dark:text-gray-400">Cada pessoa com acesso ao que realmente precisa.</p>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {team.map(({ icon: Icon, role, desc }) => (
-              <div key={role} className="rounded-3xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-5 text-center">
-                <div className="w-11 h-11 rounded-2xl bg-brand-100 dark:bg-brand-950/40 flex items-center justify-center mx-auto mb-3">
+              <div
+                key={role}
+                className="group rounded-3xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-5 text-center cursor-default
+                  transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-gray-900/10 dark:hover:shadow-black/30"
+              >
+                <div className="inline-flex w-11 h-11 rounded-2xl bg-brand-100 dark:bg-brand-950/40 items-center justify-center mx-auto mb-3">
                   <Icon className="w-5 h-5 text-brand-600 dark:text-brand-400" />
                 </div>
                 <h3 className="font-bold text-sm text-gray-900 dark:text-white">{role}</h3>
@@ -626,6 +622,7 @@ export function HomePageClient() {
           ))}
         </div>
         <p className="mt-8 text-gray-500 dark:text-gray-400">Se você vende comida, o Meu Cardápio pode ajudar a organizar sua operação.</p>
+        <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">Feito para pequenos e médios restaurantes que querem vender mais e organizar a operação.</p>
       </section>
 
       {/* PLANOS */}
@@ -648,6 +645,11 @@ export function HomePageClient() {
               <span className="text-4xl font-black text-gray-900 dark:text-white">R$ {PLAN_PRICE}</span>
               <span className="text-sm text-gray-400">/mês</span>
             </div>
+            {/* CORREÇÃO: "Tudo incluído. Sem cobrar por usuário." deixa
+                explícito, junto do preço, que o valor cobre cardápio +
+                pedidos + Kanban + WhatsApp + gestão + fidelidade +
+                relatórios + equipe — não só um cardápio digital isolado. */}
+            <p className="mt-2 text-xs font-bold text-brand-600 dark:text-brand-400">Tudo incluído. Sem cobrar por usuário.</p>
           </div>
           <ul className="space-y-2.5 mb-8">
             {planFeatures.map((f) => (
@@ -661,6 +663,17 @@ export function HomePageClient() {
             Começar 7 dias grátis
           </Link>
           <p className="mt-4 text-center text-xs text-gray-400">Sem fidelidade. Cancele quando quiser.</p>
+        </div>
+
+        {/* CORREÇÃO: bloco de migração do cardápio movido pra perto do
+            preço — antes só existia no FAQ, escondido no final da página.
+            Isso ataca de frente uma das maiores objeções antes da compra:
+            "vou ter que cadastrar tudo de novo?". */}
+        <div className="max-w-md mx-auto mt-6 rounded-3xl bg-brand-50 dark:bg-brand-950/20 border border-brand-100 dark:border-brand-900/30 p-6 text-center">
+          <h4 className="font-bold text-gray-900 dark:text-white">Já tem cardápio?</h4>
+          <p className="mt-1.5 text-sm text-gray-600 dark:text-gray-400">
+            Nós ajudamos você a migrar seus produtos para o Meu Cardápio. Sem precisar começar do zero.
+          </p>
         </div>
       </section>
 
@@ -706,7 +719,7 @@ export function HomePageClient() {
                   hero — botão sólido + link de texto sublinhado (sem caixa
                   nem borda) como CTA secundário. */}
               <Link href="/register" className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-gray-900 font-bold rounded-2xl hover:bg-gray-100 active:scale-95 transition-all text-sm shadow-lg shadow-black/20">
-                Começar 7 dias grátis
+                Começar meu teste grátis
                 <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
               </Link>
               <Link href="/menu/pizzaria-do-jose" className="group inline-flex items-center justify-center gap-1.5 px-4 py-3 text-gray-400 font-semibold hover:text-white transition-colors text-sm underline decoration-gray-600 underline-offset-4 hover:decoration-gray-400">
