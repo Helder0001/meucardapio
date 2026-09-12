@@ -13,8 +13,8 @@ import { escapeHtml } from '@/lib/security/sanitize'
 const resend = new Resend(process.env.RESEND_API_KEY)
 
 const METHOD_PT: Record<string, string> = {
-  CASH: 'Dinheiro', CREDIT_CARD: 'Cartão de Crédito', CREDIT_CARD_MANUAL: 'Crédito (entrega/retirada)',
-  DEBIT_CARD: 'Cartão de Débito', PIX: 'PIX', VOUCHER: 'Voucher',
+  CASH: 'Dinheiro', CREDIT_CARD: 'Crédito (Online)', CREDIT_CARD_MANUAL: 'Crédito (Maquininha)',
+  DEBIT_CARD: 'Débito (Maquininha)', PIX: 'PIX', VOUCHER: 'Voucher',
 }
 const TYPE_PT: Record<string, string> = {
   TABLE: 'Mesa', DELIVERY: 'Delivery', PICKUP: 'Retirada', PDV: 'Balcão',
