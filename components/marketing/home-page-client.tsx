@@ -59,6 +59,11 @@ const planFeatures = [
 // uniforme com fundo transparente pra faixa de rolagem contínua. Logos que
 // antes ficavam sem nome/legenda (Sentry, Upstash, Railway, Neon) agora
 // identificadas, e GitHub + Vercel adicionadas à lista.
+// CORREÇÃO: partner-3 e partner-4 estavam com nome/legenda trocados —
+// partner-3 é o ícone triangular da Neon (banco de dados), partner-4 é o
+// ícone de trem/círculo da Railway. E a legenda da Railway passou a
+// refletir o uso real na plataforma (hospeda o Evolution API do
+// WhatsApp), em vez de um "hospeda o backend" genérico.
 const partnerLogos = [
   { name: 'Efí Bank', logo: '/integrations/efi-bank-logo-gray.png', caption: 'PIX e pagamentos' },
   { name: 'Groq', logo: '/integrations/partner-groq.png', caption: 'IA para descrições' },
@@ -67,8 +72,8 @@ const partnerLogos = [
   { name: 'OpenCage', logo: '/integrations/partner-opencage.png', caption: 'Localização e endereços' },
   { name: 'Sentry', logo: '/integrations/partner-1.png', caption: 'Monitoramento de erros' },
   { name: 'Upstash', logo: '/integrations/partner-2.png', caption: 'Cache e filas' },
-  { name: 'Railway', logo: '/integrations/partner-3.png', caption: 'Hospeda o backend' },
-  { name: 'Neon', logo: '/integrations/partner-4.png', caption: 'Banco de dados PostgreSQL' },
+  { name: 'Neon', logo: '/integrations/partner-3.png', caption: 'Banco de dados PostgreSQL' },
+  { name: 'Railway', logo: '/integrations/partner-4.png', caption: 'Hospeda o WhatsApp' },
   { name: 'GitHub', logo: '/integrations/partner-github.png', caption: 'Versionamento de código' },
   { name: 'Vercel', logo: '/integrations/partner-vercel.png', caption: 'Hospeda o frontend' },
 ]
@@ -398,7 +403,21 @@ export function HomePageClient() {
           </div>
           <div className="rounded-3xl bg-[#e5ddd5] dark:bg-gray-800 border border-gray-100 dark:border-gray-800 p-4 shadow-xl shadow-gray-900/5">
             <div className="flex items-center gap-2 mb-3 px-1">
-              <div className="w-7 h-7 rounded-full bg-brand-500 flex items-center justify-center text-white text-xs font-black">M</div>
+              <div className="w-7 h-7 rounded-full bg-white flex items-center justify-center relative overflow-hidden flex-shrink-0">
+                <Image
+                  src="/logo-icon.png"
+                  alt="Meu Cardápio"
+                  fill
+                  sizes="28px"
+                  className="object-contain p-1"
+                  onError={(e) => {
+                    const el = e.currentTarget as HTMLImageElement
+                    el.style.display = 'none'
+                    el.nextElementSibling?.classList.remove('hidden')
+                  }}
+                />
+                <span className="hidden text-brand-500 font-black text-xs">M</span>
+              </div>
               <span className="text-sm font-bold text-gray-800 dark:text-gray-100">Meu Cardápio</span>
             </div>
             <div className="bg-white dark:bg-gray-900 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm max-w-[92%] space-y-2">
