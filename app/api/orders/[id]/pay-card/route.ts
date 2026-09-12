@@ -15,6 +15,7 @@ import { createTenantCardCharge } from '@/lib/efi/tenant-payments'
 import { computeReceiptInfo, type FinanceRatesConfig } from '@/lib/finance/compute-receipt'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { applyCashback, applyLoyaltyPoints } from '@/lib/loyalty/apply-rewards'
+import { registerPaidOrderForCustomer } from '@/lib/customers/register-paid-order'
 import type { PrismaClient } from '@prisma/client'
 import crypto from 'crypto'
 import { z } from 'zod'
@@ -205,6 +206,14 @@ export async function POST(
           if (fullyPaid && order.customerId) {
             await applyCashback(tx, order.tenantId, order.customerId, order.id, Number(order.total))
             await applyLoyaltyPoints(tx, order.tenantId, order.customerId, order.id, Number(order.total))
+            // CORREÇÃO (#5): ver lib/customers/register-paid-order.ts —
+            // só conta como gasto do cliente quando o pagamento é
+            // confirmado de verdade, não na criação do pedido.
+            await registerPaidOrderForCustomer(tx, {
+              customerId: order.customerId,
+              previousPaymentStatus: order.paymentStatus,
+              total: Number(order.total),
+            })
           }
           return fullyPaid
         })
@@ -324,6 +333,12 @@ export async function POST(
         if (fullyPaid && order.customerId) {
           await applyCashback(tx, order.tenantId, order.customerId, order.id, Number(order.total))
           await applyLoyaltyPoints(tx, order.tenantId, order.customerId, order.id, Number(order.total))
+          // CORREÇÃO (#5): ver lib/customers/register-paid-order.ts
+          await registerPaidOrderForCustomer(tx, {
+            customerId: order.customerId,
+            previousPaymentStatus: order.paymentStatus,
+            total: Number(order.total),
+          })
         }
         return fullyPaid
       })
