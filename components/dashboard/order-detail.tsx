@@ -880,7 +880,7 @@ export function OrderDetail({
                       className="flex-1 px-2 py-1.5 text-xs border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
                     >
                       <option value="CASH">💵 Dinheiro</option>
-                      <option value="CREDIT_CARD">💳 Crédito (Maquininha)</option>
+                      <option value="CREDIT_CARD_MANUAL">💳 Crédito (Maquininha)</option>
                       <option value="DEBIT_CARD">💳 Débito (Maquininha)</option>
                       {pixEnabled && <option value="PIX">⚡ PIX</option>}
                       <option value="VOUCHER">🎟️ Voucher</option>
