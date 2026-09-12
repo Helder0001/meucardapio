@@ -25,6 +25,14 @@ export function formatDate(date: Date | string): string {
   return formatInTimeZone(d, APP_TIMEZONE, "dd/MM/yyyy, HH:mm", { locale: ptBR })
 }
 
+// Formatar apenas a data, sem hora
+// formatDateOnly(new Date()) → "31/12/2024"
+// Também sempre no fuso de São Paulo, pelo mesmo motivo do formatDate acima.
+export function formatDateOnly(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date
+  return formatInTimeZone(d, APP_TIMEZONE, "dd/MM/yyyy", { locale: ptBR })
+}
+
 // Formatar apenas hora
 // formatTime(new Date()) → "23:59"
 export function formatTime(date: Date | string): string {
