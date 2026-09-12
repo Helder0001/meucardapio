@@ -52,11 +52,11 @@ function RateRow({ label, rateField, daysField, defaultRate, defaultDays }: {
         />
       </div>
       <div>
-        <label className="block text-[10px] text-muted-foreground mb-1">Prazo (dias)</label>
+        <label className="block text-[10px] text-muted-foreground mb-1">Prazo (dias corridos)</label>
         <input
           type="number" step="1" min="0" max="90" name={daysField}
           defaultValue={defaultDays ?? ''}
-          placeholder="ex: 31"
+          placeholder="ex: 30"
           className="w-full px-3 py-2 border border-input rounded-lg bg-background text-sm"
         />
       </div>
@@ -75,7 +75,9 @@ export function FinanceRatesForm(props: FinanceRatesFormProps) {
           <Info className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
           Mercado Pago e Asaas já mandam o valor líquido e a data de recebimento reais automaticamente —
           não precisam ser configurados aqui. Preencha só o que você usa: Efí (a API dela não informa taxa)
-          e/ou maquininha física (que não se comunica com o sistema).
+          e/ou maquininha física (que não se comunica com o sistema). O prazo é em dias corridos (o mesmo
+          número que aparece no contrato da sua maquininha/Efí) — se a data cair num fim de semana ou
+          feriado, o sistema empurra automaticamente pro próximo dia útil.
         </p>
       </div>
 
