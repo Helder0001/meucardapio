@@ -45,7 +45,6 @@ export interface FinanceRatesConfig {
 }
 
 const INSTANT_NO_FEE_METHODS = new Set(['PIX_MANUAL', 'CASH'])
-const DAY_MS = 24 * 60 * 60 * 1000
 const NOT_CONFIGURED: ReceiptInfo = { fee: null, netAmount: null, expectedReceiptDate: null }
 
 export function computeReceiptInfo(
@@ -90,8 +89,25 @@ function applyRate(amount: number, paidAt: Date, ratePercent?: number, days?: nu
   return {
     fee,
     netAmount: round2(amount - fee),
-    expectedReceiptDate: new Date(paidAt.getTime() + days * DAY_MS),
+    // CORREÇÃO: o prazo configurado (ex.: "31 dias") é sempre em DIAS
+    // ÚTEIS — antes isso somava dias corridos direto (paidAt + days*24h),
+    // o que adianta a data prevista sempre que o intervalo cruza um fim de
+    // semana. addBusinessDays pula sábado/domingo ao contar.
+    expectedReceiptDate: addBusinessDays(paidAt, days),
   }
+}
+
+// Soma `days` DIAS ÚTEIS a partir de `start` (pula sábado e domingo).
+// Não considera feriados nacionais/municipais — só fins de semana.
+function addBusinessDays(start: Date, days: number): Date {
+  const result = new Date(start)
+  let remaining = days
+  while (remaining > 0) {
+    result.setDate(result.getDate() + 1)
+    const weekday = result.getDay() // 0 = domingo, 6 = sábado
+    if (weekday !== 0 && weekday !== 6) remaining--
+  }
+  return result
 }
 
 function round2(n: number): number {
