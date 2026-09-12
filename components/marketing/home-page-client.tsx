@@ -66,14 +66,15 @@ const planFeatures = [
 // WhatsApp), em vez de um "hospeda o backend" genérico.
 // CORREÇÃO: mapeamento revisado a partir do código real (package.json,
 // .env.example, imports), não mais por "achismo" de formato do ícone —
-// isso já tinha causado duas trocas erradas antes.
+// isso já tinha causado erros antes.
 // - partner-1 (espiral) é o ícone da Upstash, não da Sentry.
+// - partner-2 (raio) é o ícone da Supabase (usada em app/api/upload/route.ts
+//   pro Storage de imagens, via SUPABASE_SERVICE_ROLE_KEY) — não da Upstash,
+//   e não foi removida à toa como cheguei a fazer: ela é real.
 // - partner-3 (triângulo com ondas) é o ícone da Sentry, não da Neon.
 // - o arquivo antes rotulado "Novu" é na verdade o ícone da Neon — Novu
 //   nunca existiu de verdade no projeto (não tem dependência no
 //   package.json nem env var, só estava citado aqui por engano).
-// - partner-2 (raio isolado, sem nome) não corresponde a nenhum serviço
-//   realmente integrado, então saiu da lista.
 // - legenda da Upstash reflete o uso real, visto em lib/cache/redis.ts e
 //   lib/security/rate-limit.ts: cache de cardápio, sessões, OTP e rate
 //   limit de login — não só "cache e filas" genérico.
@@ -84,6 +85,7 @@ const partnerLogos = [
   { name: 'OpenCage', logo: '/integrations/partner-opencage.png', caption: 'Localização e endereços' },
   { name: 'Neon', logo: '/integrations/partner-novu.png', caption: 'Banco de dados PostgreSQL' },
   { name: 'Upstash', logo: '/integrations/partner-1.png', caption: 'Cache, sessões e rate limit' },
+  { name: 'Supabase', logo: '/integrations/partner-2.png', caption: 'Armazenamento de imagens' },
   { name: 'Sentry', logo: '/integrations/partner-3.png', caption: 'Monitoramento de erros' },
   { name: 'Railway', logo: '/integrations/partner-4.png', caption: 'Hospeda o WhatsApp' },
   { name: 'GitHub', logo: '/integrations/partner-github.png', caption: 'Versionamento de código' },
