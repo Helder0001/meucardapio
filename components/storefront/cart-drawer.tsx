@@ -76,14 +76,19 @@ interface PaymentOption { value: PaymentMethodValue; label: string; sub: string 
 const ONLINE_PAYMENT_OPTIONS: PaymentOption[] = [
   { value: 'PIX',         label: '⚡ PIX',    sub: 'Confirmação automática' },
   { value: 'PIX_MANUAL',  label: '⚡ PIX (chave direta)', sub: 'Confirmação em alguns minutos, após envio do comprovante' },
-  { value: 'CREDIT_CARD', label: '💳 Crédito (Online)', sub: 'Pague agora, na hora' },
+  { value: 'CREDIT_CARD', label: '💳 Crédito', sub: 'Pague agora, na hora' },
 ]
 
 // Pago na hora da entrega/retirada — confirmado manualmente pela loja
 const MANUAL_PAYMENT_OPTIONS: PaymentOption[] = [
   { value: 'CASH',               label: '💵 Dinheiro', sub: 'Pague na entrega/retirada' },
-  { value: 'CREDIT_CARD_MANUAL', label: '💳 Crédito (Maquininha)',  sub: 'Na maquininha, na entrega/retirada' },
-  { value: 'DEBIT_CARD',         label: '💳 Débito (Maquininha)',   sub: 'Na maquininha, na entrega/retirada' },
+  // CORREÇÃO: o cliente não precisa ver "(Online)"/"(Maquininha)" — essa
+  // distinção importa pro lojista (conciliação financeira, ver
+  // lib/utils/payment-labels.ts), mas pro cliente é só ruído: o cabeçalho
+  // da seção ("PAGAMENTO NA ENTREGA/RETIRADA") já deixa claro que é na
+  // maquininha física.
+  { value: 'CREDIT_CARD_MANUAL', label: '💳 Crédito',  sub: 'Na maquininha, na entrega/retirada' },
+  { value: 'DEBIT_CARD',         label: '💳 Débito',   sub: 'Na maquininha, na entrega/retirada' },
 ]
 
 interface PaymentEntry {
