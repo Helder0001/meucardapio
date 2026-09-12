@@ -70,9 +70,13 @@ export async function GET(
     },
   })
 
-  // "Concluído" = entregue/retirado com sucesso — mesmo critério usado
-  // pelas estatísticas cumulativas do Customer (totalOrders/totalSpent).
-  const completed = orders.filter((o) => o.status === 'DELIVERED')
+  // "Concluído" = entregue/retirado com sucesso E com pagamento
+  // confirmado. CORREÇÃO (#5): antes só checava o status de entrega
+  // (`DELIVERED`) — um pedido "pague na entrega" com o motoboy já tendo
+  // marcado como entregue, mas o recebimento ainda não confirmado no
+  // sistema (botão "Confirmar" pendente), já contava como gasto do
+  // cliente. Agora só conta o que realmente foi pago.
+  const completed = orders.filter((o) => o.status === 'DELIVERED' && o.paymentStatus === 'PAID')
 
   const week = daysAgo(7)
   const fortnight = daysAgo(15)
