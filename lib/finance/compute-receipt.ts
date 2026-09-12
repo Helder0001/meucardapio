@@ -92,22 +92,119 @@ function applyRate(amount: number, paidAt: Date, ratePercent?: number, days?: nu
     // CORREÇÃO: o prazo configurado (ex.: "31 dias") é sempre em DIAS
     // ÚTEIS — antes isso somava dias corridos direto (paidAt + days*24h),
     // o que adianta a data prevista sempre que o intervalo cruza um fim de
-    // semana. addBusinessDays pula sábado/domingo ao contar.
+    // semana ou feriado nacional. addBusinessDays pula sábado, domingo e
+    // feriado nacional ao contar.
     expectedReceiptDate: addBusinessDays(paidAt, days),
   }
 }
 
-// Soma `days` DIAS ÚTEIS a partir de `start` (pula sábado e domingo).
-// Não considera feriados nacionais/municipais — só fins de semana.
+// --- Feriados nacionais ---------------------------------------------
+// CORREÇÃO: addBusinessDays só pulava sábado/domingo — um D+1 caindo em
+// feriado (ex.: sexta véspera de feriado na segunda) contava normalmente,
+// adiantando a Data do Crédito em relação ao que o gateway/maquininha
+// real credita. Cobre só feriados NACIONAIS (fixos + móveis, calculados a
+// partir da Páscoa) — feriados estaduais/municipais e pontos facultativos
+// variam por cidade/ano e ficam fora do escopo (não tem fonte confiável
+// única pra isso sem depender de um serviço externo por tenant).
+
+// Domingo de Páscoa do ano (algoritmo de Meeus/Jones/Butcher, calendário
+// gregoriano) — a partir dele derivamos Carnaval, Sexta-feira Santa e
+// Corpus Christi, que mudam de data todo ano.
+function easterUTC(year: number): number {
+  const a = year % 19
+  const b = Math.floor(year / 100)
+  const c = year % 100
+  const d = Math.floor(b / 4)
+  const e = b % 4
+  const f = Math.floor((b + 8) / 25)
+  const g = Math.floor((b - f + 1) / 3)
+  const h = (19 * a + b - d - g + 15) % 30
+  const i = Math.floor(c / 4)
+  const k = c % 4
+  const l = (32 + 2 * e + 2 * i - h - k) % 7
+  const m = Math.floor((a + 11 * h + 22 * l) / 451)
+  const month = Math.floor((h + l - 7 * m + 114) / 31)
+  const day = ((h + l - 7 * m + 114) % 31) + 1
+  return Date.UTC(year, month - 1, day)
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+const holidayCache = new Map<number, Set<string>>()
+
+function ymd(utcMs: number): string {
+  const d = new Date(utcMs)
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+}
+
+function nationalHolidays(year: number): Set<string> {
+  const cached = holidayCache.get(year)
+  if (cached) return cached
+
+  const set = new Set<string>()
+  const addFixed = (m: number, d: number) => set.add(`${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`)
+
+  addFixed(1, 1)   // Confraternização Universal
+  addFixed(4, 21)  // Tiradentes
+  addFixed(5, 1)   // Dia do Trabalho
+  addFixed(9, 7)   // Independência do Brasil
+  addFixed(10, 12) // Nossa Senhora Aparecida
+  addFixed(11, 2)  // Finados
+  addFixed(11, 15) // Proclamação da República
+  addFixed(11, 20) // Consciência Negra — feriado nacional desde 2024 (Lei 14.759/2023)
+  addFixed(12, 25) // Natal
+
+  const easter = easterUTC(year)
+  set.add(ymd(easter - 47 * DAY_MS)) // Carnaval (terça-feira)
+  set.add(ymd(easter - 2 * DAY_MS))  // Sexta-feira Santa
+  set.add(ymd(easter + 60 * DAY_MS)) // Corpus Christi
+
+  holidayCache.set(year, set)
+  return set
+}
+
+function isNationalHoliday(year: number, month: number, day: number): boolean {
+  return nationalHolidays(year).has(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`)
+}
+
+// Soma `days` DIAS ÚTEIS a partir de `start` (pula sábado, domingo e
+// feriado nacional).
+//
+// CORREÇÃO: getDay()/setDate() do JS operam no fuso do SERVIDOR (UTC na
+// Vercel), não no horário de Brasília. Uma venda feita à noite em SP já
+// virou o dia seguinte em UTC — ex.: sexta 23:26 em SP é sábado 02:26 em
+// UTC — então o loop começava contando a partir de sábado (quando pro
+// negócio/cliente ainda era sexta), adiantando ou atrasando a Data do
+// Crédito em 1 dia perto da virada. Agora extraímos o Y-M-D já em horário
+// de SP antes de começar a contar, e só remontamos o Date final (com o
+// mesmo horário original, também em SP) depois de achar o dia útil certo.
 function addBusinessDays(start: Date, days: number): Date {
-  const result = new Date(start)
+  const SP_TZ = 'America/Sao_Paulo'
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: SP_TZ,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+  }).formatToParts(start)
+  const get = (t: string) => parts.find((p) => p.type === t)!.value
+  const y = Number(get('year')), m = Number(get('month')), d = Number(get('day'))
+  const hh = get('hour'), mm = get('minute'), ss = get('second')
+
+  // Data.UTC aqui é só uma calculadora de calendário (Y-M-D civil de SP)
+  // — não representa nenhum instante real; por isso getUTCDay/setUTCDate,
+  // pra não sofrer o mesmo problema de fuso que este código está corrigindo.
+  const cursor = new Date(Date.UTC(y, m - 1, d))
   let remaining = days
   while (remaining > 0) {
-    result.setDate(result.getDate() + 1)
-    const weekday = result.getDay() // 0 = domingo, 6 = sábado
-    if (weekday !== 0 && weekday !== 6) remaining--
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+    const weekday = cursor.getUTCDay() // 0 = domingo, 6 = sábado
+    const isWeekend = weekday === 0 || weekday === 6
+    const isHoliday = !isWeekend && isNationalHoliday(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, cursor.getUTCDate())
+    if (!isWeekend && !isHoliday) remaining--
   }
-  return result
+
+  const yy = cursor.getUTCFullYear()
+  const mo = String(cursor.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(cursor.getUTCDate()).padStart(2, '0')
+  return new Date(`${yy}-${mo}-${dd}T${hh}:${mm}:${ss}-03:00`)
 }
 
 function round2(n: number): number {
