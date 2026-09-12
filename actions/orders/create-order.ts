@@ -289,6 +289,7 @@ export async function createOrderAction(
   const orderNumber = await getNextOrderNumber(data.tenantId)
 
   const txResult = await prisma.$transaction(async (tx) => {
+    const orderPaymentStatus = calculation.total <= 0 ? 'PAID' : 'PENDING'
     const newOrder = await tx.order.create({
       data: {
         tenantId: data.tenantId,
@@ -298,7 +299,7 @@ export async function createOrderAction(
         // Total já zerado (cashback/desconto cobriu tudo) — nada a cobrar,
         // então já nasce pago. Sem isso, o pedido ficava "pendente de
         // pagamento" pra sempre, já que não existe nenhum Payment a criar.
-        paymentStatus: calculation.total <= 0 ? 'PAID' : 'PENDING',
+        paymentStatus: orderPaymentStatus,
         tableId: data.tableId,
         pdvId: data.pdvId,
         createdById: data.createdByUserId,
@@ -399,7 +400,15 @@ export async function createOrderAction(
       })
     }
 
-    if (customer) {
+    // CORREÇÃO (#5): antes isso rodava sempre, pra QUALQUER pedido — mesmo
+    // os que nascem com paymentStatus 'PENDING' (ou seja, praticamente
+    // todos, já que só pedido de R$0 nasce 'PAID'). O cliente aparecia
+    // como tendo "gasto" um valor que talvez nunca chegue a pagar. Agora
+    // só incrementa aqui pro caso raro de pedido já nascer pago (total
+    // zerado); pros demais, o incremento acontece só quando o pagamento é
+    // de fato confirmado — ver lib/customers/register-paid-order.ts,
+    // chamado em mark-paid, pay-card e nos webhooks de pagamento.
+    if (customer && orderPaymentStatus === 'PAID') {
       await tx.customer.update({
         where: { id: customer.id },
         data: {
@@ -408,6 +417,10 @@ export async function createOrderAction(
           lastOrderAt: new Date(),
         },
       })
+    } else if (customer) {
+      // Ainda assim marca a data do último pedido (útil pra tag
+      // "Inativo"), só não conta como gasto até confirmar o pagamento.
+      await tx.customer.update({ where: { id: customer.id }, data: { lastOrderAt: new Date() } })
     }
 
     return { newOrder, affectedProductIds }
