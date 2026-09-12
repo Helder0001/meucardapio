@@ -51,7 +51,7 @@ interface OrderItem {
   quantity: number
 }
 
-type PaymentMethodType = 'PIX' | 'PIX_MANUAL' | 'CASH' | 'CREDIT_CARD' | 'DEBIT_CARD' | 'LINK'
+type PaymentMethodType = 'PIX' | 'PIX_MANUAL' | 'CASH' | 'CREDIT_CARD_MANUAL' | 'DEBIT_CARD' | 'LINK'
 interface PaymentEntry { method: PaymentMethodType; amount: number }
 
 interface PixData { qrCode: string; qrCodeBase64: string; isManual?: boolean; orderId: string }
@@ -657,7 +657,7 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
                           {pixEnabled && <option value="PIX">⚡ PIX</option>}
                           {manualPixEnabled && <option value="PIX_MANUAL">⚡ PIX (chave direta)</option>}
                           <option value="CASH">💵 Dinheiro</option>
-                          <option value="CREDIT_CARD">💳 Crédito (Maquininha)</option>
+                          <option value="CREDIT_CARD_MANUAL">💳 Crédito (Maquininha)</option>
                           <option value="DEBIT_CARD">💳 Débito (Maquininha)</option>
                           {payments.length === 1 && linkEnabled && <option value="LINK">🔗 Link de pagamento</option>}
                         </select>
