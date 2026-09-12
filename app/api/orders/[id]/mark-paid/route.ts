@@ -8,6 +8,7 @@ import { prisma } from '@/lib/db/client'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { auditLog, AuditActions } from '@/lib/utils/audit'
 import { applyOrderRewards } from '@/lib/loyalty/apply-rewards'
+import { registerPaidOrderForCustomer } from '@/lib/customers/register-paid-order'
 import { z } from 'zod'
 import { computeReceiptInfo, type FinanceRatesConfig } from '@/lib/finance/compute-receipt'
 
@@ -144,6 +145,14 @@ export async function PATCH(
       if (order.customerId) {
         await applyOrderRewards(tx, tenantId, order.customerId, orderId, Number(order.total))
       }
+      // CORREÇÃO (#5): totalOrders/totalSpent do cliente só contam AGORA,
+      // no momento em que o pagamento é de fato confirmado — não mais na
+      // criação do pedido (ver actions/orders/create-order.ts).
+      await registerPaidOrderForCustomer(tx, {
+        customerId: order.customerId,
+        previousPaymentStatus: order.paymentStatus,
+        total: Number(order.total),
+      })
     }
   })
 
