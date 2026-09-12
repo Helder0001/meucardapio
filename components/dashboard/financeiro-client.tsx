@@ -4,7 +4,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Wallet, Zap, Banknote, CreditCard, HelpCircle, Clock } from 'lucide-react'
-import { formatCurrency, formatDate } from '@/lib/utils/format'
+import { formatCurrency, formatDateOnly } from '@/lib/utils/format'
 import { FinanceRatesForm, type FinanceRatesFormProps } from './finance-rates-form'
 
 interface PaymentRow {
@@ -48,7 +48,6 @@ function PaymentTable({ rows, showCredito }: { rows: PaymentRow[]; showCredito: 
         <thead>
           <tr className="text-left text-xs text-muted-foreground border-b border-border">
             <th className="pb-2 pr-3">Pedido</th>
-            <th className="pb-2 pr-3">Cliente</th>
             <th className="pb-2 pr-3">Forma</th>
             <th className="pb-2 pr-3">Bruto</th>
             {showCredito && <th className="pb-2 pr-3">Taxa</th>}
@@ -57,7 +56,9 @@ function PaymentTable({ rows, showCredito }: { rows: PaymentRow[]; showCredito: 
                 (é quando o pagamento foi CONFIRMADO, não quando o dinheiro
                 efetivamente caiu) + nova coluna "Data do Crédito" (quando
                 o valor líquido realmente cai, já contando em dias úteis —
-                ver lib/finance/compute-receipt.ts). */}
+                ver lib/finance/compute-receipt.ts).
+                CORREÇÃO: coluna Cliente removida e datas mostram só o dia
+                (sem hora) — a pedido. */}
             <th className="pb-2 pr-3">Data da Venda</th>
             {showCredito && <th className="pb-2">Data do Crédito</th>}
           </tr>
@@ -68,7 +69,6 @@ function PaymentTable({ rows, showCredito }: { rows: PaymentRow[]; showCredito: 
             return (
               <tr key={p.id} className="border-b border-border/50 last:border-0">
                 <td className="py-2.5 pr-3 font-medium text-foreground">#{String(p.orderNumber).padStart(4, '0')}</td>
-                <td className="py-2.5 pr-3 text-muted-foreground">{p.customerName ?? '—'}</td>
                 <td className="py-2.5 pr-3">
                   <span className="inline-flex items-center gap-1 text-xs font-medium">
                     <Icon className="h-3 w-3" /> {METHOD_LABEL[p.method] ?? p.method}
@@ -77,10 +77,10 @@ function PaymentTable({ rows, showCredito }: { rows: PaymentRow[]; showCredito: 
                 <td className="py-2.5 pr-3 text-muted-foreground">{formatCurrency(p.amount)}</td>
                 {showCredito && <td className="py-2.5 pr-3 text-muted-foreground">{p.fee ? formatCurrency(p.fee) : '—'}</td>}
                 {showCredito && <td className="py-2.5 pr-3 font-semibold text-foreground">{formatCurrency(p.netAmount ?? p.amount)}</td>}
-                <td className="py-2.5 pr-3 text-muted-foreground">{formatDate(p.paidAt)}</td>
+                <td className="py-2.5 pr-3 text-muted-foreground">{formatDateOnly(p.paidAt)}</td>
                 {showCredito && (
                   <td className="py-2.5 text-muted-foreground">
-                    {p.expectedReceiptDate ? formatDate(p.expectedReceiptDate) : '—'}
+                    {p.expectedReceiptDate ? formatDateOnly(p.expectedReceiptDate) : '—'}
                   </td>
                 )}
               </tr>
