@@ -25,6 +25,7 @@
 import { prisma } from '@/lib/db/client'
 import { publishOrderEvent } from '@/lib/cache/redis'
 import { applyCashback, applyLoyaltyPoints } from '@/lib/loyalty/apply-rewards'
+import { registerPaidOrderForCustomer } from '@/lib/customers/register-paid-order'
 import { getTenantPixChargeStatus } from '@/lib/efi/tenant-pix-client'
 import { computeReceiptInfo, type FinanceRatesConfig } from '@/lib/finance/compute-receipt'
 import { after } from 'next/server'
@@ -47,7 +48,7 @@ export async function processEfiPixWebhookEntries(entries: PixWebhookEntry[]): P
         where: { provider: 'EFI', providerReference: entry.txid, method: 'PIX' },
         include: {
           order: {
-            select: { id: true, tenantId: true, total: true, status: true, customerId: true, orderNumber: true },
+            select: { id: true, tenantId: true, total: true, status: true, customerId: true, orderNumber: true, paymentStatus: true },
           },
         },
       })
@@ -150,6 +151,12 @@ export async function processEfiPixWebhookEntries(entries: PixWebhookEntry[]): P
         if (isFullyPaid && payment.order.customerId) {
           await applyCashback(tx, payment.tenantId, payment.order.customerId, payment.order.id, orderTotal)
           await applyLoyaltyPoints(tx, payment.tenantId, payment.order.customerId, payment.order.id, orderTotal)
+          // CORREÇÃO (#5): ver lib/customers/register-paid-order.ts
+          await registerPaidOrderForCustomer(tx, {
+            customerId: payment.order.customerId,
+            previousPaymentStatus: payment.order.paymentStatus,
+            total: orderTotal,
+          })
         }
 
         return { processed: true as const, isFullyPaid }
