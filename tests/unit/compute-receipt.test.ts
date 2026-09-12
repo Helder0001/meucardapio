@@ -1,8 +1,14 @@
 // tests/unit/compute-receipt.test.ts
-// Testa o cálculo de fee/netAmount/expectedReceiptDate — em especial a
-// contagem de dias úteis em horário de Brasília (ver CORREÇÃO em
-// lib/finance/compute-receipt.ts: getDay()/setDate() nativos do JS usam o
-// fuso do servidor — UTC na Vercel — não o de São Paulo).
+// Testa o cálculo de fee/netAmount/expectedReceiptDate.
+//
+// Duas correções cobertas aqui (ver CORREÇÃO em lib/finance/compute-receipt.ts):
+// 1. O prazo configurado ("Prazo (dias)") é DIAS CORRIDOS, não dias úteis
+//    — só a DATA FINAL é que precisa cair em dia útil (ajusta se cair em
+//    fim de semana/feriado). Antes o código contava dias úteis um a um,
+//    o que inflava bastante prazos longos (parcelado 7-12x etc.).
+// 2. getDay()/setDate() nativos do JS usam o fuso do servidor (UTC na
+//    Vercel), não o de São Paulo — corrigido extraindo o Y-M-D já em
+//    horário de SP antes de qualquer conta.
 
 import { describe, it, expect } from 'vitest'
 import { computeReceiptInfo } from '@/lib/finance/compute-receipt'
@@ -12,9 +18,10 @@ import { computeReceiptInfo } from '@/lib/finance/compute-receipt'
 // antigo) essa venda já "é" sábado; em São Paulo ainda é sexta-feira.
 const SEXTA_NOITE_SP = new Date('2026-09-12T02:26:00.000Z')
 
-describe('computeReceiptInfo — dias úteis em horário de Brasília', () => {
-  it('venda de sexta à noite (SP) com D+1 útil cai na segunda, não no domingo', () => {
-    // Sexta 11/09 (SP) + 1 dia útil = pula sáb 12 e dom 13 → segunda 14/09.
+describe('computeReceiptInfo', () => {
+  it('venda de sexta à noite (SP) com D+1 cai na segunda, não no domingo', () => {
+    // Sexta 11/09 (SP) + 1 dia corrido = sábado 12/09 → cai em fim de
+    // semana → empurra pro próximo dia útil → segunda 14/09.
     const result = computeReceiptInfo(
       'DEBIT_CARD', 45.90, SEXTA_NOITE_SP,
       { maquininhaDebitoRate: 1.99, maquininhaDebitoDays: 1 },
@@ -31,8 +38,9 @@ describe('computeReceiptInfo — dias úteis em horário de Brasília', () => {
     expect(result.expectedReceiptDate?.toISOString().slice(11, 16)).toBe('02:26')
   })
 
-  it('venda no meio da semana soma dias úteis corridos normalmente', () => {
-    // Terça 08/09/2026 12:00 SP (15:00 UTC) + 2 dias úteis = quinta 10/09.
+  it('quando a data corrida já cai em dia útil, não mexe (não é dia útil "a mais")', () => {
+    // Terça 08/09/2026 12:00 SP + 2 dias corridos = quinta 10/09, que já é
+    // dia útil — não empurra.
     const tercaSP = new Date('2026-09-08T15:00:00.000Z')
     const result = computeReceiptInfo(
       'CREDIT_CARD_MANUAL', 100, tercaSP,
@@ -41,21 +49,35 @@ describe('computeReceiptInfo — dias úteis em horário de Brasília', () => {
     expect(result.expectedReceiptDate?.toISOString().slice(0, 10)).toBe('2026-09-10')
   })
 
-  it('pula feriado nacional fixo (Independência, 07/09) além de sábado/domingo', () => {
-    // Sexta 04/09/2026 12:00 SP + 3 dias úteis: sáb 5 e dom 6 (fim de
-    // semana) e seg 7 (Independência) não contam → conta ter 8, qua 9,
-    // qui 10 → resultado 10/09. Sem pular o feriado daria 09/09.
+  it('prazo longo (parcelado) soma dias corridos, não dias úteis', () => {
+    // Sexta 11/09/2026 12:00 SP + 30 dias corridos = domingo 11/10 → cai
+    // em fim de semana → empurra pro próximo dia útil → segunda 12/10.
+    // (Contando como dias ÚTEIS, 30 dias renderia bem mais tarde, lá por
+    // meados de novembro — esse é exatamente o bug relatado.)
+    const sextaSP = new Date('2026-09-11T15:00:00.000Z')
+    const result = computeReceiptInfo(
+      'CREDIT_CARD', 1000, sextaSP,
+      { efiCard7to12Rate: 4.5, efiCard7to12Days: 30 },
+      'EFI', 8,
+    )
+    expect(result.expectedReceiptDate?.toISOString().slice(0, 10)).toBe('2026-10-12')
+  })
+
+  it('empurra pro próximo dia útil quando a data corrida cai em feriado nacional fixo', () => {
+    // Sexta 04/09/2026 12:00 SP + 3 dias corridos = segunda 07/09
+    // (Independência) → empurra → terça 08/09.
     const sextaSP = new Date('2026-09-04T15:00:00.000Z')
     const result = computeReceiptInfo(
       'DEBIT_CARD', 100, sextaSP,
       { maquininhaDebitoRate: 1.99, maquininhaDebitoDays: 3 },
     )
-    expect(result.expectedReceiptDate?.toISOString().slice(0, 10)).toBe('2026-09-10')
+    expect(result.expectedReceiptDate?.toISOString().slice(0, 10)).toBe('2026-09-08')
   })
 
-  it('pula feriado móvel (Corpus Christi, calculado a partir da Páscoa)', () => {
-    // Corpus Christi 2026 cai em 04/06 (quinta). Quarta 03/06/2026 12:00 SP
-    // + 1 dia útil pulando a quinta (feriado) → sexta 05/06.
+  it('empurra pro próximo dia útil quando a data corrida cai em feriado móvel (Corpus Christi)', () => {
+    // Corpus Christi 2026 cai em 04/06 (quinta, calculado a partir da
+    // Páscoa). Quarta 03/06/2026 12:00 SP + 1 dia corrido = quinta 04/06
+    // (feriado) → empurra → sexta 05/06.
     const quartaSP = new Date('2026-06-03T15:00:00.000Z')
     const result = computeReceiptInfo(
       'DEBIT_CARD', 100, quartaSP,
