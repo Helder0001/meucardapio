@@ -218,9 +218,9 @@ async function buildOrderReceivedMessage(orderId: string): Promise<string | null
     ? paymentMethods.map(method => {
         switch (method) {
           case 'PIX':                return '⚡ PIX'
-          case 'CREDIT_CARD':        return '💳 Cartão de Crédito'
-          case 'CREDIT_CARD_MANUAL': return '💳 Crédito (entrega/retirada)'
-          case 'DEBIT_CARD':         return '💳 Cartão de Débito'
+          case 'CREDIT_CARD':        return '💳 Crédito (Online)'
+          case 'CREDIT_CARD_MANUAL': return '💳 Crédito (Maquininha)'
+          case 'DEBIT_CARD':         return '💳 Débito (Maquininha)'
           case 'CASH':               return '💵 Dinheiro'
           case 'VOUCHER':            return '🎟️ Voucher'
           case 'CASHBACK':           return '💰 Cashback'

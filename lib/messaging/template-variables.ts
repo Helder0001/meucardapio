@@ -12,9 +12,9 @@ export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.meucardap
 
 const PAYMENT_LABELS: Record<string, string> = {
   PIX:                 'PIX',
-  CREDIT_CARD:         'Cartão de Crédito',
-  CREDIT_CARD_MANUAL:  'Cartão de Crédito (na entrega/retirada)',
-  DEBIT_CARD:          'Cartão de Débito',
+  CREDIT_CARD:         'Crédito (Online)',
+  CREDIT_CARD_MANUAL:  'Crédito (Maquininha)',
+  DEBIT_CARD:          'Débito (Maquininha)',
   CASH:                'Dinheiro',
   VOUCHER:             'Voucher',
   CASHBACK:            'Cashback',
