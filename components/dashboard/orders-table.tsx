@@ -206,9 +206,9 @@ export function OrdersTable({ orders, total, page, pageSize, currentFilters }: O
             { value: '', label: 'Todas as formas' },
             { value: 'PIX', label: '⚡ PIX' },
             { value: 'PIX_MANUAL', label: '⚡ PIX (chave própria)' },
-            { value: 'CREDIT_CARD', label: '💳 Cartão de Crédito' },
-            { value: 'CREDIT_CARD_MANUAL', label: '💳 Crédito (entrega/retirada)' },
-            { value: 'DEBIT_CARD', label: '💳 Cartão de Débito' },
+            { value: 'CREDIT_CARD', label: '💳 Crédito (Online)' },
+            { value: 'CREDIT_CARD_MANUAL', label: '💳 Crédito (Maquininha)' },
+            { value: 'DEBIT_CARD', label: '💳 Débito (Maquininha)' },
             { value: 'CASH', label: '💵 Dinheiro' },
             { value: 'VOUCHER', label: '🎟️ Voucher' },
             { value: 'CASHBACK', label: '💰 Cashback' },
@@ -303,9 +303,13 @@ export function OrdersTable({ orders, total, page, pageSize, currentFilters }: O
                               // caía no fallback e mostrava o enum cru
                               // ("PIX_MANUAL") na coluna Forma.
                               PIX_MANUAL: '⚡ Pix Chave',
-                              CREDIT_CARD: '💳 Crédito',
-                              CREDIT_CARD_MANUAL: '💳 Crédito',
-                              DEBIT_CARD: '💳 Débito',
+                              // CORREÇÃO (#4): Crédito online (Efí) e
+                              // Crédito na maquininha física usavam o
+                              // MESMO rótulo aqui ("💳 Crédito") — impossível
+                              // distinguir um do outro só olhando a coluna.
+                              CREDIT_CARD: '💳 Crédito (Online)',
+                              CREDIT_CARD_MANUAL: '💳 Crédito (Maquininha)',
+                              DEBIT_CARD: '💳 Débito (Maquininha)',
                               CASH: '💵 Dinheiro',
                             }
                             return m[p.method] ?? p.method
