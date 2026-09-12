@@ -139,11 +139,21 @@ export async function processMarketplaceOrder(
       affectedProductIds = result.affectedProductIds
     }
 
-    if (customerId) {
+    // CORREÇÃO (#5): mesmo raciocínio de actions/orders/create-order.ts —
+    // só conta como gasto do cliente se o pedido já nasce PAGO (marketplace
+    // cobrou online e repassou pra gente já confirmado). Pedido "pague na
+    // entrega" do iFood/99Food não deveria contar até alguém confirmar o
+    // recebimento — mas note que hoje não existe um mark-paid equivalente
+    // pra pedidos de marketplace, então esse caso simplesmente não conta
+    // ainda; se isso for um fluxo real no seu operação, me avise que a
+    // gente cria esse ponto de confirmação também.
+    if (customerId && newOrder.paymentStatus === 'PAID') {
       await tx.customer.update({
         where: { id: customerId },
         data: { totalOrders: { increment: 1 }, totalSpent: { increment: normalized.total }, lastOrderAt: new Date() },
       })
+    } else if (customerId) {
+      await tx.customer.update({ where: { id: customerId }, data: { lastOrderAt: new Date() } })
     }
 
     return { newOrder, affectedProductIds }
