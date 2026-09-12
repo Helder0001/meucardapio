@@ -56,17 +56,21 @@ const planFeatures = [
 ]
 
 // CORREÇÃO: logos de parceiros/integrações — todas tratadas em cinza
-// uniforme com fundo transparente pra faixa de rolagem contínua.
+// uniforme com fundo transparente pra faixa de rolagem contínua. Logos que
+// antes ficavam sem nome/legenda (Sentry, Upstash, Railway, Neon) agora
+// identificadas, e GitHub + Vercel adicionadas à lista.
 const partnerLogos = [
   { name: 'Efí Bank', logo: '/integrations/efi-bank-logo-gray.png', caption: 'PIX e pagamentos' },
   { name: 'Groq', logo: '/integrations/partner-groq.png', caption: 'IA para descrições' },
   { name: 'Resend', logo: '/integrations/partner-resend.png', caption: 'E-mails automáticos' },
   { name: 'Novu', logo: '/integrations/partner-novu.png', caption: 'Notificações' },
   { name: 'OpenCage', logo: '/integrations/partner-opencage.png', caption: 'Localização e endereços' },
-  { name: 'Parceiro', logo: '/integrations/partner-1.png', caption: null },
-  { name: 'Parceiro', logo: '/integrations/partner-2.png', caption: null },
-  { name: 'Parceiro', logo: '/integrations/partner-3.png', caption: null },
-  { name: 'Parceiro', logo: '/integrations/partner-4.png', caption: null },
+  { name: 'Sentry', logo: '/integrations/partner-1.png', caption: 'Monitoramento de erros' },
+  { name: 'Upstash', logo: '/integrations/partner-2.png', caption: 'Cache e filas' },
+  { name: 'Railway', logo: '/integrations/partner-3.png', caption: 'Hospeda o backend' },
+  { name: 'Neon', logo: '/integrations/partner-4.png', caption: 'Banco de dados PostgreSQL' },
+  { name: 'GitHub', logo: '/integrations/partner-github.png', caption: 'Versionamento de código' },
+  { name: 'Vercel', logo: '/integrations/partner-vercel.png', caption: 'Hospeda o frontend' },
 ]
 
 // Papéis de acesso — cada pessoa da equipe vê só o que precisa.
@@ -202,7 +206,7 @@ export function HomePageClient() {
       </nav>
 
       {/* HERO */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-brand-50/60 via-white to-white dark:from-gray-900 dark:via-gray-950 dark:to-gray-950 pt-20 pb-28">
+      <section className="relative overflow-hidden bg-gradient-to-b from-brand-50/60 via-white to-white dark:from-gray-900 dark:via-gray-950 dark:to-gray-950 pt-14 sm:pt-20 pb-14 sm:pb-28">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-brand-400/10 rounded-full blur-3xl animate-pulse-slow pointer-events-none" />
         <div className="relative max-w-5xl mx-auto px-5 text-center">
 
@@ -273,8 +277,8 @@ export function HomePageClient() {
       </section>
 
       {/* PROBLEMA → SOLUÇÃO */}
-      <section className="py-24 max-w-5xl mx-auto px-5">
-        <div className="text-center mb-14">
+      <section className="py-14 sm:py-24 max-w-5xl mx-auto px-5">
+        <div className="text-center mb-10 sm:mb-14">
           <h2 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
             Chega de pedidos <span className="text-gradient">espalhados</span>
           </h2>
@@ -319,9 +323,9 @@ export function HomePageClient() {
       </section>
 
       {/* COMO FUNCIONA */}
-      <section id="como-funciona" className="py-24 bg-gray-50/60 dark:bg-gray-900/30">
+      <section id="como-funciona" className="py-14 sm:py-24 bg-gray-50/60 dark:bg-gray-900/30">
         <div className="max-w-5xl mx-auto px-5">
-          <div className="text-center mb-14">
+          <div className="text-center mb-10 sm:mb-14">
             <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
               🧭 Como funciona
             </span>
@@ -356,8 +360,8 @@ export function HomePageClient() {
       </section>
 
       {/* KANBAN EM DESTAQUE */}
-      <section className="py-24 max-w-5xl mx-auto px-5">
-        <div className="text-center mb-14">
+      <section className="py-14 sm:py-24 max-w-5xl mx-auto px-5">
+        <div className="text-center mb-10 sm:mb-14">
           <h2 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
             Do pedido à entrega, <span className="text-gradient">todo mundo sabe o que fazer</span>
           </h2>
@@ -379,7 +383,7 @@ export function HomePageClient() {
       </section>
 
       {/* WHATSAPP */}
-      <section className="py-24 bg-gray-50/60 dark:bg-gray-900/30">
+      <section className="py-14 sm:py-24 bg-gray-50/60 dark:bg-gray-900/30">
         <div className="max-w-4xl mx-auto px-5 grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
           <div>
             <span className="inline-flex items-center gap-1.5 bg-green-100 dark:bg-green-950/40 text-green-600 dark:text-green-400 text-xs font-semibold px-3 py-1.5 rounded-full">
@@ -411,8 +415,8 @@ export function HomePageClient() {
       </section>
 
       {/* CARDÁPIO / QR CODE */}
-      <section className="py-24 max-w-5xl mx-auto px-5">
-        <div className="text-center mb-14">
+      <section className="py-14 sm:py-24 max-w-5xl mx-auto px-5">
+        <div className="text-center mb-10 sm:mb-14">
           <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
             📱 Cardápio digital
           </span>
@@ -448,7 +452,7 @@ export function HomePageClient() {
       </section>
 
       {/* PAGAMENTOS */}
-      <section className="py-24 bg-gray-50/60 dark:bg-gray-900/30">
+      <section className="py-14 sm:py-24 bg-gray-50/60 dark:bg-gray-900/30">
         <div className="max-w-2xl mx-auto px-5 text-center">
           <span className="inline-flex items-center gap-1.5 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-full">
             <CreditCard className="w-3.5 h-3.5" /> Pagamentos
@@ -483,8 +487,8 @@ export function HomePageClient() {
           não integrações que o restaurante escolhe e já usa por conta
           própria. Chamar de "integrações"/"parceiros que você já usa"
           criava uma promessa comercial ambígua. */}
-      <section id="integracoes" className="py-24 max-w-6xl mx-auto px-5">
-        <div className="text-center mb-14">
+      <section id="integracoes" className="py-14 sm:py-24 max-w-6xl mx-auto px-5">
+        <div className="text-center mb-10 sm:mb-14">
           <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
             ⚙️ Tecnologia
           </span>
@@ -506,9 +510,9 @@ export function HomePageClient() {
         <div className="relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
           <div className="flex items-center w-max animate-marquee hover:[animation-play-state:paused]">
             {[...partnerLogos, ...partnerLogos].map(({ name, logo, caption }, i) => (
-              <div key={`${name}-${i}`} className="flex-shrink-0 w-40 mx-4 flex flex-col items-center justify-center gap-1.5">
-                <div className="relative w-28 h-12">
-                  <Image src={logo} alt={name} fill sizes="112px" className="object-contain" />
+              <div key={`${name}-${i}`} className="flex-shrink-0 w-32 mx-2 flex flex-col items-center justify-center gap-1.5">
+                <div className="relative w-24 h-10">
+                  <Image src={logo} alt={name} fill sizes="96px" className="object-contain" />
                 </div>
                 {caption && <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 text-center leading-tight">{caption}</span>}
               </div>
@@ -550,8 +554,8 @@ export function HomePageClient() {
           Kanban, WhatsApp, Pagamentos e IA já foram mostrados em seções
           próprias antes desta. Cards menores (ícone e padding reduzidos)
           pra não repetir o mesmo destaque visual das seções anteriores. */}
-      <section id="funcionalidades" className="py-24 max-w-6xl mx-auto px-5">
-        <div className="text-center mb-14">
+      <section id="funcionalidades" className="py-14 sm:py-24 max-w-6xl mx-auto px-5">
+        <div className="text-center mb-10 sm:mb-14">
           <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
             ⚡ E muito mais
           </span>
@@ -580,9 +584,9 @@ export function HomePageClient() {
       </section>
 
       {/* EQUIPE / PERMISSÕES */}
-      <section className="py-24 bg-gray-50/60 dark:bg-gray-900/30">
+      <section className="py-14 sm:py-24 bg-gray-50/60 dark:bg-gray-900/30">
         <div className="max-w-5xl mx-auto px-5">
-          <div className="text-center mb-14">
+          <div className="text-center mb-10 sm:mb-14">
             <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
               <Users className="w-3.5 h-3.5" /> Equipe
             </span>
@@ -610,7 +614,7 @@ export function HomePageClient() {
       </section>
 
       {/* TIPOS DE NEGÓCIO */}
-      <section className="py-24 max-w-5xl mx-auto px-5 text-center">
+      <section className="py-14 sm:py-24 max-w-5xl mx-auto px-5 text-center">
         <h2 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
           Feito para diferentes <span className="text-gradient">tipos de negócio</span>
         </h2>
@@ -626,8 +630,8 @@ export function HomePageClient() {
       </section>
 
       {/* PLANOS */}
-      <section id="planos" className="py-24 max-w-5xl mx-auto px-5">
-        <div className="text-center mb-14">
+      <section id="planos" className="py-14 sm:py-24 max-w-5xl mx-auto px-5">
+        <div className="text-center mb-10 sm:mb-14">
           <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
             🛡 Um plano. Tudo incluído.
           </span>
@@ -678,9 +682,9 @@ export function HomePageClient() {
       </section>
 
       {/* PERGUNTAS FREQUENTES */}
-      <section id="faq" className="py-24 bg-gray-50/60 dark:bg-gray-900/30">
+      <section id="faq" className="py-14 sm:py-24 bg-gray-50/60 dark:bg-gray-900/30">
         <div className="max-w-3xl mx-auto px-5">
-          <div className="text-center mb-14">
+          <div className="text-center mb-10 sm:mb-14">
             <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
               ❓ Perguntas frequentes
             </span>
@@ -704,7 +708,7 @@ export function HomePageClient() {
       </section>
 
       {/* CTA FINAL */}
-      <section className="py-24 max-w-5xl mx-auto px-5">
+      <section className="py-14 sm:py-24 max-w-5xl mx-auto px-5">
         <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 dark:from-gray-800 dark:to-gray-900 p-12 sm:p-16 text-center border border-gray-700">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(249,115,22,0.15)_0%,_transparent_70%)] pointer-events-none" />
           <div className="relative">
