@@ -2,13 +2,29 @@
 
 // components/dashboard/header.tsx
 
-import { Bell, ChevronDown, LogOut, Settings, User, Receipt, ExternalLink, Sun, Moon, Monitor } from 'lucide-react'
+import { Bell, ChevronDown, LogOut, Settings, User, Receipt, ExternalLink, Sun, Moon, Monitor, PackageX, ShoppingBag } from 'lucide-react'
 import { signOut } from 'next-auth/react'
 import { useState, useEffect } from 'react'
 import { useTheme } from 'next-themes'
 import Link from 'next/link'
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
+import { formatCurrency, formatOrderNumber } from '@/lib/utils/format'
+
+interface OrderNotification {
+  id: string
+  orderNumber: number
+  total: number
+  type: string
+  createdAt: string
+  customerName: string | null
+}
+
+interface StockNotification {
+  productId: string
+  productName: string
+  updatedAt: string
+}
 
 interface HeaderProps {
   user: {
@@ -41,7 +57,12 @@ const THEME_CONFIG: Record<ThemeValue, { icon: React.ElementType; label: string;
 export function Header({ user }: HeaderProps) {
   const [menuOpen, setMenuOpen]   = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
-  const [pendingCount, setPendingCount] = useState(0)
+  // CORREÇÃO (#3): antes só existia uma contagem (`pendingCount`) usada
+  // pra montar um único item agregado no dropdown ("Pedidos aguardando —
+  // N pendentes"). Agora guardamos as listas de verdade — cada pedido
+  // pendente e cada produto esgotado aparece como seu próprio item.
+  const [orders, setOrders] = useState<OrderNotification[]>([])
+  const [outOfStock, setOutOfStock] = useState<StockNotification[]>([])
   const [mounted, setMounted]     = useState(false)
 
   const { theme, setTheme, resolvedTheme } = useTheme()
@@ -50,23 +71,26 @@ export function Header({ user }: HeaderProps) {
   useEffect(() => setMounted(true), [])
 
   useEffect(() => {
-    const fetchPending = async () => {
+    const fetchNotifications = async () => {
       try {
-        const res = await fetch('/api/orders/pending-count')
+        const res = await fetch('/api/notifications/list')
         if (res.ok) {
           const data = await res.json()
-          setPendingCount(data.pending ?? 0)
+          setOrders(data.orders ?? [])
+          setOutOfStock(data.outOfStock ?? [])
         }
       } catch {}
     }
-    fetchPending()
-    const interval = setInterval(fetchPending, 30000)
-    window.addEventListener('meucardapio:new-order', fetchPending)
+    fetchNotifications()
+    const interval = setInterval(fetchNotifications, 30000)
+    window.addEventListener('meucardapio:new-order', fetchNotifications)
     return () => {
       clearInterval(interval)
-      window.removeEventListener('meucardapio:new-order', fetchPending)
+      window.removeEventListener('meucardapio:new-order', fetchNotifications)
     }
   }, [])
+
+  const notificationCount = orders.length + outOfStock.length
 
   const initials = user.name
     ? user.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
@@ -125,9 +149,9 @@ export function Header({ user }: HeaderProps) {
             className="relative p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
           >
             <Bell className="h-5 w-5" />
-            {pendingCount > 0 && (
+            {notificationCount > 0 && (
               <span className="absolute top-1.5 right-1.5 h-3.5 w-3.5 bg-primary text-white rounded-full text-[9px] font-bold flex items-center justify-center">
-                {pendingCount > 9 ? '9+' : pendingCount}
+                {notificationCount > 9 ? '9+' : notificationCount}
               </span>
             )}
           </button>
@@ -136,33 +160,57 @@ export function Header({ user }: HeaderProps) {
             <>
               <div className="fixed inset-0 z-10" onClick={() => setNotifOpen(false)} />
               <div
-                className="absolute right-0 top-full mt-2 w-72 bg-card border border-border rounded-xl z-20 py-2 animate-slide-up"
+                className="absolute right-0 top-full mt-2 w-80 max-h-[70vh] overflow-y-auto bg-card border border-border rounded-xl z-20 py-2 animate-slide-up"
                 style={{ boxShadow: 'var(--shadow-dropdown)' }}
               >
-                <div className="px-3 py-2 border-b border-border">
+                <div className="px-3 py-2 border-b border-border sticky top-0 bg-card">
                   <p className="text-sm font-semibold text-foreground">Notificações</p>
                 </div>
-                {pendingCount > 0 ? (
-                  <div className="p-2">
-                    <Link
-                      href="/dashboard/orders/kanban"
-                      onClick={() => setNotifOpen(false)}
-                      className="flex items-center gap-3 p-2.5 bg-brand-50 dark:bg-brand-950/30 rounded-lg hover:bg-brand-100 dark:hover:bg-brand-950/50 transition-colors"
-                    >
-                      <span className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                        {pendingCount}
-                      </span>
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Pedidos aguardando</p>
-                        <p className="text-xs text-muted-foreground">
-                          {pendingCount} pedido{pendingCount !== 1 ? 's' : ''} pendente{pendingCount !== 1 ? 's' : ''}
-                        </p>
-                      </div>
-                    </Link>
-                  </div>
-                ) : (
+                {notificationCount === 0 ? (
                   <div className="px-3 py-6 text-center">
                     <p className="text-sm text-muted-foreground">Nenhuma notificação</p>
+                  </div>
+                ) : (
+                  <div className="p-2 space-y-1">
+                    {/* CORREÇÃO (#3): cada pedido pendente vira seu próprio
+                        item, linkando direto pro pedido — antes era um
+                        único card agregado que só linkava pro Kanban. */}
+                    {orders.map((o) => (
+                      <Link
+                        key={o.id}
+                        href={`/dashboard/orders/${o.id}`}
+                        onClick={() => setNotifOpen(false)}
+                        className="flex items-center gap-3 p-2.5 bg-brand-50 dark:bg-brand-950/30 rounded-lg hover:bg-brand-100 dark:hover:bg-brand-950/50 transition-colors"
+                      >
+                        <span className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white flex-shrink-0">
+                          <ShoppingBag className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            Pedido {formatOrderNumber(o.orderNumber)}{o.customerName ? ` — ${o.customerName}` : ''}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{formatCurrency(o.total)} · aguardando confirmação</p>
+                        </div>
+                      </Link>
+                    ))}
+                    {/* CORREÇÃO (#3): novo tipo de notificação — produto
+                        com estoque zerado. Linka pra tela de Estoque. */}
+                    {outOfStock.map((s) => (
+                      <Link
+                        key={s.productId}
+                        href="/dashboard/stock"
+                        onClick={() => setNotifOpen(false)}
+                        className="flex items-center gap-3 p-2.5 bg-red-50 dark:bg-red-950/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors"
+                      >
+                        <span className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center text-white flex-shrink-0">
+                          <PackageX className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{s.productName}</p>
+                          <p className="text-xs text-muted-foreground">Estoque esgotado</p>
+                        </div>
+                      </Link>
+                    ))}
                   </div>
                 )}
               </div>
