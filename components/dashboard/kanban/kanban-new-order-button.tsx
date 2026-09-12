@@ -657,8 +657,8 @@ export function KanbanNewOrderButton({ tenantId, pdvId, createdByUserId, categor
                           {pixEnabled && <option value="PIX">⚡ PIX</option>}
                           {manualPixEnabled && <option value="PIX_MANUAL">⚡ PIX (chave direta)</option>}
                           <option value="CASH">💵 Dinheiro</option>
-                          <option value="CREDIT_CARD">💳 Crédito</option>
-                          <option value="DEBIT_CARD">💳 Débito</option>
+                          <option value="CREDIT_CARD">💳 Crédito (Maquininha)</option>
+                          <option value="DEBIT_CARD">💳 Débito (Maquininha)</option>
                           {payments.length === 1 && linkEnabled && <option value="LINK">🔗 Link de pagamento</option>}
                         </select>
 
