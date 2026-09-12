@@ -89,23 +89,29 @@ function applyRate(amount: number, paidAt: Date, ratePercent?: number, days?: nu
   return {
     fee,
     netAmount: round2(amount - fee),
-    // CORREÇÃO: o prazo configurado (ex.: "31 dias") é sempre em DIAS
-    // ÚTEIS — antes isso somava dias corridos direto (paidAt + days*24h),
-    // o que adianta a data prevista sempre que o intervalo cruza um fim de
-    // semana ou feriado nacional. addBusinessDays pula sábado, domingo e
-    // feriado nacional ao contar.
-    expectedReceiptDate: addBusinessDays(paidAt, days),
+    // CORREÇÃO: o prazo configurado ("Prazo (dias)" no formulário de
+    // taxas) é DIAS CORRIDOS, igual todo acquirer/maquininha do mercado
+    // informa ("recebe em 30 dias corridos") — isso já estava documentado
+    // no comentário do FinanceRatesConfig acima, mas a função somava como
+    // se fossem dias ÚTEIS, o que inflava bastante a data prevista em
+    // prazos longos (30+ dias corridos vira 40+ dias corridos quando
+    // contado só em dias úteis). addBusinessDaysAdjusted soma os dias
+    // corridos direto e só empurra pro próximo dia útil se a data cair em
+    // fim de semana ou feriado nacional — que é exatamente a regra que
+    // Efí/maquininha usam de verdade.
+    expectedReceiptDate: addBusinessDaysAdjusted(paidAt, days),
   }
 }
 
 // --- Feriados nacionais ---------------------------------------------
-// CORREÇÃO: addBusinessDays só pulava sábado/domingo — um D+1 caindo em
-// feriado (ex.: sexta véspera de feriado na segunda) contava normalmente,
-// adiantando a Data do Crédito em relação ao que o gateway/maquininha
-// real credita. Cobre só feriados NACIONAIS (fixos + móveis, calculados a
-// partir da Páscoa) — feriados estaduais/municipais e pontos facultativos
-// variam por cidade/ano e ficam fora do escopo (não tem fonte confiável
-// única pra isso sem depender de um serviço externo por tenant).
+// CORREÇÃO: addBusinessDaysAdjusted só pulava sábado/domingo — um prazo
+// caindo em feriado (ex.: vencendo numa segunda de feriado) não empurrava
+// pro próximo dia útil, adiantando a Data do Crédito em relação ao que o
+// gateway/maquininha real credita. Cobre só feriados NACIONAIS (fixos +
+// móveis, calculados a partir da Páscoa) — feriados estaduais/municipais
+// e pontos facultativos variam por cidade/ano e ficam fora do escopo (não
+// tem fonte confiável única pra isso sem depender de um serviço externo
+// por tenant).
 
 // Domingo de Páscoa do ano (algoritmo de Meeus/Jones/Butcher, calendário
 // gregoriano) — a partir dele derivamos Carnaval, Sexta-feira Santa e
@@ -166,18 +172,21 @@ function isNationalHoliday(year: number, month: number, day: number): boolean {
   return nationalHolidays(year).has(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`)
 }
 
-// Soma `days` DIAS ÚTEIS a partir de `start` (pula sábado, domingo e
-// feriado nacional).
+// Soma `days` DIAS CORRIDOS a `start` e, SÓ SE a data resultante cair em
+// fim de semana ou feriado nacional, empurra pro próximo dia útil. Não é
+// "conta N dias úteis pulando fim de semana/feriado no caminho" — é a
+// regra real que Efí/maquininha/qualquer acquirer usa: o prazo em si é
+// corrido, só o dia da liberação em si precisa ser um dia útil.
 //
 // CORREÇÃO: getDay()/setDate() do JS operam no fuso do SERVIDOR (UTC na
 // Vercel), não no horário de Brasília. Uma venda feita à noite em SP já
 // virou o dia seguinte em UTC — ex.: sexta 23:26 em SP é sábado 02:26 em
-// UTC — então o loop começava contando a partir de sábado (quando pro
+// UTC — então a soma de dias começava a partir de sábado (quando pro
 // negócio/cliente ainda era sexta), adiantando ou atrasando a Data do
 // Crédito em 1 dia perto da virada. Agora extraímos o Y-M-D já em horário
-// de SP antes de começar a contar, e só remontamos o Date final (com o
-// mesmo horário original, também em SP) depois de achar o dia útil certo.
-function addBusinessDays(start: Date, days: number): Date {
+// de SP antes de somar, e só remontamos o Date final (com o mesmo horário
+// original, também em SP) depois de achar o dia útil certo.
+function addBusinessDaysAdjusted(start: Date, days: number): Date {
   const SP_TZ = 'America/Sao_Paulo'
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: SP_TZ,
@@ -192,13 +201,16 @@ function addBusinessDays(start: Date, days: number): Date {
   // — não representa nenhum instante real; por isso getUTCDay/setUTCDate,
   // pra não sofrer o mesmo problema de fuso que este código está corrigindo.
   const cursor = new Date(Date.UTC(y, m - 1, d))
-  let remaining = days
-  while (remaining > 0) {
-    cursor.setUTCDate(cursor.getUTCDate() + 1)
+  cursor.setUTCDate(cursor.getUTCDate() + days) // dias CORRIDOS, de uma vez
+
+  // Só ajusta se a data caiu em fim de semana/feriado — e pode precisar
+  // avançar mais de um dia (ex.: sexta-feira Santa emendando com sábado).
+  while (true) {
     const weekday = cursor.getUTCDay() // 0 = domingo, 6 = sábado
     const isWeekend = weekday === 0 || weekday === 6
     const isHoliday = !isWeekend && isNationalHoliday(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, cursor.getUTCDate())
-    if (!isWeekend && !isHoliday) remaining--
+    if (!isWeekend && !isHoliday) break
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
   }
 
   const yy = cursor.getUTCFullYear()
