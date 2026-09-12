@@ -27,9 +27,9 @@ const dateParamSchema = z
 
 const METHOD_PT: Record<string, string> = {
   CASH:               'Dinheiro',
-  CREDIT_CARD:        'Cartão de Crédito',
-  CREDIT_CARD_MANUAL: 'Crédito (entrega/retirada)',
-  DEBIT_CARD:         'Cartão de Débito',
+  CREDIT_CARD:        'Crédito (Online)',
+  CREDIT_CARD_MANUAL: 'Crédito (Maquininha)',
+  DEBIT_CARD:         'Débito (Maquininha)',
   PIX:                'PIX',
   VOUCHER:            'Voucher',
   CASHBACK:           'Cashback',
