@@ -16,6 +16,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
+import { registerPaidOrderForCustomer } from '@/lib/customers/register-paid-order'
 import { decrypt, safeCompareHash } from '@/lib/security/crypto'
 import { createHash } from 'crypto'
 
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
   try {
     const dbPayment = await prisma.payment.findFirst({
       where: { providerReference: payment.id, provider: 'ASAAS', tenantId },
-      select: { id: true, orderId: true, status: true, method: true, amount: true, order: { select: { total: true } } },
+      select: { id: true, orderId: true, status: true, method: true, amount: true, order: { select: { total: true, customerId: true, paymentStatus: true } } },
     })
 
     if (!dbPayment) {
@@ -129,6 +130,15 @@ export async function POST(req: NextRequest) {
           ? { paymentStatus: 'PAID', status: 'CONFIRMED', confirmedAt: new Date() }
           : { paymentStatus: 'PARTIAL' },
       })
+
+      if (isFullyPaid) {
+        // CORREÇÃO (#5): ver lib/customers/register-paid-order.ts
+        await registerPaidOrderForCustomer(tx, {
+          customerId: dbPayment.order.customerId,
+          previousPaymentStatus: dbPayment.order.paymentStatus,
+          total: orderTotal,
+        })
+      }
 
       return { processed: true as const, isFullyPaid }
     })
