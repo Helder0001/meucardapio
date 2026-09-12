@@ -64,15 +64,27 @@ const planFeatures = [
 // ícone de trem/círculo da Railway. E a legenda da Railway passou a
 // refletir o uso real na plataforma (hospeda o Evolution API do
 // WhatsApp), em vez de um "hospeda o backend" genérico.
+// CORREÇÃO: mapeamento revisado a partir do código real (package.json,
+// .env.example, imports), não mais por "achismo" de formato do ícone —
+// isso já tinha causado duas trocas erradas antes.
+// - partner-1 (espiral) é o ícone da Upstash, não da Sentry.
+// - partner-3 (triângulo com ondas) é o ícone da Sentry, não da Neon.
+// - o arquivo antes rotulado "Novu" é na verdade o ícone da Neon — Novu
+//   nunca existiu de verdade no projeto (não tem dependência no
+//   package.json nem env var, só estava citado aqui por engano).
+// - partner-2 (raio isolado, sem nome) não corresponde a nenhum serviço
+//   realmente integrado, então saiu da lista.
+// - legenda da Upstash reflete o uso real, visto em lib/cache/redis.ts e
+//   lib/security/rate-limit.ts: cache de cardápio, sessões, OTP e rate
+//   limit de login — não só "cache e filas" genérico.
 const partnerLogos = [
   { name: 'Efí Bank', logo: '/integrations/efi-bank-logo-gray.png', caption: 'PIX e pagamentos' },
   { name: 'Groq', logo: '/integrations/partner-groq.png', caption: 'IA para descrições' },
   { name: 'Resend', logo: '/integrations/partner-resend.png', caption: 'E-mails automáticos' },
-  { name: 'Novu', logo: '/integrations/partner-novu.png', caption: 'Notificações' },
   { name: 'OpenCage', logo: '/integrations/partner-opencage.png', caption: 'Localização e endereços' },
-  { name: 'Sentry', logo: '/integrations/partner-1.png', caption: 'Monitoramento de erros' },
-  { name: 'Upstash', logo: '/integrations/partner-2.png', caption: 'Cache e filas' },
-  { name: 'Neon', logo: '/integrations/partner-3.png', caption: 'Banco de dados PostgreSQL' },
+  { name: 'Neon', logo: '/integrations/partner-novu.png', caption: 'Banco de dados PostgreSQL' },
+  { name: 'Upstash', logo: '/integrations/partner-1.png', caption: 'Cache, sessões e rate limit' },
+  { name: 'Sentry', logo: '/integrations/partner-3.png', caption: 'Monitoramento de erros' },
   { name: 'Railway', logo: '/integrations/partner-4.png', caption: 'Hospeda o WhatsApp' },
   { name: 'GitHub', logo: '/integrations/partner-github.png', caption: 'Versionamento de código' },
   { name: 'Vercel', logo: '/integrations/partner-vercel.png', caption: 'Hospeda o frontend' },
