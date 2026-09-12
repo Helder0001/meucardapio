@@ -39,6 +39,10 @@ function makeItemKey(productId: string, addonIds: string[]): string {
 function changeMethodOptions(orderType?: string): Array<{ value: string; label: string }> {
   return [
     { value: 'PIX',                label: '⚡ PIX' },
+    // CORREÇÃO: faltava essa opção aqui — quem recebe Pix por chave
+    // própria (sem o Checkout Pro) não tinha como registrar/trocar pra
+    // esse método no PDV/balcão.
+    { value: 'PIX_MANUAL',         label: paymentMethodLabel('PIX_MANUAL', orderType) },
     { value: 'CASH',                label: '💵 Dinheiro' },
     { value: 'CREDIT_CARD_MANUAL',  label: paymentMethodLabel('CREDIT_CARD_MANUAL', orderType) },
     { value: 'DEBIT_CARD',          label: paymentMethodLabel('DEBIT_CARD', orderType) },
@@ -46,7 +50,7 @@ function changeMethodOptions(orderType?: string): Array<{ value: string; label: 
   ]
 }
 
-type AddPaymentMethod = 'PIX' | 'CASH' | 'CREDIT_CARD' | 'CREDIT_CARD_MANUAL' | 'DEBIT_CARD' | 'VOUCHER' | 'TRANSFER'
+type AddPaymentMethod = 'PIX' | 'PIX_MANUAL' | 'CASH' | 'CREDIT_CARD' | 'CREDIT_CARD_MANUAL' | 'DEBIT_CARD' | 'VOUCHER' | 'TRANSFER'
 interface AddPaymentEntry { method: AddPaymentMethod; amount: number }
 
 // Tradução dos status do histórico para português
@@ -879,10 +883,14 @@ export function OrderDetail({
                       onChange={(e) => setAddPayments((prev) => prev.map((x, i) => i === idx ? { ...x, method: e.target.value as AddPaymentMethod } : x))}
                       className="flex-1 px-2 py-1.5 text-xs border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
                     >
+                      {pixEnabled && <option value="PIX">⚡ PIX</option>}
+                      {/* CORREÇÃO: Pix por chave própria (sem Checkout Pro)
+                          não aparecia aqui — quem recebe assim não tinha
+                          como registrar o pagamento com o método certo. */}
+                      <option value="PIX_MANUAL">⚡ PIX (chave própria)</option>
                       <option value="CASH">💵 Dinheiro</option>
                       <option value="CREDIT_CARD_MANUAL">💳 Crédito (Maquininha)</option>
                       <option value="DEBIT_CARD">💳 Débito (Maquininha)</option>
-                      {pixEnabled && <option value="PIX">⚡ PIX</option>}
                       <option value="VOUCHER">🎟️ Voucher</option>
                       <option value="TRANSFER">🏦 Transferência</option>
                     </select>
