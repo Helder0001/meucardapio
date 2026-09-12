@@ -82,9 +82,9 @@ function typePrintLabel(order: { type: string; table: { number: number; sector: 
 const PAYMENT_PRINT_LABELS: Record<string, string> = {
   PIX:                'PIX',
   CASH:               'DINHEIRO',
-  CREDIT_CARD:        'CARTÃO DE CRÉDITO',
-  CREDIT_CARD_MANUAL: 'CARTÃO DE CRÉDITO (ENTREGA/RETIRADA)',
-  DEBIT_CARD:         'CARTÃO DE DÉBITO',
+  CREDIT_CARD:        'CRÉDITO (ONLINE)',
+  CREDIT_CARD_MANUAL: 'CRÉDITO (MAQUININHA)',
+  DEBIT_CARD:         'DÉBITO (MAQUININHA)',
   VOUCHER:            'VOUCHER',
   CASHBACK:           'CASHBACK',
 }
