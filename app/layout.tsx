@@ -25,8 +25,19 @@ export const metadata: Metadata = {
     title: 'Meu Cardápio — Cardápio Digital',
     description: 'Cardápio digital, pedidos online, delivery, PIX e gestão completa para o seu restaurante.',
     siteName: 'Meu Cardápio',
-    images: ['/logo-icon.png'],
+    // CORREÇÃO: era só o ícone quadrado (512×512) — no WhatsApp/Twitter/
+    // Facebook isso aparece cortado/pequeno no preview. 1200×630 é o
+    // tamanho padrão que essas plataformas esperam pra um card de link.
+    images: [{ url: '/og/default.jpg', width: 1200, height: 630 }],
     locale: 'pt_BR',
+  },
+  // CORREÇÃO: sem isso, X/Twitter às vezes cai num card pequeno em vez do
+  // "summary_large_image" — mesma imagem do OG acima.
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Meu Cardápio — Cardápio Digital',
+    description: 'Cardápio digital, pedidos online, delivery, PIX e gestão completa para o seu restaurante.',
+    images: ['/og/default.jpg'],
   },
 }
 
