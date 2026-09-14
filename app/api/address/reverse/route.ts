@@ -11,10 +11,19 @@
 // sem precisar de chave nova.
 
 import { NextRequest, NextResponse } from 'next/server'
+import { addressLimiter } from '@/lib/security/rate-limit'
 
 const NOMINATIM_REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse'
 
 export async function GET(req: NextRequest) {
+  // CORREÇÃO: mesma cota do Nominatim que a busca por texto — usa o mesmo
+  // limitador (mesmo prefixo, mesmo IP conta pros dois juntos).
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '127.0.0.1'
+  const { success } = await addressLimiter.limit(ip)
+  if (!success) {
+    return NextResponse.json({ result: null }, { status: 429 })
+  }
+
   const lat = parseFloat(req.nextUrl.searchParams.get('lat') ?? '')
   const lng = parseFloat(req.nextUrl.searchParams.get('lng') ?? '')
 
