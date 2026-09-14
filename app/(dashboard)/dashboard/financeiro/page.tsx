@@ -59,7 +59,9 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
   const params = await searchParams
 
   const startDate = params.start || startOfMonthSP().toISOString().slice(0, 10)
-  const endDate   = params.end   || new Date().toISOString().slice(0, 10)
+  // CORREÇÃO: mesmo bug do todayStr em reports/export — toISOString() usa
+  // UTC, então perto da meia-noite em Brasília isso virava "amanhã".
+  const endDate   = params.end   || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
   const dateField = params.dateField === 'credito' ? 'credito' : 'venda'
   const orderNumber = params.orderNumber?.trim() || ''
   // CORREÇÃO: searchParams sempre chega como string solta — o Prisma
