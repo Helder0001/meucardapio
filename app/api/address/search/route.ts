@@ -11,6 +11,7 @@
 // exigir uma API key nova (diferente do Google Places Autocomplete).
 
 import { NextRequest, NextResponse } from 'next/server'
+import { addressLimiter } from '@/lib/security/rate-limit'
 
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search'
 
@@ -33,6 +34,17 @@ interface AddressResult {
 }
 
 export async function GET(req: NextRequest) {
+  // CORREÇÃO: só tinha o limite geral da API (60/min por IP) — de propósito
+  // generoso porque autocomplete dispara várias chamadas rápidas enquanto
+  // a pessoa digita. Esse limite aqui é mais folgado que o de cupom (30 em
+  // 10 min, não por minuto), pra não travar digitação normal mas ainda
+  // proteger a cota do Nominatim de automação/scraping.
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '127.0.0.1'
+  const { success } = await addressLimiter.limit(ip)
+  if (!success) {
+    return NextResponse.json({ results: [] }, { status: 429 })
+  }
+
   const query = req.nextUrl.searchParams.get('q')?.trim() ?? ''
   // Cidade/UF do tenant (opcional) — melhora a relevância dos resultados
   // quando o nome da rua sozinho é ambíguo (existe em várias cidades).
