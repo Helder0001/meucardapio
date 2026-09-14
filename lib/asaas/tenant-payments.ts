@@ -69,7 +69,10 @@ export async function createAsaasPixCharge(params: CreateAsaasPixChargeParams) {
 
   // Vencimento hoje — cobrança Pix é liquidada na hora, a data serve só
   // pra satisfazer o campo obrigatório da API.
-  const today = new Date().toISOString().slice(0, 10)
+  // CORREÇÃO: toISOString() usa UTC — perto da meia-noite em
+  // horário de Brasília (21h-23h59 BRT já é o dia seguinte em UTC),
+  // a cobrança saía com vencimento de amanhã em vez de hoje.
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
   const payment = await asaasRequest<AsaasPayment>(params.tenantId, '/payments', {
     method: 'POST',
@@ -175,7 +178,10 @@ export async function createAsaasCardCharge(params: CreateAsaasCardChargeParams)
     customerEmail: params.customerEmail,
   })
 
-  const today = new Date().toISOString().slice(0, 10)
+  // CORREÇÃO: toISOString() usa UTC — perto da meia-noite em
+  // horário de Brasília (21h-23h59 BRT já é o dia seguinte em UTC),
+  // a cobrança saía com vencimento de amanhã em vez de hoje.
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
   const payment = await asaasRequest<{ id: string; status: string; creditCard?: { creditCardNumber?: string } }>(
     params.tenantId,
