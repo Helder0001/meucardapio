@@ -16,7 +16,12 @@ interface PageProps {
   }>
 }
 
-const PAID_STATUS_FILTER = { notIn: ['CANCELLED', 'REFUNDED'] as OrderStatus[] }
+// CORREÇÃO: o nome antigo (PAID_STATUS_FILTER) dava a entender que isso
+// já filtrava por pagamento confirmado — só filtra o status de FLUXO do
+// pedido (exclui cancelado/estornado), sem nenhuma relação com
+// paymentStatus. Isso deixava entrar nos relatórios pedidos cujo status
+// avançou no Kanban mas cujo pagamento nunca foi confirmado de verdade.
+const NOT_CANCELLED_STATUS_FILTER = { notIn: ['CANCELLED', 'REFUNDED'] as OrderStatus[] }
 
 // Converte "YYYY-MM-DD" para início/fim do dia no fuso de São Paulo (UTC-3)
 const toSpStart = (d: string) => new Date(d + 'T00:00:00-03:00')
@@ -48,6 +53,7 @@ async function queryRevenueChart(
     where: {
       tenantId,
       status: { notIn: ['CANCELLED', 'REFUNDED'] },
+      paymentStatus: 'PAID',
       createdAt: { gte: startDate, lte: endDate },
       ...buildPdvWhere(filterPdv, filterSaleType),
       ...(filterPayment ? { payments: { some: { method: filterPayment as any } } } : {}),
@@ -77,6 +83,7 @@ async function queryRevenueChartSimple(
     where: {
       tenantId,
       status: { notIn: ['CANCELLED', 'REFUNDED'] },
+      paymentStatus: 'PAID',
       createdAt: { gte: startDate, lte: endDate },
     },
     select: { total: true, createdAt: true },
@@ -102,6 +109,7 @@ async function queryHourChart(
     where: {
       tenantId,
       status: { notIn: ['CANCELLED', 'REFUNDED'] },
+      paymentStatus: 'PAID',
       createdAt: { gte: startDate, lte: endDate },
       ...buildPdvWhere(filterPdv, filterSaleType),
       ...(filterPayment ? { payments: { some: { method: filterPayment as any } } } : {}),
@@ -153,7 +161,11 @@ export default async function ReportsPage({ searchParams }: PageProps) {
 
   const baseWhere: any = {
     tenantId,
-    status: PAID_STATUS_FILTER,
+    status: NOT_CANCELLED_STATUS_FILTER,
+    // CORREÇÃO: adicionado — sem isso, pedidos com pagamento nunca
+    // confirmado (cliente desistiu, ficou de pagar depois, etc.) entravam
+    // no faturamento dos relatórios.
+    paymentStatus: 'PAID',
     createdAt: { gte: startDate, lte: endDate },
   }
   if (filterPdv === 'null') {
@@ -286,7 +298,7 @@ export default async function ReportsPage({ searchParams }: PageProps) {
       _count: { id: true },
     }),
     prisma.order.aggregate({
-      where: { tenantId, status: PAID_STATUS_FILTER, createdAt: { gte: prevStart, lte: prevEnd } },
+      where: { tenantId, status: NOT_CANCELLED_STATUS_FILTER, paymentStatus: 'PAID', createdAt: { gte: prevStart, lte: prevEnd } },
       _sum: { total: true },
       _count: { id: true },
     }),
