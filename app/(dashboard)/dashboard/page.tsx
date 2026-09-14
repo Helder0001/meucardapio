@@ -41,9 +41,15 @@ export default async function DashboardPage() {
   const prevWeekStart  = new Date(weekStart.getTime() - 7 * 24 * 60 * 60 * 1000)
   const prevMonthStart = startOfMonth(new Date(monthStart.getTime() - 1))
 
-  // CORREÇÃO: remover filtro paymentStatus: 'PAID' da semana/mês
-  // Cartão e dinheiro não passam por webhook de pagamento — o status fica PENDING
-  // mas o pedido já foi entregue/confirmado. Contabilizamos por status do pedido.
+  // CORREÇÃO: o comentário antigo aqui dizia pra tirar o filtro de
+  // paymentStatus porque "cartão e dinheiro não passam por webhook".
+  // Isso está invertido: cartão manual e dinheiro SÃO confirmados pelo
+  // atendente clicando em "Confirmar pagamento" (que atualiza
+  // order.paymentStatus corretamente — ver mark-paid/route.ts). Sem esse
+  // filtro, um pedido cujo status avançou no Kanban (ex: "Preparando")
+  // mas cujo pagamento NUNCA foi confirmado (cliente desistiu, ficou de
+  // pagar depois, etc.) entrava no faturamento como se já tivesse caído
+  // o dinheiro — inflando os números.
   const [
     todayOrders,
     weekRevenue,
@@ -60,6 +66,7 @@ export default async function DashboardPage() {
         tenantId,
         createdAt: { gte: todayStart },
         status: { not: 'CANCELLED' },
+        paymentStatus: 'PAID',
       },
       _count: { id: true },
       _sum: { total: true },
@@ -71,6 +78,7 @@ export default async function DashboardPage() {
         tenantId,
         createdAt: { gte: weekStart },
         status: { notIn: ['CANCELLED', 'REFUNDED'] },
+        paymentStatus: 'PAID',
       },
       _sum: { total: true },
     }),
@@ -81,6 +89,7 @@ export default async function DashboardPage() {
         tenantId,
         createdAt: { gte: monthStart },
         status: { notIn: ['CANCELLED', 'REFUNDED'] },
+        paymentStatus: 'PAID',
       },
       _sum: { total: true },
       _count: { id: true },
@@ -119,6 +128,7 @@ export default async function DashboardPage() {
         tenantId,
         createdAt: { gte: yesterdayStart, lt: todayStart },
         status: { not: 'CANCELLED' },
+        paymentStatus: 'PAID',
       },
       _sum: { total: true },
     }),
@@ -129,6 +139,7 @@ export default async function DashboardPage() {
         tenantId,
         createdAt: { gte: prevWeekStart, lt: weekStart },
         status: { notIn: ['CANCELLED', 'REFUNDED'] },
+        paymentStatus: 'PAID',
       },
       _sum: { total: true },
     }),
@@ -139,6 +150,7 @@ export default async function DashboardPage() {
         tenantId,
         createdAt: { gte: prevMonthStart, lt: monthStart },
         status: { notIn: ['CANCELLED', 'REFUNDED'] },
+        paymentStatus: 'PAID',
       },
       _sum: { total: true },
     }),
