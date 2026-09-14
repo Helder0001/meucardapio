@@ -131,7 +131,6 @@ export async function POST(request: Request) {
 
     let payment: Awaited<ReturnType<typeof findPaymentByMpId>> = null
     let connectionTenantId: string | null = null
-    let tenantSecretFound = false
 
     // BUG: só resolvíamos o secret do tenant quando event.type === 'payment'.
     // O Mercado Pago também manda notificações do tipo 'merchant_order'
@@ -161,35 +160,15 @@ export async function POST(request: Request) {
       const tenantSecret = (tenant?.settings as any)?.mercadoPagoWebhookSecret
       if (tenantSecret) {
         webhookSecret = tenantSecret
-        tenantSecretFound = true
       }
     }
 
-    // Guarda pra logar fora do if acima (fora do escopo de bloco)
-    ;(event as any).__debugConnectionTenantId = connectionTenantId
-    ;(event as any).__debugTenantSecretFound = tenantSecretFound
-
-    // LOG TEMPORÁRIO DE DIAGNÓSTICO — agora roda SEMPRE, pra qualquer
-    // event.type, não só 'payment'. Não loga o secret em si — só um
-    // "fingerprint" (tamanho + primeiro/último caractere) pra dá pra
-    // conferir se o valor batendo é mesmo o que foi colado no dashboard,
-    // sem expor o segredo nos logs. Remover depois de identificar a causa.
-    const secretFingerprint = webhookSecret
-      ? `len=${webhookSecret.length} starts=${webhookSecret[0]} ends=${webhookSecret[webhookSecret.length - 1]}`
-      : 'none'
+    // CORREÇÃO: removido o log temporário de diagnóstico que ficou aqui
+    // (rodava em toda requisição, logando até um fingerprint do secret —
+    // nunca o secret em si, mas ainda era debug esquecido em produção).
+    // A causa já foi identificada; a resolução do secret por tenant acima
+    // é o que resolve de fato.
     const signatureValid = validateSignature(body, signature, requestId, webhookSecret)
-    console.log('[webhook/mp][debug]', {
-      eventType: event.type ?? null,
-      eventUserId: event.user_id ?? null,
-      dataId: event.data?.id ?? null,
-      connectionTenantId: (event as any).__debugConnectionTenantId ?? null,
-      tenantSecretFound: (event as any).__debugTenantSecretFound ?? false,
-      usingSecret: (event as any).__debugConnectionTenantId
-        ? ((event as any).__debugTenantSecretFound ? 'tenant' : 'platform-fallback')
-        : 'platform-default',
-      secretFingerprint,
-      signatureValid,
-    })
 
     // VULN-03 CORRIGIDO: sem bypass — SEMPRE valida a assinatura
     if (!signatureValid) {
