@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/client'
 import { z } from 'zod'
+import { couponLimiter } from '@/lib/security/rate-limit'
 
 const schema = z.object({
   code:     z.string().min(1).max(50),
@@ -10,6 +11,15 @@ const schema = z.object({
 })
 
 export async function POST(req: Request) {
+  // CORREÇÃO: só tinha o limite geral da API (60/min por IP), que ainda dá
+  // margem pra tentar adivinhar código de cupom válido por força bruta.
+  // Limite específico e mais apertado aqui (20 tentativas / 10 min por IP).
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '127.0.0.1'
+  const { success } = await couponLimiter.limit(ip)
+  if (!success) {
+    return NextResponse.json({ error: 'Muitas tentativas. Aguarde um momento.' }, { status: 429 })
+  }
+
   let body: unknown
   try { body = await req.json() } catch {
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 })
