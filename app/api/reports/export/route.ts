@@ -339,7 +339,10 @@ export async function GET(request: Request) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
-const todayStr = () => new Date().toISOString().slice(0, 10)
+// CORREÇÃO: toISOString() usa UTC — perto da meia-noite em horário de
+// Brasília (21h-23h59 BRT = já é o dia seguinte em UTC), o nome do
+// arquivo saía com a data de amanhã em vez de hoje.
+const todayStr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 const fmtN     = (v: any) => Number(v ?? 0).toFixed(2)
 const hasKeys  = (o: object) => Object.keys(o).length > 0
 
