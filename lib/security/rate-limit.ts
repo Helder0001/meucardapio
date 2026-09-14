@@ -101,6 +101,28 @@ export const aiImportLimiter = new Ratelimit({
   prefix:  'rl:ai-import',
 })
 
+// ── Cupons ─────────────────────────────────────────────────────────────
+// 20 tentativas de validação por 10 min por IP — o limite geral da API
+// (60/min) ainda deixa margem pra ficar tentando adivinhar código de
+// cupom válido; esse aqui trava isso especificamente, sem incomodar quem
+// só digitou o cupom errado uma ou duas vezes.
+export const couponLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(20, '10 m'),
+  prefix:  'rl:coupon',
+})
+
+// ── Endereço (busca/reverse geocoding) ────────────────────────────────
+// 30 buscas por 10 min por IP — protege a cota paga/gratuita do provedor
+// de geocoding (Nominatim/OpenCage) de ser estourada por automação, sem
+// travar o uso normal (autocomplete digitando endereço gera várias
+// chamadas em poucos segundos).
+export const addressLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(30, '10 m'),
+  prefix:  'rl:address',
+})
+
 // ── Helper: verificar OTP com ambas as dimensões ──────────────────────────
 export async function checkOtpRateLimit(
   ip: string,
