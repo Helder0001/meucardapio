@@ -28,6 +28,17 @@ export async function POST(req: Request) {
   const tenantId = session.user.tenantId
   const userId   = session.user.id
 
+  // Segunda barreira: mesmo que algum cliente/aba antiga ainda tente
+  // enviar posição, se o estabelecimento desligou o rastreamento ao vivo
+  // (ver actions/delivery/toggle-live-tracking.ts) a posição não é salva.
+  const tenant = await prisma.tenant.findFirst({
+    where: { id: tenantId },
+    select: { settings: true },
+  })
+  if ((tenant?.settings as any)?.liveTrackingEnabled === false) {
+    return NextResponse.json({ ok: true, tracking: false })
+  }
+
   const order = await prisma.order.findFirst({
     where: { id: orderId, tenantId },
     select: { id: true, type: true, status: true, courierId: true },
