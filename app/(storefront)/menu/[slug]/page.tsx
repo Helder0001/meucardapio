@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/db/client'
 import { StorefrontClient } from '@/components/storefront/storefront-client'
 import { isOutOfStock } from '@/lib/utils/stock'
+import { isDemoRequest } from '@/lib/utils/demo-tenant'
 import { UtensilsCrossed } from 'lucide-react'
 import type { Metadata } from 'next'
 
@@ -10,7 +11,7 @@ export const revalidate = 60
 
 interface PageProps {
   params:       Promise<{ slug: string }>
-  searchParams: Promise<{ table?: string }>
+  searchParams: Promise<{ table?: string; demo?: string }>
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -146,7 +147,11 @@ function UnavailablePage() {
 
 export default async function StorefrontPage({ params, searchParams }: PageProps) {
   const { slug }  = await params
-  const { table } = await searchParams
+  const { table, demo } = await searchParams
+  // CORREÇÃO (#2, ajuste): modo demo vem só da query string (?demo=1),
+  // usada exclusivamente pelos links da landing page — ver
+  // lib/utils/demo-tenant.ts.
+  const isDemo = isDemoRequest(demo)
 
   const tenant = await getTenantMenu(slug)
 
@@ -199,6 +204,7 @@ export default async function StorefrontPage({ params, searchParams }: PageProps
       tableInfo={tableInfo}
       isOpen={open}
       closedMessage={closedMessage}
+      isDemo={isDemo}
     />
   )
 }
