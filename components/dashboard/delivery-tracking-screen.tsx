@@ -31,7 +31,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft, Navigation, MapPin, Store, Clock, Ruler,
+  ArrowLeft, Navigation, NavigationOff, MapPin, Store, Clock, Ruler,
   PlayCircle, CheckCircle2, AlertTriangle, Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -52,6 +52,10 @@ interface DeliveryTrackingScreenProps {
   bairro: string | null
   store: LatLng | null
   destination: LatLng | null
+  // Estabelecimento pode desligar o rastreamento ao vivo por completo (ver
+  // actions/delivery/toggle-live-tracking.ts). Default true para não
+  // quebrar nenhum outro lugar que ainda não passe essa prop.
+  trackingEnabled?: boolean
 }
 
 const SEND_LOCATION_INTERVAL_MS = 8_000
@@ -88,6 +92,7 @@ export function DeliveryTrackingScreen({
   bairro,
   store,
   destination,
+  trackingEnabled = true,
 }: DeliveryTrackingScreenProps) {
   const router = useRouter()
 
@@ -151,7 +156,7 @@ export function DeliveryTrackingScreen({
   // e envia pro servidor a cada ~8s (mesmo intervalo do widget flutuante
   // em courier-location-tracker.tsx).
   useEffect(() => {
-    if (!isActive || !navigator.geolocation) return
+    if (!trackingEnabled || !isActive || !navigator.geolocation) return
 
     let lastSentAt = 0
     const watchId = navigator.geolocation.watchPosition(
@@ -182,7 +187,7 @@ export function DeliveryTrackingScreen({
   // o deslocamento. O servidor de demonstração do OSRM é gratuito, mas é
   // de uso leve — por isso o throttle aqui.
   const fetchRoute = useCallback(async (origin: LatLng | null) => {
-    if (!destination) return
+    if (!trackingEnabled || !destination) return
     const now = Date.now()
     if (now - lastRouteFetchAt.current < RECALC_ROUTE_INTERVAL_MS && route) return
     lastRouteFetchAt.current = now
@@ -198,11 +203,12 @@ export function DeliveryTrackingScreen({
       const data = await res.json()
       if (data.route) setRoute(data.route)
     } catch {}
-  }, [orderId, destination, route])
+  }, [orderId, destination, route, trackingEnabled])
 
   useEffect(() => {
+    if (!trackingEnabled) return
     fetchRoute(myPosition ?? store)
-  }, [myPosition, store]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [myPosition, store, trackingEnabled]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Poll de status: mantém o mapa/estado sincronizado mesmo se o
   // entregador tiver duas abas abertas, ou se outra pessoa mudar o status.
@@ -270,12 +276,22 @@ export function DeliveryTrackingScreen({
 
       {/* Mapa */}
       <div className="flex-1 relative min-h-0">
-        <DeliveryLiveMap
-          store={store}
-          destination={destination}
-          courier={mapCourier}
-          route={route?.coordinates}
-        />
+        {trackingEnabled ? (
+          <DeliveryLiveMap
+            store={store}
+            destination={destination}
+            courier={mapCourier}
+            route={route?.coordinates}
+          />
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center gap-2 text-center text-muted-foreground bg-muted/30 px-6">
+            <NavigationOff className="h-8 w-8" />
+            <p className="text-sm font-medium">Rastreamento ao vivo desativado</p>
+            <p className="text-xs max-w-xs">
+              O estabelecimento desligou o compartilhamento de localização. Use a navegação externa abaixo para chegar ao destino.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Painel inferior */}
@@ -287,7 +303,7 @@ export function DeliveryTrackingScreen({
           </div>
         )}
 
-        {route && (
+        {trackingEnabled && route && (
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <Ruler className="h-3.5 w-3.5" /> {formatDistance(route.distanceMeters)}
@@ -298,7 +314,7 @@ export function DeliveryTrackingScreen({
           </div>
         )}
 
-        {gpsError && (
+        {trackingEnabled && gpsError && (
           <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 rounded-lg px-3 py-2">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
             Ative a localização do navegador para compartilhar o trajeto com o cliente.
