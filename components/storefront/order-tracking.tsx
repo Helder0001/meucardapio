@@ -103,6 +103,11 @@ interface OrderTrackingProps {
   // Telefone do estabelecimento (WhatsApp) — usado no botão "Enviar
   // comprovante" do Pix manual (chave própria, sem gateway).
   tenantWhatsapp?: string | null
+  // Estabelecimento pode desligar o rastreamento ao vivo por completo (ver
+  // actions/delivery/toggle-live-tracking.ts) — quando false, a seção do
+  // mapa nem é renderizada, e o polling de status nem chega a receber o
+  // bloco `tracking` do servidor.
+  liveTrackingEnabled?: boolean
 }
 
 // ─── Componente countdown PIX ────────────────────────────────────────────────
@@ -364,7 +369,7 @@ function PixSection({
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey, cardProvider, efiAccountIdentifier, efiSandbox, tenantWhatsapp }: OrderTrackingProps) {
+export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey, cardProvider, efiAccountIdentifier, efiSandbox, tenantWhatsapp, liveTrackingEnabled = true }: OrderTrackingProps) {
   const [order, setOrder] = useState(initialOrder)
   const [isRefreshingPix, setIsRefreshingPix] = useState(false)
   const [tracking, setTracking] = useState<{
@@ -420,7 +425,7 @@ export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey, c
   // "a caminho"; recalcula a cada 30s (não precisa de mais frequência que
   // isso, o entregador já reenvia a posição a cada ~8s por conta própria).
   useEffect(() => {
-    if (!isDelivery || order.status !== 'OUT_FOR_DELIVERY') return
+    if (!liveTrackingEnabled || !isDelivery || order.status !== 'OUT_FOR_DELIVERY') return
     let cancelled = false
     const fetchRoute = async () => {
       try {
@@ -619,8 +624,11 @@ export function OrderTracking({ order: initialOrder, statusToken, mpPublicKey, c
           </div>
         )}
 
-        {/* ── MAPA DE RASTREAMENTO AO VIVO ── */}
-        {isDelivery && order.status === 'OUT_FOR_DELIVERY' && (
+        {/* ── MAPA DE RASTREAMENTO AO VIVO ──
+            Some por completo se o estabelecimento desligou a função (ver
+            actions/delivery/toggle-live-tracking.ts) — não mostramos nem
+            um estado "desativado" aqui pro cliente, só omitimos a seção. */}
+        {liveTrackingEnabled && isDelivery && order.status === 'OUT_FOR_DELIVERY' && (
           <div className="space-y-2">
             <p className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5 px-1">
               🛵 Acompanhe o entregador em tempo real
