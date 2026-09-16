@@ -11,6 +11,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { prisma } from '@/lib/db/client'
 import { formatOrderNumber } from '@/lib/utils/format'
+import { DeliveryTrackingToggle } from '@/components/dashboard/delivery-tracking-toggle'
 import { Truck, MapPin, ChevronRight } from 'lucide-react'
 import type { Metadata } from 'next'
 
@@ -18,11 +19,23 @@ export const metadata: Metadata = { title: 'Minhas Entregas — Meu Cardápio' }
 export const dynamic = 'force-dynamic'
 
 const ALLOWED_ROLES = ['DELIVERY_PERSON', 'TENANT_ADMIN', 'MANAGER']
+const CAN_TOGGLE_ROLES = ['TENANT_ADMIN', 'MANAGER']
 
 export default async function DeliveryTrackingListPage() {
   const session = await auth()
   if (!session?.user?.tenantId) redirect('/login')
   if (!ALLOWED_ROLES.includes(session.user.role)) redirect('/dashboard')
+
+  // Só busca o tenant (e mostra o botão) para quem pode de fato mudar a
+  // configuração — o estabelecimento decide se usa essa função ou não.
+  let liveTrackingEnabled = true
+  if (CAN_TOGGLE_ROLES.includes(session.user.role)) {
+    const tenant = await prisma.tenant.findFirst({
+      where: { id: session.user.tenantId },
+      select: { settings: true },
+    })
+    liveTrackingEnabled = (tenant?.settings as any)?.liveTrackingEnabled !== false
+  }
 
   const orders = await prisma.order.findMany({
     where: {
@@ -49,6 +62,10 @@ export default async function DeliveryTrackingListPage() {
           Pedidos a caminho do cliente agora
         </p>
       </div>
+
+      {CAN_TOGGLE_ROLES.includes(session.user.role) && (
+        <DeliveryTrackingToggle initialEnabled={liveTrackingEnabled} />
+      )}
 
       {orders.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border py-16 flex flex-col items-center gap-2 text-center text-muted-foreground">
