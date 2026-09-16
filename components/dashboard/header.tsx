@@ -2,17 +2,19 @@
 
 // components/dashboard/header.tsx
 
-import { Bell, ChevronDown, LogOut, Settings, User, Receipt, ExternalLink, Sun, Moon, Monitor, PackageX, ShoppingBag } from 'lucide-react'
+import { Bell, ChevronDown, LogOut, Settings, User, Receipt, ExternalLink, Sun, Moon, Monitor, PackageX, PackageMinus, ShoppingBag, ChefHat, Bike, CheckCheck } from 'lucide-react'
 import { signOut } from 'next-auth/react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTheme } from 'next-themes'
 import Link from 'next/link'
 import Image from 'next/image'
 import { cn } from '@/lib/utils'
 import { formatCurrency, formatOrderNumber } from '@/lib/utils/format'
+import { isNotificationRead, markNotificationRead, markAllNotificationsRead, countUnread } from '@/lib/utils/notification-read-state'
 
 interface OrderNotification {
   id: string
+  orderId: string
   orderNumber: number
   total: number
   type: string
@@ -21,9 +23,21 @@ interface OrderNotification {
 }
 
 interface StockNotification {
+  id: string
   productId: string
   productName: string
   updatedAt: string
+}
+
+interface LowStockNotification extends StockNotification {
+  quantity: number
+}
+
+interface SlowOrderNotification {
+  id: string
+  orderId: string
+  orderNumber: number
+  minutesAgo: number | null
 }
 
 interface HeaderProps {
@@ -63,6 +77,12 @@ export function Header({ user }: HeaderProps) {
   // pendente e cada produto esgotado aparece como seu próprio item.
   const [orders, setOrders] = useState<OrderNotification[]>([])
   const [outOfStock, setOutOfStock] = useState<StockNotification[]>([])
+  const [lowStock, setLowStock] = useState<LowStockNotification[]>([])
+  const [slowPrep, setSlowPrep] = useState<SlowOrderNotification[]>([])
+  const [slowDelivery, setSlowDelivery] = useState<SlowOrderNotification[]>([])
+  // Incrementado toda vez que marcamos algo como lido — só pra forçar um
+  // re-render (o estado de "lido" em si mora no localStorage, não aqui).
+  const [readVersion, setReadVersion] = useState(0)
   const [mounted, setMounted]     = useState(false)
 
   const { theme, setTheme, resolvedTheme } = useTheme()
@@ -78,6 +98,9 @@ export function Header({ user }: HeaderProps) {
           const data = await res.json()
           setOrders(data.orders ?? [])
           setOutOfStock(data.outOfStock ?? [])
+          setLowStock(data.lowStock ?? [])
+          setSlowPrep(data.slowPrep ?? [])
+          setSlowDelivery(data.slowDelivery ?? [])
         }
       } catch {}
     }
@@ -90,7 +113,22 @@ export function Header({ user }: HeaderProps) {
     }
   }, [])
 
-  const notificationCount = orders.length + outOfStock.length
+  const allIds = useMemo(
+    () => [...orders, ...outOfStock, ...lowStock, ...slowPrep, ...slowDelivery].map((n) => n.id),
+    [orders, outOfStock, lowStock, slowPrep, slowDelivery]
+  )
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- readVersion só existe pra forçar recálculo
+  const unreadCount = useMemo(() => countUnread(allIds), [allIds, readVersion])
+  const notificationCount = allIds.length
+
+  const markRead = (id: string) => {
+    markNotificationRead(id)
+    setReadVersion((v) => v + 1)
+  }
+  const markAllRead = () => {
+    markAllNotificationsRead(allIds)
+    setReadVersion((v) => v + 1)
+  }
 
   const initials = user.name
     ? user.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
@@ -149,9 +187,9 @@ export function Header({ user }: HeaderProps) {
             className="relative p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
           >
             <Bell className="h-5 w-5" />
-            {notificationCount > 0 && (
+            {unreadCount > 0 && (
               <span className="absolute top-1.5 right-1.5 h-3.5 w-3.5 bg-primary text-white rounded-full text-[9px] font-bold flex items-center justify-center">
-                {notificationCount > 9 ? '9+' : notificationCount}
+                {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
           </button>
@@ -159,12 +197,26 @@ export function Header({ user }: HeaderProps) {
           {notifOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setNotifOpen(false)} />
+              {/* CORREÇÃO: no mobile, `absolute right-0 w-80` fazia o
+                  dropdown vazar pra fora da tela (a largura fixa de 320px
+                  não cabe entre o sino e a borda da tela em telas
+                  estreitas — ficava cortado à esquerda). Abaixo de sm,
+                  vira um painel fixo com margem segura dos dois lados; a
+                  partir de sm, volta a ser o dropdown ancorado no sino. */}
               <div
-                className="absolute right-0 top-full mt-2 w-80 max-h-[70vh] overflow-y-auto bg-card border border-border rounded-xl z-20 py-2 animate-slide-up"
+                className="fixed inset-x-3 top-16 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-80 max-h-[70vh] overflow-y-auto bg-card border border-border rounded-xl z-20 py-2 animate-slide-up"
                 style={{ boxShadow: 'var(--shadow-dropdown)' }}
               >
-                <div className="px-3 py-2 border-b border-border sticky top-0 bg-card">
+                <div className="px-3 py-2 border-b border-border sticky top-0 bg-card flex items-center justify-between gap-2">
                   <p className="text-sm font-semibold text-foreground">Notificações</p>
+                  {notificationCount > 0 && unreadCount > 0 && (
+                    <button
+                      onClick={markAllRead}
+                      className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <CheckCheck className="h-3.5 w-3.5" /> Marcar todas como lidas
+                    </button>
+                  )}
                 </div>
                 {notificationCount === 0 ? (
                   <div className="px-3 py-6 text-center">
@@ -172,45 +224,122 @@ export function Header({ user }: HeaderProps) {
                   </div>
                 ) : (
                   <div className="p-2 space-y-1">
-                    {/* CORREÇÃO (#3): cada pedido pendente vira seu próprio
-                        item, linkando direto pro pedido — antes era um
-                        único card agregado que só linkava pro Kanban. */}
-                    {orders.map((o) => (
-                      <Link
-                        key={o.id}
-                        href={`/dashboard/orders/${o.id}`}
-                        onClick={() => setNotifOpen(false)}
-                        className="flex items-center gap-3 p-2.5 bg-brand-50 dark:bg-brand-950/30 rounded-lg hover:bg-brand-100 dark:hover:bg-brand-950/50 transition-colors"
-                      >
-                        <span className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white flex-shrink-0">
-                          <ShoppingBag className="h-4 w-4" />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">
-                            Pedido {formatOrderNumber(o.orderNumber)}{o.customerName ? ` — ${o.customerName}` : ''}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{formatCurrency(o.total)} · aguardando confirmação</p>
-                        </div>
-                      </Link>
-                    ))}
-                    {/* CORREÇÃO (#3): novo tipo de notificação — produto
-                        com estoque zerado. Linka pra tela de Estoque. */}
-                    {outOfStock.map((s) => (
-                      <Link
-                        key={s.productId}
-                        href="/dashboard/stock"
-                        onClick={() => setNotifOpen(false)}
-                        className="flex items-center gap-3 p-2.5 bg-red-50 dark:bg-red-950/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors"
-                      >
-                        <span className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center text-white flex-shrink-0">
-                          <PackageX className="h-4 w-4" />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">{s.productName}</p>
-                          <p className="text-xs text-muted-foreground">Estoque esgotado</p>
-                        </div>
-                      </Link>
-                    ))}
+                    {orders.map((o) => {
+                      const read = isNotificationRead(o.id)
+                      return (
+                        <Link
+                          key={o.id}
+                          href={`/dashboard/orders/${o.orderId}`}
+                          onClick={() => { markRead(o.id); setNotifOpen(false) }}
+                          className={cn(
+                            'flex items-center gap-3 p-2.5 rounded-lg transition-colors',
+                            read ? 'hover:bg-muted' : 'bg-brand-50 dark:bg-brand-950/30 hover:bg-brand-100 dark:hover:bg-brand-950/50'
+                          )}
+                        >
+                          <span className={cn('w-8 h-8 rounded-lg flex items-center justify-center text-white flex-shrink-0', read ? 'bg-muted-foreground/40' : 'bg-primary')}>
+                            <ShoppingBag className="h-4 w-4" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className={cn('text-sm truncate', read ? 'text-muted-foreground' : 'font-medium text-foreground')}>
+                              Pedido {formatOrderNumber(o.orderNumber)}{o.customerName ? ` — ${o.customerName}` : ''}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{formatCurrency(o.total)} · aguardando confirmação</p>
+                          </div>
+                        </Link>
+                      )
+                    })}
+                    {slowPrep.map((o) => {
+                      const read = isNotificationRead(o.id)
+                      return (
+                        <Link
+                          key={o.id}
+                          href={`/dashboard/orders/${o.orderId}`}
+                          onClick={() => { markRead(o.id); setNotifOpen(false) }}
+                          className={cn(
+                            'flex items-center gap-3 p-2.5 rounded-lg transition-colors',
+                            read ? 'hover:bg-muted' : 'bg-amber-50 dark:bg-amber-950/20 hover:bg-amber-100 dark:hover:bg-amber-950/40'
+                          )}
+                        >
+                          <span className={cn('w-8 h-8 rounded-lg flex items-center justify-center text-white flex-shrink-0', read ? 'bg-muted-foreground/40' : 'bg-amber-500')}>
+                            <ChefHat className="h-4 w-4" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className={cn('text-sm truncate', read ? 'text-muted-foreground' : 'font-medium text-foreground')}>
+                              Pedido {formatOrderNumber(o.orderNumber)} demorando no preparo
+                            </p>
+                            <p className="text-xs text-muted-foreground">{o.minutesAgo != null ? `Em preparo há ${o.minutesAgo} min` : 'Em preparo há muito tempo'}</p>
+                          </div>
+                        </Link>
+                      )
+                    })}
+                    {slowDelivery.map((o) => {
+                      const read = isNotificationRead(o.id)
+                      return (
+                        <Link
+                          key={o.id}
+                          href={`/dashboard/orders/${o.orderId}`}
+                          onClick={() => { markRead(o.id); setNotifOpen(false) }}
+                          className={cn(
+                            'flex items-center gap-3 p-2.5 rounded-lg transition-colors',
+                            read ? 'hover:bg-muted' : 'bg-amber-50 dark:bg-amber-950/20 hover:bg-amber-100 dark:hover:bg-amber-950/40'
+                          )}
+                        >
+                          <span className={cn('w-8 h-8 rounded-lg flex items-center justify-center text-white flex-shrink-0', read ? 'bg-muted-foreground/40' : 'bg-amber-500')}>
+                            <Bike className="h-4 w-4" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className={cn('text-sm truncate', read ? 'text-muted-foreground' : 'font-medium text-foreground')}>
+                              Pedido {formatOrderNumber(o.orderNumber)} demorando na entrega
+                            </p>
+                            <p className="text-xs text-muted-foreground">{o.minutesAgo != null ? `Pronto há ${o.minutesAgo} min` : 'Pronto há muito tempo'}</p>
+                          </div>
+                        </Link>
+                      )
+                    })}
+                    {lowStock.map((s) => {
+                      const read = isNotificationRead(s.id)
+                      return (
+                        <Link
+                          key={s.id}
+                          href="/dashboard/stock"
+                          onClick={() => { markRead(s.id); setNotifOpen(false) }}
+                          className={cn(
+                            'flex items-center gap-3 p-2.5 rounded-lg transition-colors',
+                            read ? 'hover:bg-muted' : 'bg-amber-50 dark:bg-amber-950/20 hover:bg-amber-100 dark:hover:bg-amber-950/40'
+                          )}
+                        >
+                          <span className={cn('w-8 h-8 rounded-lg flex items-center justify-center text-white flex-shrink-0', read ? 'bg-muted-foreground/40' : 'bg-amber-500')}>
+                            <PackageMinus className="h-4 w-4" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className={cn('text-sm truncate', read ? 'text-muted-foreground' : 'font-medium text-foreground')}>{s.productName}</p>
+                            <p className="text-xs text-muted-foreground">Estoque baixo — restam {s.quantity}</p>
+                          </div>
+                        </Link>
+                      )
+                    })}
+                    {outOfStock.map((s) => {
+                      const read = isNotificationRead(s.id)
+                      return (
+                        <Link
+                          key={s.id}
+                          href="/dashboard/stock"
+                          onClick={() => { markRead(s.id); setNotifOpen(false) }}
+                          className={cn(
+                            'flex items-center gap-3 p-2.5 rounded-lg transition-colors',
+                            read ? 'hover:bg-muted' : 'bg-red-50 dark:bg-red-950/20 hover:bg-red-100 dark:hover:bg-red-950/40'
+                          )}
+                        >
+                          <span className={cn('w-8 h-8 rounded-lg flex items-center justify-center text-white flex-shrink-0', read ? 'bg-muted-foreground/40' : 'bg-red-500')}>
+                            <PackageX className="h-4 w-4" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className={cn('text-sm truncate', read ? 'text-muted-foreground' : 'font-medium text-foreground')}>{s.productName}</p>
+                            <p className="text-xs text-muted-foreground">Estoque esgotado</p>
+                          </div>
+                        </Link>
+                      )
+                    })}
                   </div>
                 )}
               </div>
