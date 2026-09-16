@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 import { createOrderAction } from '@/actions/orders/create-order'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import { isDemoTenantSlug } from '@/lib/utils/demo-tenant'
 
 const AddressPinPicker = dynamic(
   () => import('./address-pin-picker').then((m) => m.AddressPinPicker),
@@ -108,6 +109,16 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   const pixEnabled = tenant.pixEnabled ?? tenant.settings?.pixEnabled ?? true
   const cardEnabled = tenant.cardEnabled ?? tenant.settings?.cardEnabled ?? true
   const manualPixEnabled = tenant.manualPixEnabled ?? tenant.settings?.manualPixEnabled ?? false
+  // CORREÇÃO (#2): quando o lojista desliga "Rastreamento ao vivo da
+  // entrega" (components/dashboard/delivery-tracking-toggle.tsx →
+  // tenant.settings.liveTrackingEnabled), o mapa de confirmação de
+  // localização também some do checkout — ausente ou `true` = ligado
+  // (mesmo default usado na action toggleLiveTrackingAction).
+  const liveTrackingEnabled = tenant.settings?.liveTrackingEnabled ?? true
+  // CORREÇÃO (#1): cardápio de demonstração — todo o fluxo (carrinho,
+  // endereço, dados, escolha da forma de pagamento) fica livre; só a
+  // confirmação final do pedido é bloqueada em handleSubmitOrder.
+  const isDemoTenant = isDemoTenantSlug(tenant.slug)
   // 'LINK' (Mercado Pago) não é mais uma opção no cardápio digital — ver
   // ONLINE_PAYMENT_OPTIONS acima. Fica exclusivo do PDV/balcão.
   const onlineOptions = ONLINE_PAYMENT_OPTIONS.filter((o) => {
@@ -478,6 +489,13 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
 
   const handleSubmitOrder = async () => {
     if (items.length === 0) return
+    // CORREÇÃO (#1): demonstração — bloqueia só na confirmação da forma de
+    // pagamento (esse clique), depois de todo o resto do fluxo já ter
+    // ficado livre pro visitante explorar.
+    if (isDemoTenant) {
+      toast.error('Isso é uma demonstração — pedidos não são finalizados de verdade aqui.')
+      return
+    }
     if (!isTableOrder && !customerPhone && !phone) { toast.error('Informe seu telefone'); return }
     if (deliveryType === 'DELIVERY' && !cepZone && tenant.deliveryZones.length > 0) { toast.error('Informe um CEP válido na área de entrega'); return }
 
@@ -1030,7 +1048,10 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                               localização passa a ser do cliente, arrastando
                               o mapa até a posição certa. Ver
                               components/storefront/address-pin-picker.tsx. */}
-                          {deliveryAddress.trim() && (
+                          {/* CORREÇÃO (#2): com o rastreamento ao vivo
+                              desligado pelo lojista, não faz sentido pedir
+                              essa confirmação de pino ao cliente. */}
+                          {deliveryAddress.trim() && liveTrackingEnabled && (
                             <div className="mt-2">
                               <AddressPinPicker
                                 seedLat={pinSeed.lat}
@@ -1234,6 +1255,14 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                 </div>
                 <p className="text-[10px] text-gray-400 text-center">* Valor final confirmado pelo servidor</p>
               </div>
+
+              {/* CORREÇÃO (#1): avisa antes do clique — o bloqueio em si
+                  acontece em handleSubmitOrder. */}
+              {isDemoTenant && (
+                <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-400 text-center">
+                  🧪 Isso é uma demonstração — a confirmação do pedido está desativada.
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1256,13 +1285,13 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                   toast.error('Informe o número da casa/apartamento')
                   return
                 }
-                if (deliveryType === 'DELIVERY' && !pinConfirmed) {
+                if (deliveryType === 'DELIVERY' && liveTrackingEnabled && !pinConfirmed) {
                   toast.error('Confirme sua localização no mapa antes de continuar')
                   return
                 }
                 setStep(isTableOrder ? 'payment' : 'info')
               }}
-                disabled={deliveryType === 'DELIVERY' && (!deliveryNumber.trim() || !pinConfirmed)}
+                disabled={deliveryType === 'DELIVERY' && (!deliveryNumber.trim() || (liveTrackingEnabled && !pinConfirmed))}
                 className="w-full flex items-center justify-between text-white px-5 py-3.5 rounded-2xl font-bold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}>
                 <span>Continuar</span>
