@@ -81,7 +81,7 @@ export async function GET(
       courierUpdatedAt: true,
       deliveryLat: true,
       deliveryLng: true,
-      tenant: { select: { latitude: true, longitude: true } },
+      tenant: { select: { latitude: true, longitude: true, settings: true } },
       payments: {
         // BUG CORRIGIDO: filtro restrito a `method: 'PIX'` e `take: 1` fazia
         // sentido para o storefront (order-tracking.tsx só acompanha 1 PIX),
@@ -265,7 +265,11 @@ export async function GET(
       // "a caminho". Qualquer um dos três pode vir null (loja sem
       // localização cadastrada, endereço não geocodificado, ou entregador
       // ainda não começou a compartilhar a posição).
-      ...(order.type === 'DELIVERY' ? {
+      // Se o estabelecimento desligou o rastreamento ao vivo (ver
+      // actions/delivery/toggle-live-tracking.ts), o bloco `tracking` nem
+      // é enviado — nem para o cliente final, nem para a tela do
+      // entregador/staff, que também consultam este mesmo endpoint.
+      ...(order.type === 'DELIVERY' && (order.tenant.settings as any)?.liveTrackingEnabled !== false ? {
         tracking: {
           store: (order.tenant.latitude != null && order.tenant.longitude != null)
             ? { lat: order.tenant.latitude, lng: order.tenant.longitude }
