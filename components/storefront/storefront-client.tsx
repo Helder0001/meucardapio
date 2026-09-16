@@ -51,6 +51,11 @@ interface StorefrontClientProps {
   viewOnly?: boolean
   isOpen: boolean
   closedMessage?: string
+  // CORREÇÃO (#2, ajuste): só vem `true` quando a página é acessada com
+  // ?demo=1 (links da landing page — ver lib/utils/demo-tenant.ts). O "Ver
+  // cardápio" do dashboard e o link de Configurações não usam esse
+  // parâmetro, então nunca entram em modo demo.
+  isDemo?: boolean
 }
 
 // ─── Modal de Mais Informações ───
@@ -561,7 +566,7 @@ function CustomerOrdersSection({
   )
 }
 
-export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, viewOnly = false }: StorefrontClientProps) {
+export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, viewOnly = false, isDemo = false }: StorefrontClientProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -1211,6 +1216,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, vie
         onClose={() => setCartOpen(false)}
         tenant={tenant}
         tableInfo={tableInfo}
+        isDemo={isDemo}
       />
 
       {/* ─── MODAL MAIS INFORMAÇÕES ─── */}

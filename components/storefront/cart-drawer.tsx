@@ -12,7 +12,6 @@ import { cn } from '@/lib/utils'
 import { createOrderAction } from '@/actions/orders/create-order'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
-import { isDemoTenantSlug } from '@/lib/utils/demo-tenant'
 
 const AddressPinPicker = dynamic(
   () => import('./address-pin-picker').then((m) => m.AddressPinPicker),
@@ -58,6 +57,9 @@ interface CartDrawerProps {
     }>
   }
   tableInfo: { id: string; number: number } | null
+  // CORREÇÃO (#2, ajuste): vem da página (?demo=1, só nos links da landing
+  // page) — ver lib/utils/demo-tenant.ts.
+  isDemo?: boolean
 }
 
 type Step = 'cart' | 'info' | 'payment'
@@ -103,7 +105,7 @@ function newEntry(method: PaymentMethodValue = 'PIX'): PaymentEntry {
   return { id: Math.random().toString(36).slice(2), method, amount: '', changeFor: '' }
 }
 
-export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps) {
+export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }: CartDrawerProps) {
   const router = useRouter()
   const color = tenant.primaryColor ?? '#f97316'
   const pixEnabled = tenant.pixEnabled ?? tenant.settings?.pixEnabled ?? true
@@ -118,7 +120,13 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   // CORREÇÃO (#1): cardápio de demonstração — todo o fluxo (carrinho,
   // endereço, dados, escolha da forma de pagamento) fica livre; só a
   // confirmação final do pedido é bloqueada em handleSubmitOrder.
-  const isDemoTenant = isDemoTenantSlug(tenant.slug)
+  // CORREÇÃO (#2, ajuste): usa a prop `isDemo` (vinda de ?demo=1 na URL,
+  // só presente nos links da landing page) em vez de checar o slug do
+  // tenant — o mesmo slug do cardápio de demonstração pode coincidir com
+  // o de um tenant real (ex.: conta de teste que manteve o slug do seed),
+  // e nesse caso o "Ver cardápio" do dashboard e o link de Configurações
+  // não podem ficar travados.
+  const isDemoTenant = isDemo
   // 'LINK' (Mercado Pago) não é mais uma opção no cardápio digital — ver
   // ONLINE_PAYMENT_OPTIONS acima. Fica exclusivo do PDV/balcão.
   const onlineOptions = ONLINE_PAYMENT_OPTIONS.filter((o) => {
