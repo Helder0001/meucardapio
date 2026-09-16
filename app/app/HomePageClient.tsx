@@ -3,6 +3,7 @@
 // app/HomePageClient.tsx — toda a UI da landing page (com interatividade)
 import { useState } from 'react'
 import Link from 'next/link'
+import { buildDemoMenuHref } from '@/lib/utils/demo-tenant'
 import {
   Smartphone, Truck, UtensilsCrossed, Zap, BarChart3, MessageCircle,
   Printer, Sparkles, Check, ArrowRight, Star, ChevronDown, Globe,
@@ -111,7 +112,7 @@ export default function HomePageClient() {
               Criar conta grátis
               <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
             </Link>
-            <Link href="/menu/pizzaria-do-jose" className="inline-flex items-center justify-center gap-2 px-8 py-4 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-bold rounded-2xl hover:border-brand-300 hover:text-brand-600 dark:hover:border-brand-600 dark:hover:text-brand-400 active:scale-95 transition-all text-base">
+            <Link href={buildDemoMenuHref("pizzaria-do-jose")} className="inline-flex items-center justify-center gap-2 px-8 py-4 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-bold rounded-2xl hover:border-brand-300 hover:text-brand-600 dark:hover:border-brand-600 dark:hover:text-brand-400 active:scale-95 transition-all text-base">
               🌐 Ver demo ao vivo
             </Link>
           </div>
@@ -289,7 +290,7 @@ export default function HomePageClient() {
                 Criar conta grátis
                 <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
               </Link>
-              <Link href="/menu/pizzaria-do-jose" className="inline-flex items-center justify-center gap-2 px-8 py-4 border border-gray-600 text-gray-300 font-bold rounded-2xl hover:border-gray-400 hover:text-white active:scale-95 transition-all text-base">
+              <Link href={buildDemoMenuHref("pizzaria-do-jose")} className="inline-flex items-center justify-center gap-2 px-8 py-4 border border-gray-600 text-gray-300 font-bold rounded-2xl hover:border-gray-400 hover:text-white active:scale-95 transition-all text-base">
                 🌐 Ver cardápio demo
               </Link>
             </div>
@@ -317,7 +318,7 @@ export default function HomePageClient() {
                 <ul className="space-y-2 text-gray-500 dark:text-gray-400">
                   <li><a href="#funcionalidades" className="hover:text-brand-500 transition-colors">Funcionalidades</a></li>
                   <li><a href="#planos" className="hover:text-brand-500 transition-colors">Planos</a></li>
-                  <li><Link href="/menu/pizzaria-do-jose" className="hover:text-brand-500 transition-colors">Demo</Link></li>
+                  <li><Link href={buildDemoMenuHref("pizzaria-do-jose")} className="hover:text-brand-500 transition-colors">Demo</Link></li>
                 </ul>
               </div>
               <div>
