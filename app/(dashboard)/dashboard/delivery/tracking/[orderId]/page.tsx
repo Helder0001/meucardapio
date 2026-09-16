@@ -33,7 +33,7 @@ export default async function DeliveryTrackingDetailPage({ params }: PageProps) 
       deliveryBairro: true,
       deliveryLat: true,
       deliveryLng: true,
-      tenant: { select: { latitude: true, longitude: true } },
+      tenant: { select: { latitude: true, longitude: true, settings: true } },
     },
   })
 
@@ -57,6 +57,11 @@ export default async function DeliveryTrackingDetailPage({ params }: PageProps) 
   const addressLine: string | null =
     addr?.address ?? ([addr?.street, addr?.number].filter(Boolean).join(', ') || null)
 
+  // Estabelecimento pode desligar o rastreamento ao vivo (ver
+  // actions/delivery/toggle-live-tracking.ts) — nesse caso o próprio
+  // entregador também não captura/envia GPS nesta tela.
+  const trackingEnabled = (order.tenant.settings as any)?.liveTrackingEnabled !== false
+
   return (
     <DeliveryTrackingScreen
       orderId={order.id}
@@ -64,6 +69,7 @@ export default async function DeliveryTrackingDetailPage({ params }: PageProps) 
       initialStatus={order.status}
       addressLine={addressLine}
       bairro={order.deliveryBairro}
+      trackingEnabled={trackingEnabled}
       store={
         order.tenant.latitude != null && order.tenant.longitude != null
           ? { lat: order.tenant.latitude, lng: order.tenant.longitude }
