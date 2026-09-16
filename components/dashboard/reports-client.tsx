@@ -749,6 +749,45 @@ export function ReportsClient({
         </div>
       </div>
 
+      {/* ── Vendas por bairro (feature #4 pt.2) ── */}
+      {/* CORREÇÃO: pedido pra deixar visualmente igual ao card "Formas de
+          pagamento" (barra de progresso horizontal com % e valor) em vez do
+          gráfico de barras do Recharts + lista ao lado que só existia aqui. */}
+      {/* CORREÇÃO (#3): movido pra antes do card "Pico de pedidos por
+          horário" — a ordem de leitura no relatório passa a ser
+          Vendas por bairro → Formas de pagamento/Pico por horário. */}
+      {salesByBairro.length > 0 && (
+        <div className="bg-card border border-border rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-foreground">Vendas por bairro</h2>
+            <InfoTooltip text="Quantidade de pedidos e faturamento por bairro de entrega, no período selecionado. Pedidos de retirada/mesa/PDV não têm bairro e ficam de fora." align="right" />
+          </div>
+          <div className="space-y-4">
+            {salesByBairro.slice(0, 8).map((b, i) => {
+              const pct = Math.round((b.total / totalBairroAll) * 100)
+              const color = BAIRRO_COLORS[i % BAIRRO_COLORS.length]
+              return (
+                <div key={b.bairro}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-foreground">{b.bairro}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-bold text-foreground">{pct}%</span>
+                      <span className="text-xs text-muted-foreground">{formatCurrency(b.total)}</span>
+                    </div>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${pct}%`, backgroundColor: color }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── Formas de pagamento + Pico por horário ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Formas de pagamento */}
@@ -830,42 +869,6 @@ export function ReportsClient({
           )}
         </div>
       </div>
-
-      {/* ── Vendas por bairro (feature #4 pt.2) ── */}
-      {/* CORREÇÃO: pedido pra deixar visualmente igual ao card "Formas de
-          pagamento" (barra de progresso horizontal com % e valor) em vez do
-          gráfico de barras do Recharts + lista ao lado que só existia aqui. */}
-      {salesByBairro.length > 0 && (
-        <div className="bg-card border border-border rounded-2xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-foreground">Vendas por bairro</h2>
-            <InfoTooltip text="Quantidade de pedidos e faturamento por bairro de entrega, no período selecionado. Pedidos de retirada/mesa/PDV não têm bairro e ficam de fora." align="right" />
-          </div>
-          <div className="space-y-4">
-            {salesByBairro.slice(0, 8).map((b, i) => {
-              const pct = Math.round((b.total / totalBairroAll) * 100)
-              const color = BAIRRO_COLORS[i % BAIRRO_COLORS.length]
-              return (
-                <div key={b.bairro}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-foreground">{b.bairro}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-bold text-foreground">{pct}%</span>
-                      <span className="text-xs text-muted-foreground">{formatCurrency(b.total)}</span>
-                    </div>
-                  </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${pct}%`, backgroundColor: color }}
-                    />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
 
       {/* ── Clientes ── */}
       {(summary.totalClients != null) && (
