@@ -134,6 +134,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
     setSelectedAddressLng(null)
     setPinLat(null)
     setPinLng(null)
+    setPinConfirmed(false)
     if (digits.length !== 8) { setCepError(''); setCepZone(null); setAddressLockedByCep(false); return }
     setCepLoading(true); setCepError('')
 
@@ -227,6 +228,10 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
   // mesmo, que já é melhor que nada.
   const [pinLat, setPinLat] = useState<number | null>(null)
   const [pinLng, setPinLng] = useState<number | null>(null)
+  // CORREÇÃO: o checkout só libera "Continuar" na entrega depois que o
+  // cliente confirma a localização no mapa (ver address-pin-picker.tsx) —
+  // não basta ter digitado endereço/número.
+  const [pinConfirmed, setPinConfirmed] = useState(false)
   // Estimativa inicial pro mapa de confirmação: melhor coordenada que já
   // temos (busca de rua) > localização da loja > centro neutro de
   // Fortaleza. Propositalmente NÃO inclui pinLat/pinLng aqui — isso é o
@@ -281,6 +286,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
     // (de um endereço diferente) não vale mais.
     setPinLat(null)
     setPinLng(null)
+    setPinConfirmed(false)
 
     // Mesma checagem de zona de entrega usada no fluxo de CEP — sem isso,
     // um endereço achado por rua nunca teria a zona/taxa de entrega
@@ -990,6 +996,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                                     setSelectedAddressLng(null)
                                     setPinLat(null)
                                     setPinLng(null)
+                                    setPinConfirmed(false)
                                   }}
                                   className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold underline"
                                   style={{ color }}
@@ -1029,6 +1036,8 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                                 seedLat={pinSeed.lat}
                                 seedLng={pinSeed.lng}
                                 onChange={(lat, lng) => { setPinLat(lat); setPinLng(lng) }}
+                                onConfirm={() => setPinConfirmed(true)}
+                                confirmed={pinConfirmed}
                               />
                             </div>
                           )}
@@ -1247,9 +1256,14 @@ export function CartDrawer({ open, onClose, tenant, tableInfo }: CartDrawerProps
                   toast.error('Informe o número da casa/apartamento')
                   return
                 }
+                if (deliveryType === 'DELIVERY' && !pinConfirmed) {
+                  toast.error('Confirme sua localização no mapa antes de continuar')
+                  return
+                }
                 setStep(isTableOrder ? 'payment' : 'info')
               }}
-                className="w-full flex items-center justify-between text-white px-5 py-3.5 rounded-2xl font-bold transition-all active:scale-95"
+                disabled={deliveryType === 'DELIVERY' && (!deliveryNumber.trim() || !pinConfirmed)}
+                className="w-full flex items-center justify-between text-white px-5 py-3.5 rounded-2xl font-bold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}>
                 <span>Continuar</span>
                 <div className="flex items-center gap-2">

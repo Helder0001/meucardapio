@@ -30,6 +30,11 @@ interface AddressPinPickerProps {
   seedLat: number
   seedLng: number
   onChange: (lat: number, lng: number) => void
+  /** Chamado quando o cliente clica em "Confirmar localização" — é esse
+   *  clique (não o simples fato do mapa existir) que o checkout exige
+   *  antes de liberar o "Continuar" na entrega. */
+  onConfirm: () => void
+  confirmed: boolean
 }
 
 // Recentraliza o mapa quando a estimativa inicial muda (nova rua/CEP
@@ -55,7 +60,7 @@ function CenterTracker({ onMove }: { onMove: (lat: number, lng: number) => void 
   return null
 }
 
-export function AddressPinPicker({ seedLat, seedLng, onChange }: AddressPinPickerProps) {
+export function AddressPinPicker({ seedLat, seedLng, onChange, onConfirm, confirmed }: AddressPinPickerProps) {
   return (
     <div className="space-y-1.5">
       <div className="relative h-56 rounded-xl overflow-hidden border border-border z-0">
@@ -82,9 +87,30 @@ export function AddressPinPicker({ seedLat, seedLng, onChange }: AddressPinPicke
           <span style={{ fontSize: 36, filter: 'drop-shadow(0 2px 3px rgba(0,0,0,.4))' }}>📍</span>
         </div>
       </div>
-      <p className="text-xs text-muted-foreground text-center">
-        📍 Arraste o mapa até o pino ficar bem em cima da sua casa
-      </p>
+
+      {/* CORREÇÃO: o checkout de delivery só libera o "Continuar" depois
+          desse clique — arrastar o mapa sozinho não basta (a pessoa pode
+          nem mexer nele e o endereço só-por-estimativa passaria batido).
+          Precisa de uma confirmação explícita de que aquele ponto é
+          mesmo a casa dela. */}
+      {confirmed ? (
+        <p className="text-xs text-emerald-600 dark:text-emerald-400 text-center font-medium">
+          ✓ Localização confirmada
+        </p>
+      ) : (
+        <>
+          <p className="text-xs text-muted-foreground text-center">
+            📍 Arraste o mapa até o pino ficar bem em cima da sua casa
+          </p>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="w-full py-2 text-sm font-semibold rounded-xl bg-brand-500 text-white hover:bg-brand-600 transition-colors"
+          >
+            ✓ Confirmar localização
+          </button>
+        </>
+      )}
     </div>
   )
 }
