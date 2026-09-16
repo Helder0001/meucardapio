@@ -17,6 +17,18 @@ export async function GET() {
   const tenantId = session.user.tenantId
   const userId   = session.user.id
 
+  // Estabelecimento pode desligar o rastreamento ao vivo por completo
+  // (ver actions/delivery/toggle-live-tracking.ts) — nesse caso não
+  // listamos nenhuma entrega "ativa", então o widget que consome este
+  // endpoint (courier-location-tracker.tsx) nunca chega a pedir GPS.
+  const tenant = await prisma.tenant.findFirst({
+    where: { id: tenantId },
+    select: { settings: true },
+  })
+  if ((tenant?.settings as any)?.liveTrackingEnabled === false) {
+    return NextResponse.json({ orders: [] })
+  }
+
   const orders = await prisma.order.findMany({
     where: {
       tenantId,
