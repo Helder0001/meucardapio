@@ -9,6 +9,7 @@ import { useTheme } from 'next-themes'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Poppins } from 'next/font/google'
+import { buildDemoMenuHref } from '@/lib/utils/demo-tenant'
 import {
   Smartphone, Truck, UtensilsCrossed, BarChart3, MessageCircle,
   Printer, Sparkles, ChevronDown, QrCode, ShoppingBag, Columns3,
@@ -253,7 +254,7 @@ export function HomePageClient() {
                 mais valioso pra quem quer ver o produto funcionando antes
                 de criar conta), só que agora com peso visual claramente
                 menor. */}
-            <Link href="/menu/pizzaria-do-jose" className="group inline-flex items-center justify-center gap-1.5 px-4 py-3 text-gray-500 dark:text-gray-400 font-semibold hover:text-brand-600 dark:hover:text-brand-400 transition-colors text-sm underline decoration-gray-300 dark:decoration-gray-600 underline-offset-4 hover:decoration-brand-400">
+            <Link href={buildDemoMenuHref("pizzaria-do-jose")} className="group inline-flex items-center justify-center gap-1.5 px-4 py-3 text-gray-500 dark:text-gray-400 font-semibold hover:text-brand-600 dark:hover:text-brand-400 transition-colors text-sm underline decoration-gray-300 dark:decoration-gray-600 underline-offset-4 hover:decoration-brand-400">
               Ver demonstração
               <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
             </Link>
@@ -759,7 +760,7 @@ export function HomePageClient() {
                 Começar meu teste grátis
                 <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
               </Link>
-              <Link href="/menu/pizzaria-do-jose" className="group inline-flex items-center justify-center gap-1.5 px-4 py-3 text-gray-400 font-semibold hover:text-white transition-colors text-sm underline decoration-gray-600 underline-offset-4 hover:decoration-gray-400">
+              <Link href={buildDemoMenuHref("pizzaria-do-jose")} className="group inline-flex items-center justify-center gap-1.5 px-4 py-3 text-gray-400 font-semibold hover:text-white transition-colors text-sm underline decoration-gray-600 underline-offset-4 hover:decoration-gray-400">
                 Ver cardápio demo
                 <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
               </Link>
@@ -803,7 +804,7 @@ export function HomePageClient() {
                   <li><a href="#como-funciona" className="hover:text-brand-500 transition-colors">Como funciona</a></li>
                   <li><a href="#planos" className="hover:text-brand-500 transition-colors">Planos</a></li>
                   <li><a href="#faq" className="hover:text-brand-500 transition-colors">FAQ</a></li>
-                  <li><Link href="/menu/pizzaria-do-jose" className="hover:text-brand-500 transition-colors">Demonstração</Link></li>
+                  <li><Link href={buildDemoMenuHref("pizzaria-do-jose")} className="hover:text-brand-500 transition-colors">Demonstração</Link></li>
                 </ul>
               </div>
               <div>
