@@ -51,7 +51,7 @@ export default async function OrderPage({ params }: PageProps) {
       deliveryAddress: true,
       notes: true,
       tenant: {
-        select: { name: true, slug: true, primaryColor: true, logo: true, phone: true },
+        select: { name: true, slug: true, primaryColor: true, logo: true, phone: true, settings: true },
       },
       items: {
         select: {
@@ -118,6 +118,13 @@ export default async function OrderPage({ params }: PageProps) {
 
   const { tenantId, ...orderWithoutTenantId } = order
 
+  // Rastreamento ao vivo pode ter sido desligado pelo estabelecimento (ver
+  // actions/delivery/toggle-live-tracking.ts) — nesse caso nem mostramos a
+  // seção do mapa para o cliente. `settings` não vai para o cliente, só o
+  // booleano derivado dele.
+  const liveTrackingEnabled = (order.tenant.settings as any)?.liveTrackingEnabled !== false
+  const { settings: _tenantSettings, ...tenantWithoutSettings } = order.tenant
+
   // Mesmo padrão usado na tela do entregador (delivery/tracking/[orderId]/page.tsx)
   // para transformar o Json de deliveryAddress numa linha de texto exibível.
   const addr = order.deliveryAddress as any
@@ -126,6 +133,7 @@ export default async function OrderPage({ params }: PageProps) {
 
   const serialized = {
     ...orderWithoutTenantId,
+    tenant: tenantWithoutSettings,
     addressLine,
     total:          Number(order.total),
     subtotal:       Number(order.subtotal),
@@ -156,6 +164,7 @@ export default async function OrderPage({ params }: PageProps) {
       efiAccountIdentifier={efiAccountIdentifier}
       efiSandbox={efiSandbox}
       tenantWhatsapp={order.tenant.phone}
+      liveTrackingEnabled={liveTrackingEnabled}
     />
   )
 }
