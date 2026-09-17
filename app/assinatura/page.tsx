@@ -12,8 +12,6 @@ import { prisma } from '@/lib/db/client'
 import { SubscriptionCardForm } from './subscription-card-form'
 import { SignOutLink } from './sign-out-link'
 
-const PLAN_PRICE_MONTHLY = 3.00
-
 export default async function AssinaturaPage() {
   const session = await auth()
   if (!session?.user) redirect('/login')
@@ -71,19 +69,18 @@ export default async function AssinaturaPage() {
             : trialEndsAtLabel
               ? `O teste grátis do ${tenant.name} venceu em ${trialEndsAtLabel}.`
               : `O acesso do ${tenant.name} está suspenso por falta de pagamento.`}{' '}
-          Para continuar usando o Meu Cardápio, ative sua assinatura do Plano PRO.
+          Para continuar usando o Meu Cardápio, escolha um plano e ative sua assinatura.
         </p>
 
         <div className="mt-6">
           <SubscriptionCardForm
-            amount={PLAN_PRICE_MONTHLY}
             accountIdentifier={process.env.NEXT_PUBLIC_EFI_ACCOUNT_IDENTIFIER ?? ''}
             sandbox={process.env.NEXT_PUBLIC_EFI_SANDBOX !== 'false'}
           />
         </div>
 
         <p className="mt-4 text-xs text-neutral-400">
-          Assinatura mensal — cobrança automática no cartão a cada 30 dias.
+          Cobrança automática no cartão a cada ciclo escolhido — cancele quando quiser.
         </p>
 
         <div className="mt-6 border-t border-neutral-100 pt-4">
