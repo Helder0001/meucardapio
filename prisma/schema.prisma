@@ -18,7 +18,10 @@ datasource db {
 // ══════════════════════════════════════════════════════════
 
 enum Plan {
-  PRO   // acesso completo — usuários ilimitados, todos os recursos
+  // CORREÇÃO: antes só existia PRO — todo tenant, mesmo em trial, tinha
+  // "acesso completo" no papel. Agora há dois planos de verdade:
+  NORMAL // R$ 39,90/mês — tudo, exceto os recursos de WhatsApp
+  PRO    // R$ 59,90/mês — tudo, incluindo WhatsApp automático
 }
 
 enum BillingCycle {
@@ -128,7 +131,9 @@ model Tenant {
   name               String
   slug               String             @unique // ex: "pizzaria-do-ze" → /menu/pizzaria-do-ze
   customDomain       String?            @unique // ex: "pedidos.pizzariadoze.com.br"
-  plan               Plan               @default(PRO)
+  // CORREÇÃO: o trial de 7 dias é sempre no plano Normal — o tenant só
+  // deveria ganhar acesso PRO (WhatsApp) se escolher e pagar por ele.
+  plan               Plan               @default(NORMAL)
   subscriptionStatus SubscriptionStatus @default(TRIAL)
   trialEndsAt        DateTime?
 
@@ -277,12 +282,16 @@ enum EfiEnvironment {
 
 model EfiPlan {
   id           String         @id @default(cuid())
+  // CORREÇÃO: antes só existia um plano (PRO) então bastava o ciclo pra
+  // identificar. Agora Normal e Pro são planos DIFERENTES na Efí (valores
+  // diferentes), cada um com seu próprio plan_id por ciclo.
+  plan         Plan
   billingCycle BillingCycle
   environment  EfiEnvironment
   efiPlanId    Int
   createdAt    DateTime       @default(now())
 
-  @@unique([billingCycle, environment])
+  @@unique([plan, billingCycle, environment])
   @@unique([efiPlanId, environment])
 }
 
