@@ -17,9 +17,13 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, AlertCircle, ShieldCheck } from 'lucide-react'
+import { Loader2, AlertCircle, ShieldCheck, Check } from 'lucide-react'
 import { reactivateSubscriptionAction } from '@/actions/billing/reactivate-subscription'
 import { formatCpf, isValidCpf, onlyDigits } from '@/lib/utils/cpf'
+import {
+  monthlyPrice, annualTotalPrice, annualMonthlyEquivalent, chargeAmount,
+  PLAN_LABEL, type PlanTier, type BillingCycle,
+} from '@/lib/billing/pricing'
 
 declare global {
   interface Window {
@@ -28,7 +32,6 @@ declare global {
 }
 
 interface SubscriptionCardFormProps {
-  amount: number
   accountIdentifier: string // "Identificador de Conta" da Efí (API > Introdução), NÃO é o client_id/secret
   sandbox: boolean
 }
@@ -81,10 +84,16 @@ const CURRENT_YEAR = new Date().getFullYear()
 const EXPIRATION_YEARS = Array.from({ length: 13 }, (_, i) => String(CURRENT_YEAR + i))
 const EXPIRATION_MONTHS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'))
 
-export function SubscriptionCardForm({ amount, accountIdentifier, sandbox }: SubscriptionCardFormProps) {
+export function SubscriptionCardForm({ accountIdentifier, sandbox }: SubscriptionCardFormProps) {
   const router = useRouter()
   const [state, setState] = useState<LoadState>('loading-sdk')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  // CORREÇÃO: renovação agora exige ESCOLHER o plano — antes ia direto pro
+  // formulário de cartão com um valor fixo (o único plano que existia).
+  const [plan, setPlan] = useState<PlanTier>('NORMAL')
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>('MONTHLY')
+  const amount = chargeAmount(plan, billingCycle)
 
   const [cardNumber, setCardNumber] = useState('')
   const [expirationMonth, setExpirationMonth] = useState('')
@@ -224,6 +233,8 @@ export function SubscriptionCardForm({ amount, accountIdentifier, sandbox }: Sub
         .getPaymentToken()
 
       const result = await reactivateSubscriptionAction({
+        plan,
+        billingCycle,
         cardToken: tokenResult.payment_token,
         payerEmail: payerEmail.trim(),
         payerPhone: phoneDigits,
@@ -312,7 +323,76 @@ export function SubscriptionCardForm({ amount, accountIdentifier, sandbox }: Sub
 
       {state !== 'loading-sdk' && !isBusy && (
         <form onSubmit={handleSubmit} className="space-y-3">
+          {/* CORREÇÃO: seleção de plano — Normal (sem WhatsApp) ou Pro
+              (com WhatsApp automático), cada um mensal ou anual (15% off). */}
           <div>
+            <label className="block text-xs text-neutral-500 mb-1.5">Escolha seu plano</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['NORMAL', 'PRO'] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPlan(p)}
+                  disabled={isBusy}
+                  className={`text-left rounded-lg border px-3 py-2.5 transition-colors ${
+                    plan === p
+                      ? 'border-neutral-900 bg-neutral-900/5'
+                      : 'border-neutral-200 hover:border-neutral-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-neutral-900">{PLAN_LABEL[p]}</span>
+                    {plan === p && <Check className="h-3.5 w-3.5 text-neutral-900" />}
+                  </div>
+                  <p className="text-xs text-neutral-500 mt-0.5">
+                    {p === 'PRO' ? 'Tudo, incluindo WhatsApp automático' : 'Tudo, exceto WhatsApp automático'}
+                  </p>
+                  <p className="text-sm font-bold text-neutral-900 mt-1">
+                    R$ {monthlyPrice(p).toFixed(2).replace('.', ',')}<span className="font-normal text-neutral-500">/mês</span>
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-neutral-500 mb-1.5">Ciclo de cobrança</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setBillingCycle('MONTHLY')}
+                disabled={isBusy}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  billingCycle === 'MONTHLY'
+                    ? 'border-neutral-900 bg-neutral-900/5 text-neutral-900'
+                    : 'border-neutral-200 text-neutral-600 hover:border-neutral-300'
+                }`}
+              >
+                Mensal
+              </button>
+              <button
+                type="button"
+                onClick={() => setBillingCycle('ANNUAL')}
+                disabled={isBusy}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors relative ${
+                  billingCycle === 'ANNUAL'
+                    ? 'border-neutral-900 bg-neutral-900/5 text-neutral-900'
+                    : 'border-neutral-200 text-neutral-600 hover:border-neutral-300'
+                }`}
+              >
+                Anual
+                <span className="ml-1 text-[10px] font-bold text-emerald-600">-15%</span>
+              </button>
+            </div>
+            {billingCycle === 'ANNUAL' && (
+              <p className="text-xs text-neutral-500 mt-1.5">
+                R$ {annualTotalPrice(plan).toFixed(2).replace('.', ',')} cobrado uma vez por ano
+                (equivale a R$ {annualMonthlyEquivalent(plan).toFixed(2).replace('.', ',')}/mês)
+              </p>
+            )}
+          </div>
+
+          <div className="border-t border-neutral-100 pt-3">
             <label className="block text-xs text-neutral-500 mb-1">Número do cartão</label>
             <input
               className={inputClass}
