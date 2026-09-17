@@ -18,13 +18,15 @@ import { prisma } from '@/lib/db/client'
 import { auth } from '@/lib/auth/session'
 import { createEfiCardSubscription } from '@/lib/efi/subscription'
 import { onlyDigits } from '@/lib/utils/cpf'
-
-const PLAN_PRICE_MONTHLY = 1.00
-const PLAN_PRICE_ANNUAL = parseFloat((PLAN_PRICE_MONTHLY * 12 * 0.9).toFixed(2))
+import { chargeAmount, PLAN_LABEL, type PlanTier } from '@/lib/billing/pricing'
 
 export type ReactivateResult = { error?: string; status?: string }
 
 export interface ReactivateCardInput {
+  // CORREÇÃO: quando o trial acaba e o acesso é bloqueado, o cliente
+  // precisa ESCOLHER entre Normal e Pro pra renovar — antes isso não
+  // existia, e a reativação sempre virava PRO (o único plano que existia).
+  plan: PlanTier
   cardToken: string // payment_token da Efí (Efí.js), não mais card_token_id do MP
   payerEmail: string
   payerCpf: string
@@ -44,9 +46,13 @@ export async function reactivateSubscriptionAction(
 
   const { cardToken, payerEmail, payerCpf, payerPhone, cardholderName, cardLast4 } = input
   const billingCycle = input.billingCycle ?? 'MONTHLY'
+  const plan = input.plan
 
   if (!cardToken || !payerEmail || !payerCpf || !payerPhone) {
     return { error: 'Dados do cartão incompletos.' }
+  }
+  if (plan !== 'NORMAL' && plan !== 'PRO') {
+    return { error: 'Selecione um plano (Normal ou Pro) para continuar.' }
   }
 
   const tenant = await prisma.tenant.findUnique({
@@ -65,14 +71,18 @@ export async function reactivateSubscriptionAction(
   }
 
   const isAnnual = billingCycle === 'ANNUAL'
-  const amount = isAnnual ? PLAN_PRICE_ANNUAL : PLAN_PRICE_MONTHLY
+  // CORREÇÃO: era um valor de teste (R$1,00) fixo — agora usa o preço real
+  // do plano escolhido (Normal R$39,90 ou Pro R$59,90/mês, com 15% de
+  // desconto no anual — ver lib/billing/pricing.ts).
+  const amount = chargeAmount(plan, billingCycle)
 
   let efiResult: Awaited<ReturnType<typeof createEfiCardSubscription>>
   try {
     efiResult = await createEfiCardSubscription({
+      plan,
       billingCycle,
       amount,
-      planLabel: `Meu Cardápio — Reativação Plano PRO ${isAnnual ? 'Anual' : 'Mensal'} — ${tenant.name}`,
+      planLabel: `Meu Cardápio — Reativação Plano ${PLAN_LABEL[plan]} ${isAnnual ? 'Anual' : 'Mensal'} — ${tenant.name}`,
       customerName: cardholderName,
       customerCpf: onlyDigits(payerCpf),
       customerEmail: payerEmail,
@@ -105,37 +115,45 @@ export async function reactivateSubscriptionAction(
   // nasce com status 'waiting' (aguardando confirmação do banco emissor do
   // cartão) — só o webhook (app/api/webhooks/efi/route.ts), ao receber a
   // confirmação 'paid' da cobrança, vira o status pra ACTIVE de verdade.
-  await prisma.subscription.upsert({
-    where: { tenantId: tenant.id },
-    update: {
-      provider: 'EFI',
-      efiPlanId: efiResult.efiPlanId,
-      efiSubscriptionId: efiResult.efiSubscriptionId,
-      efiChargeId: efiResult.efiChargeId,
-      mercadoPagoSubId: null,
-      billingCycle: billingCycle as any,
-      amount,
-      cardLast4,
-      currentPeriodStart: now,
-      currentPeriodEnd: periodEnd,
-      cancelledAt: null,
-      cancelReason: null,
-    },
-    create: {
-      tenantId: tenant.id,
-      plan: 'PRO',
-      provider: 'EFI',
-      billingCycle: billingCycle as any,
-      status: 'PAST_DUE',
-      cardLast4,
-      efiPlanId: efiResult.efiPlanId,
-      efiSubscriptionId: efiResult.efiSubscriptionId,
-      efiChargeId: efiResult.efiChargeId,
-      currentPeriodStart: now,
-      currentPeriodEnd: periodEnd,
-      amount,
-    },
-  })
+  // CORREÇÃO: também precisa atualizar Tenant.plan — é esse campo que
+  // decide se o WhatsApp automático fica liberado (ver
+  // lib/billing/pricing.ts, hasWhatsAppAccess). Antes só a Subscription
+  // guardava o plano; o Tenant ficava parado em PRO desde a criação.
+  await prisma.$transaction([
+    prisma.tenant.update({ where: { id: tenant.id }, data: { plan } }),
+    prisma.subscription.upsert({
+      where: { tenantId: tenant.id },
+      update: {
+        provider: 'EFI',
+        plan,
+        efiPlanId: efiResult.efiPlanId,
+        efiSubscriptionId: efiResult.efiSubscriptionId,
+        efiChargeId: efiResult.efiChargeId,
+        mercadoPagoSubId: null,
+        billingCycle: billingCycle as any,
+        amount,
+        cardLast4,
+        currentPeriodStart: now,
+        currentPeriodEnd: periodEnd,
+        cancelledAt: null,
+        cancelReason: null,
+      },
+      create: {
+        tenantId: tenant.id,
+        plan,
+        provider: 'EFI',
+        billingCycle: billingCycle as any,
+        status: 'PAST_DUE',
+        cardLast4,
+        efiPlanId: efiResult.efiPlanId,
+        efiSubscriptionId: efiResult.efiSubscriptionId,
+        efiChargeId: efiResult.efiChargeId,
+        currentPeriodStart: now,
+        currentPeriodEnd: periodEnd,
+        amount,
+      },
+    }),
+  ])
 
   return { status: 'pending_confirmation' }
 }
