@@ -10,6 +10,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Poppins } from 'next/font/google'
 import { buildDemoMenuHref } from '@/lib/utils/demo-tenant'
+import { monthlyPrice, annualTotalPrice, annualMonthlyEquivalent, PLAN_LABEL } from '@/lib/billing/pricing'
 import {
   Smartphone, Truck, UtensilsCrossed, BarChart3, MessageCircle,
   Printer, Sparkles, ChevronDown, QrCode, ShoppingBag, Columns3,
@@ -45,16 +46,15 @@ const features = [
   { icon: Printer,      title: 'Impressão',          desc: 'Recursos para integrar a impressão à operação.' },
 ]
 
-// CORREÇÃO: Starter/Pro (2 planos) trocado por um único plano com tudo
-// incluído — mais simples de vender e de entender. O valor abaixo é um
-// placeholder (mesmo preço do antigo Pro): troque PLAN_PRICE pelo valor
-// definitivo antes de publicar.
-const PLAN_PRICE = 99
-const planFeatures = [
-  'Cardápio digital', 'QR Code', 'Pedidos online', 'Kanban', 'WhatsApp',
+// CORREÇÃO: volta a ter 2 planos (Normal e Pro) — preço e regra de
+// desconto anual vêm de lib/billing/pricing.ts (fonte única, usada também
+// no cadastro e na renovação), não mais um valor solto aqui.
+const NORMAL_FEATURES = [
+  'Cardápio digital', 'QR Code', 'Pedidos online', 'Kanban',
   'Delivery', 'PIX', 'Cupons', 'Fidelidade', 'Relatórios',
-  'IA para produtos', 'Gestão de equipe', 'Todos os recursos incluídos',
+  'IA para produtos', 'Gestão de equipe',
 ]
+const PRO_ONLY_FEATURES = ['WhatsApp automático (confirmação, status, cobrança)']
 
 // CORREÇÃO: logos de parceiros/integrações — todas tratadas em cinza
 // uniforme com fundo transparente pra faixa de rolagem contínua. Logos que
@@ -117,7 +117,7 @@ const businessTypes = [
 const faqs = [
   { q: 'Preciso instalar algum aplicativo?', a: 'Não. O cardápio digital funciona direto no navegador do celular (PWA) — o cliente escaneia o QR Code e já faz o pedido, sem baixar nada. O dashboard também funciona em qualquer navegador, no computador ou celular.' },
   { q: 'O cliente precisa criar uma conta?', a: 'Não. O objetivo é tornar o pedido rápido e simples, sem cadastro nem senha.' },
-  { q: 'Como funciona o trial de 7 dias?', a: 'Você cria a conta, cadastra o cartão (sem cobrança nenhuma nesse momento) e usa a plataforma completa por 7 dias. Se cancelar antes do fim do trial, não é cobrado nada. Sem contrato de fidelidade.' },
+  { q: 'Como funciona o trial de 7 dias?', a: 'Você cria a conta, cadastra o cartão (sem cobrança nenhuma nesse momento) e usa o plano Normal por 7 dias. Se cancelar antes do fim do trial, não é cobrado nada. Sem contrato de fidelidade. Quer o plano Pro (com WhatsApp automático)? É só falar com o suporte.' },
   { q: 'Posso usar QR Code nas mesas?', a: 'Sim. Você pode gerar um QR Code exclusivo para cada mesa, balcão ou divulgação.' },
   { q: 'Funciona no celular e computador?', a: 'Sim, em qualquer dispositivo com navegador — nenhum app para instalar, nem para você, nem para seus clientes.' },
   { q: 'Posso cadastrar funcionários com permissões diferentes?', a: 'Sim. Você pode criar contas para garçom, atendente ou entregador com permissões reduzidas — cada um acessa só o que precisa pra sua função, sem ver relatórios ou configurações se não for o caso.' },
@@ -130,6 +130,9 @@ const faqs = [
 
 export function HomePageClient() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  // CORREÇÃO: toggle Mensal/Anual na seção de preços, pra mostrar os 15%
+  // de desconto sem precisar de duas seções separadas.
+  const [pricingCycle, setPricingCycle] = useState<'MONTHLY' | 'ANNUAL'>('MONTHLY')
   const { theme, setTheme } = useTheme()
 
   return (
@@ -667,41 +670,107 @@ export function HomePageClient() {
       <section id="planos" className="py-14 sm:py-24 max-w-5xl mx-auto px-5">
         <div className="text-center mb-10 sm:mb-14">
           <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
-            🛡 Um plano. Tudo incluído.
+            🛡 Planos simples, sem pegadinha
           </span>
           <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
             Simples e <span className="text-gradient">transparente</span>
           </h2>
           <p className="mt-4 text-gray-500 dark:text-gray-400">Sem taxas escondidas. Sem fidelidade. Cancele quando quiser.</p>
-        </div>
-        {/* CORREÇÃO: Starter + Pro trocados por um único plano com tudo
-            incluído — mais fácil de vender e de entender. */}
-        <div className="max-w-md mx-auto rounded-3xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-xl shadow-gray-900/5 p-8">
-          <div className="text-center mb-6">
-            <h3 className="text-xl font-black text-gray-900 dark:text-white">Meu Cardápio</h3>
-            <div className="flex items-baseline justify-center gap-1 mt-2">
-              <span className="text-4xl font-black text-gray-900 dark:text-white">R$ {PLAN_PRICE}</span>
-              <span className="text-sm text-gray-400">/mês</span>
-            </div>
-            {/* CORREÇÃO: "Tudo incluído. Sem cobrar por usuário." deixa
-                explícito, junto do preço, que o valor cobre cardápio +
-                pedidos + Kanban + WhatsApp + gestão + fidelidade +
-                relatórios + equipe — não só um cardápio digital isolado. */}
-            <p className="mt-2 text-xs font-bold text-brand-600 dark:text-brand-400">Tudo incluído. Sem cobrar por usuário.</p>
+
+          {/* Mensal / Anual */}
+          <div className="mt-6 inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-full p-1">
+            <button
+              onClick={() => setPricingCycle('MONTHLY')}
+              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${
+                pricingCycle === 'MONTHLY' ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'
+              }`}
+            >
+              Mensal
+            </button>
+            <button
+              onClick={() => setPricingCycle('ANNUAL')}
+              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${
+                pricingCycle === 'ANNUAL' ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'
+              }`}
+            >
+              Anual <span className="text-emerald-600 dark:text-emerald-400">-15%</span>
+            </button>
           </div>
-          <ul className="space-y-2.5 mb-8">
-            {planFeatures.map((f) => (
-              <li key={f} className="flex items-start gap-2.5">
-                <div className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center mt-0.5 text-xs bg-brand-100 dark:bg-brand-950/40 text-brand-500">✓</div>
-                <span className="text-sm text-gray-600 dark:text-gray-400">{f}</span>
-              </li>
-            ))}
-          </ul>
-          <Link href="/register" className="block text-center py-3.5 rounded-2xl text-sm font-bold active:scale-95 transition-all bg-brand-500 text-white hover:bg-brand-600 shadow-sm shadow-brand-200 dark:shadow-none">
-            Começar 7 dias grátis
-          </Link>
-          <p className="mt-4 text-center text-xs text-gray-400">Sem fidelidade. Cancele quando quiser.</p>
         </div>
+
+        {/* CORREÇÃO: 2 planos de novo (Normal e Pro) — o Pro é só o Normal
+            + WhatsApp automático, deixado explícito no card pra não parecer
+            um recurso arbitrário a mais. */}
+        <div className="grid sm:grid-cols-2 gap-6 max-w-3xl mx-auto items-start">
+          {(['NORMAL', 'PRO'] as const).map((tier) => {
+            const isPro = tier === 'PRO'
+            const price = pricingCycle === 'ANNUAL' ? annualMonthlyEquivalent(tier) : monthlyPrice(tier)
+            return (
+              <div
+                key={tier}
+                className={`rounded-3xl bg-white dark:bg-gray-900 border p-8 ${
+                  isPro
+                    ? 'border-brand-300 dark:border-brand-700 shadow-xl shadow-brand-900/10 relative'
+                    : 'border-gray-200 dark:border-gray-700 shadow-sm'
+                }`}
+              >
+                {isPro && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-white text-[11px] font-bold px-3 py-1 rounded-full">
+                    Mais completo
+                  </span>
+                )}
+                <div className="text-center mb-6">
+                  <h3 className="text-xl font-black text-gray-900 dark:text-white">{PLAN_LABEL[tier]}</h3>
+                  <div className="flex items-baseline justify-center gap-1 mt-2">
+                    <span className="text-4xl font-black text-gray-900 dark:text-white">
+                      R$ {price.toFixed(2).replace('.', ',')}
+                    </span>
+                    <span className="text-sm text-gray-400">/mês</span>
+                  </div>
+                  {pricingCycle === 'ANNUAL' && (
+                    <p className="mt-1 text-xs text-gray-400">
+                      R$ {annualTotalPrice(tier).toFixed(2).replace('.', ',')} cobrado uma vez por ano
+                    </p>
+                  )}
+                  <p className="mt-2 text-xs font-bold text-brand-600 dark:text-brand-400">
+                    {isPro ? 'Tudo do Normal + WhatsApp automático' : 'Tudo, exceto WhatsApp automático'}
+                  </p>
+                </div>
+                <ul className="space-y-2.5 mb-8">
+                  {NORMAL_FEATURES.map((f) => (
+                    <li key={f} className="flex items-start gap-2.5">
+                      <div className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center mt-0.5 text-xs bg-brand-100 dark:bg-brand-950/40 text-brand-500">✓</div>
+                      <span className="text-sm text-gray-600 dark:text-gray-400">{f}</span>
+                    </li>
+                  ))}
+                  {PRO_ONLY_FEATURES.map((f) => (
+                    <li key={f} className="flex items-start gap-2.5">
+                      <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center mt-0.5 text-xs ${
+                        isPro ? 'bg-brand-100 dark:bg-brand-950/40 text-brand-500' : 'bg-gray-100 dark:bg-gray-800 text-gray-300 dark:text-gray-600'
+                      }`}>
+                        {isPro ? '✓' : '—'}
+                      </div>
+                      <span className={`text-sm ${isPro ? 'text-gray-600 dark:text-gray-400' : 'text-gray-400 dark:text-gray-600'}`}>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  href="/register"
+                  className={`block text-center py-3.5 rounded-2xl text-sm font-bold active:scale-95 transition-all ${
+                    isPro
+                      ? 'bg-brand-500 text-white hover:bg-brand-600 shadow-sm shadow-brand-200 dark:shadow-none'
+                      : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100'
+                  }`}
+                >
+                  Começar 7 dias grátis
+                </Link>
+              </div>
+            )
+          })}
+        </div>
+        <p className="mt-6 text-center text-xs text-gray-400">
+          O teste grátis de 7 dias é sempre no plano Normal — mude pro Pro quando quiser.
+        </p>
 
         {/* CORREÇÃO: bloco de migração do cardápio movido pra perto do
             preço — antes só existia no FAQ, escondido no final da página.
