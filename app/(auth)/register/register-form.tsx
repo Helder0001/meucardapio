@@ -24,6 +24,7 @@ import { Eye, EyeOff, Loader2, Calendar, Zap, AlertCircle, ShieldCheck } from 'l
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { formatCpf, isValidCpf, onlyDigits } from '@/lib/utils/cpf'
+import { monthlyPrice, annualTotalPrice, annualMonthlyEquivalent } from '@/lib/billing/pricing'
 
 declare global {
   interface Window {
@@ -31,9 +32,15 @@ declare global {
   }
 }
 
-const PLAN_PRICE_MONTHLY = 3.00
-const PLAN_PRICE_ANNUAL  = parseFloat((PLAN_PRICE_MONTHLY * 12 * 0.9).toFixed(2))
-const ANNUAL_DISCOUNT_PCT = 10
+// CORREÇÃO: valores vinham fixos aqui (R$3,00 de teste) e desatualizados
+// desde que o plano virou NORMAL/PRO (ver lib/billing/pricing.ts, fonte
+// única de preço). O cadastro sempre cria a conta no plano NORMAL — virar
+// Pro é upgrade posterior em Configurações → Assinatura — então os valores
+// mostrados aqui são os do NORMAL.
+const PLAN_PRICE_MONTHLY = monthlyPrice('NORMAL')
+const PLAN_PRICE_ANNUAL  = annualTotalPrice('NORMAL')
+const PLAN_PRICE_ANNUAL_MONTHLY_EQUIV = annualMonthlyEquivalent('NORMAL')
+const ANNUAL_DISCOUNT_PCT = Math.round((1 - PLAN_PRICE_ANNUAL / (PLAN_PRICE_MONTHLY * 12)) * 100)
 
 const EFI_SCRIPT_SRC = '/vendor/payment-token-efi.js'
 const POLL_INTERVAL_MS = 3_000
@@ -100,7 +107,7 @@ export function RegisterForm({ efiAccountIdentifier, efiSandbox }: RegisterFormP
 
   const cancelledRef = useRef(false)
   const isAnnual = billingCycle === 'ANNUAL'
-  const monthlyEquiv = isAnnual ? (PLAN_PRICE_ANNUAL / 12).toFixed(2) : null
+  const monthlyEquiv = isAnnual ? PLAN_PRICE_ANNUAL_MONTHLY_EQUIV.toFixed(2) : null
   const amount = isAnnual ? PLAN_PRICE_ANNUAL : PLAN_PRICE_MONTHLY
 
   useEffect(() => {
@@ -258,20 +265,23 @@ export function RegisterForm({ efiAccountIdentifier, efiSandbox }: RegisterFormP
         </div>
       )}
 
-      {/* Plano único */}
+      {/* Plano único — cadastro sempre começa no Normal; Pro é upgrade
+          posterior (ver actions/auth/register.ts e lib/billing/pricing.ts) */}
       <div className="bg-brand-50 border border-brand-200 rounded-2xl p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Zap className="h-4 w-4 text-brand-500" />
-          <h3 className="text-sm font-bold text-brand-700 uppercase tracking-wide">Plano PRO — Acesso completo</h3>
+          <h3 className="text-sm font-bold text-brand-700 uppercase tracking-wide">Plano Normal — comece por aqui</h3>
         </div>
         <ul className="text-xs text-gray-600 space-y-1">
           <li>✓ Cardápio digital + QR Code</li>
           <li>✓ Pedidos em tempo real (kanban)</li>
           <li>✓ Pagamentos PIX + cartão</li>
-          <li>✓ WhatsApp + notificações</li>
           <li>✓ Usuários ilimitados</li>
           <li>✓ Relatórios e delivery</li>
         </ul>
+        <p className="text-[11px] text-gray-500 pt-1 border-t border-brand-100">
+          Quer confirmação automática de pedido e cobrança pelo WhatsApp? Isso é do plano Pro — dá pra fazer upgrade a qualquer momento depois, em Configurações → Assinatura.
+        </p>
       </div>
 
       {/* Ciclo de cobrança */}
