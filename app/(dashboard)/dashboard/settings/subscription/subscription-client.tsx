@@ -21,9 +21,8 @@ const BILLING_CYCLE_LABELS: Record<string, string> = {
 }
 
 const PLAN_LABELS: Record<string, string> = {
-  STARTER: 'Starter',
-  PRO: 'PRO',
-  PREMIUM: 'Premium',
+  NORMAL: 'Normal',
+  PRO: 'Pro',
 }
 
 const EFI_SCRIPT_SRC = '/vendor/payment-token-efi.js'
