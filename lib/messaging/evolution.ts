@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/db/client'
 import { formatCurrency } from '@/lib/utils/format'
 import { buildTemplateVariables, renderTemplate } from './template-variables'
+import { hasWhatsAppAccess } from '@/lib/billing/pricing'
 import crypto from 'crypto'
 
 // ✅ Credenciais vêm das env vars — não do banco
@@ -30,6 +31,16 @@ async function getConfig(tenantId: string) {
     console.error('[evolution] EVOLUTION_API_URL ou EVOLUTION_API_KEY não configurados')
     return null
   }
+
+  // CORREÇÃO: WhatsApp automático é exclusivo do plano Pro — barrado aqui
+  // (ponto único usado por toda função de envio) como rede de segurança de
+  // backend, mesmo que a tela de configuração (bloqueada pra quem é
+  // Normal) seja contornada de alguma forma.
+  const tenant = await prisma.tenant.findFirst({
+    where: { id: tenantId },
+    select: { plan: true, subscriptionStatus: true },
+  })
+  if (!tenant || !hasWhatsAppAccess(tenant)) return null
 
   // Só verifica se o tenant tem WhatsApp conectado no banco
   const config = await prisma.whatsappConfig.findFirst({
