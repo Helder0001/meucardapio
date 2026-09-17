@@ -16,9 +16,8 @@ interface Tenant {
 }
 
 const PLAN_STYLE: Record<string, string> = {
-  STARTER: 'bg-muted text-muted-foreground',
-  PRO:     'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  PREMIUM: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  NORMAL: 'bg-muted text-muted-foreground',
+  PRO:    'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
 }
 
 const STATUS_STYLE: Record<string, string> = {
