@@ -8,6 +8,7 @@ import { hashPassword } from '@/lib/auth/password'
 import { nanoid } from 'nanoid'
 import { createEfiCardSubscription } from '@/lib/efi/subscription'
 import { onlyDigits } from '@/lib/utils/cpf'
+import { monthlyPrice, annualTotalPrice } from '@/lib/billing/pricing'
 
 const registerSchema = z.object({
   tenantName:   z.string().min(2).max(100),
@@ -47,8 +48,12 @@ function generateSlug(name: string): string {
     .replace(/\s+/g, '-').replace(/-+/g, '-').slice(0, 50)
 }
 
-const PLAN_PRICE_MONTHLY = 3.00
-const PLAN_PRICE_ANNUAL  = parseFloat((PLAN_PRICE_MONTHLY * 12 * 0.9).toFixed(2))
+// CORREÇÃO: era um valor de teste (R$3,00) com 10% de desconto anual —
+// o cadastro sempre começa no plano NORMAL (trial de 7 dias é sempre
+// Normal; virar Pro é uma escolha feita depois, na renovação — ver
+// app/assinatura/page.tsx), com o preço e desconto reais.
+const PLAN_PRICE_MONTHLY = monthlyPrice('NORMAL')
+const PLAN_PRICE_ANNUAL  = annualTotalPrice('NORMAL')
 
 export async function registerAction(
   _prev: RegisterState,
@@ -104,9 +109,10 @@ export async function registerAction(
   let efiResult: Awaited<ReturnType<typeof createEfiCardSubscription>>
   try {
     efiResult = await createEfiCardSubscription({
+      plan: 'NORMAL',
       billingCycle,
       amount,
-      planLabel: `Meu Cardápio — Plano PRO ${isAnnual ? 'Anual' : 'Mensal'} — ${tenantName}`,
+      planLabel: `Meu Cardápio — Plano Normal ${isAnnual ? 'Anual' : 'Mensal'} — ${tenantName}`,
       customerName: cardholderName,
       customerCpf: onlyDigits(payerCpf),
       customerEmail: email,
@@ -142,7 +148,7 @@ export async function registerAction(
         data: {
           name: tenantName,
           slug,
-          plan: 'PRO',
+          plan: 'NORMAL',
           subscriptionStatus: initialStatus,
           trialEndsAt: wantsImmediateAccess ? null : trialEndsAt,
           primaryColor: '#f97316',
@@ -164,7 +170,7 @@ export async function registerAction(
       await tx.subscription.create({
         data: {
           tenantId:           tenant.id,
-          plan:               'PRO',
+          plan:               'NORMAL',
           provider:           'EFI',
           billingCycle:       billingCycle as any,
           status:             initialStatus,
