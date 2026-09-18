@@ -17,7 +17,11 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, AlertCircle, ShieldCheck, Check } from 'lucide-react'
+import {
+  Loader2, AlertCircle, ShieldCheck, Check, CreditCard, Calendar,
+  Lock, User, Mail, Phone, IdCard, Sparkles, MessageCircle,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { reactivateSubscriptionAction } from '@/actions/billing/reactivate-subscription'
 import { formatCpf, isValidCpf, onlyDigits } from '@/lib/utils/cpf'
 import {
@@ -289,32 +293,29 @@ export function SubscriptionCardForm({ accountIdentifier, sandbox }: Subscriptio
 
   const isBusy = state === 'submitting' || state === 'processing' || state === 'success'
   const inputClass =
-    'w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900/10 focus:border-neutral-300 disabled:bg-neutral-50 disabled:text-neutral-400'
+    'w-full rounded-lg border border-neutral-200 pl-9 pr-3 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand-500/15 focus:border-brand-400 disabled:bg-neutral-50 disabled:text-neutral-400 transition-colors'
+  const fieldWrapClass = 'relative'
+  const fieldIconClass = 'pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400'
 
   return (
     <div className="text-left">
-      <div className="flex items-center gap-2 mb-3">
-        <ShieldCheck className="h-4 w-4 text-neutral-400" />
-        <p className="text-xs text-neutral-500">Seus dados são processados de forma segura pela Efí</p>
-      </div>
-
       {errorMessage && (
-        <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2.5 text-xs text-red-600 mb-3">
+        <div className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2.5 text-xs text-red-600 mb-4">
           <AlertCircle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
           {errorMessage}
         </div>
       )}
 
       {state === 'loading-sdk' && (
-        <div className="flex items-center justify-center py-10 text-neutral-400 text-sm gap-2">
-          <Loader2 className="h-4 w-4 animate-spin" />
+        <div className="flex flex-col items-center justify-center py-12 text-neutral-400 text-sm gap-2.5">
+          <Loader2 className="h-5 w-5 animate-spin" />
           Carregando formulário seguro...
         </div>
       )}
 
       {isBusy && (
-        <div className="flex items-center justify-center py-3 text-neutral-500 text-sm gap-2 mb-2 text-center">
-          <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
+        <div className="flex flex-col items-center justify-center py-8 text-neutral-600 text-sm gap-2.5 mb-2 text-center">
+          <Loader2 className="h-5 w-5 animate-spin flex-shrink-0 text-brand-500" />
           {state === 'submitting' && 'Enviando dados do cartão...'}
           {state === 'processing' && 'Confirmando pagamento... isso pode levar alguns segundos.'}
           {state === 'success' && 'Pagamento confirmado! Redirecionando...'}
@@ -322,51 +323,68 @@ export function SubscriptionCardForm({ accountIdentifier, sandbox }: Subscriptio
       )}
 
       {state !== 'loading-sdk' && !isBusy && (
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-5">
           {/* CORREÇÃO: seleção de plano — Normal (sem WhatsApp) ou Pro
               (com WhatsApp automático), cada um mensal ou anual (15% off). */}
           <div>
-            <label className="block text-xs text-neutral-500 mb-1.5">Escolha seu plano</label>
-            <div className="grid grid-cols-2 gap-2">
-              {(['NORMAL', 'PRO'] as const).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPlan(p)}
-                  disabled={isBusy}
-                  className={`text-left rounded-lg border px-3 py-2.5 transition-colors ${
-                    plan === p
-                      ? 'border-neutral-900 bg-neutral-900/5'
-                      : 'border-neutral-200 hover:border-neutral-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-neutral-900">{PLAN_LABEL[p]}</span>
-                    {plan === p && <Check className="h-3.5 w-3.5 text-neutral-900" />}
-                  </div>
-                  <p className="text-xs text-neutral-500 mt-0.5">
-                    {p === 'PRO' ? 'Tudo, incluindo WhatsApp automático' : 'Tudo, exceto WhatsApp automático'}
-                  </p>
-                  <p className="text-sm font-bold text-neutral-900 mt-1">
-                    R$ {monthlyPrice(p).toFixed(2).replace('.', ',')}<span className="font-normal text-neutral-500">/mês</span>
-                  </p>
-                </button>
-              ))}
+            <label className="block text-xs font-semibold text-neutral-700 mb-2 uppercase tracking-wide">Escolha seu plano</label>
+            <div className="grid grid-cols-2 gap-2.5">
+              {(['NORMAL', 'PRO'] as const).map((p) => {
+                const selected = plan === p
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPlan(p)}
+                    disabled={isBusy}
+                    className={cn(
+                      'relative text-left rounded-xl border-2 px-3.5 py-3 transition-all',
+                      selected
+                        ? 'border-brand-500 bg-brand-50/60 shadow-sm'
+                        : 'border-neutral-200 hover:border-neutral-300'
+                    )}
+                  >
+                    {p === 'PRO' && (
+                      <span className="absolute -top-2.5 right-3 inline-flex items-center gap-0.5 rounded-full bg-brand-500 text-white text-[10px] font-bold px-2 py-0.5">
+                        <Sparkles className="h-2.5 w-2.5" /> Mais popular
+                      </span>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-neutral-900">{PLAN_LABEL[p]}</span>
+                      <span className={cn(
+                        'flex items-center justify-center h-4 w-4 rounded-full border-2 flex-shrink-0',
+                        selected ? 'border-brand-500 bg-brand-500' : 'border-neutral-300'
+                      )}>
+                        {selected && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
+                      </span>
+                    </div>
+                    <p className="flex items-center gap-1 text-[11px] text-neutral-500 mt-1">
+                      {p === 'PRO' && <MessageCircle className="h-3 w-3 text-emerald-500 flex-shrink-0" />}
+                      {p === 'PRO' ? 'Tudo, incluindo WhatsApp automático' : 'Tudo, exceto WhatsApp automático'}
+                    </p>
+                    <p className="text-base font-extrabold text-neutral-900 mt-1.5">
+                      R$ {monthlyPrice(p).toFixed(2).replace('.', ',')}
+                      <span className="text-xs font-normal text-neutral-500">/mês</span>
+                    </p>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
           <div>
-            <label className="block text-xs text-neutral-500 mb-1.5">Ciclo de cobrança</label>
-            <div className="grid grid-cols-2 gap-2">
+            <label className="block text-xs font-semibold text-neutral-700 mb-2 uppercase tracking-wide">Ciclo de cobrança</label>
+            <div className="grid grid-cols-2 gap-2.5">
               <button
                 type="button"
                 onClick={() => setBillingCycle('MONTHLY')}
                 disabled={isBusy}
-                className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                className={cn(
+                  'rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition-all',
                   billingCycle === 'MONTHLY'
-                    ? 'border-neutral-900 bg-neutral-900/5 text-neutral-900'
+                    ? 'border-brand-500 bg-brand-50/60 text-neutral-900'
                     : 'border-neutral-200 text-neutral-600 hover:border-neutral-300'
-                }`}
+                )}
               >
                 Mensal
               </button>
@@ -374,136 +392,162 @@ export function SubscriptionCardForm({ accountIdentifier, sandbox }: Subscriptio
                 type="button"
                 onClick={() => setBillingCycle('ANNUAL')}
                 disabled={isBusy}
-                className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors relative ${
+                className={cn(
+                  'rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition-all relative',
                   billingCycle === 'ANNUAL'
-                    ? 'border-neutral-900 bg-neutral-900/5 text-neutral-900'
+                    ? 'border-brand-500 bg-brand-50/60 text-neutral-900'
                     : 'border-neutral-200 text-neutral-600 hover:border-neutral-300'
-                }`}
+                )}
               >
                 Anual
-                <span className="ml-1 text-[10px] font-bold text-emerald-600">-15%</span>
+                <span className="ml-1.5 inline-block text-[10px] font-bold text-emerald-700 bg-emerald-100 rounded-full px-1.5 py-0.5">-15%</span>
               </button>
             </div>
             {billingCycle === 'ANNUAL' && (
-              <p className="text-xs text-neutral-500 mt-1.5">
+              <p className="flex items-center gap-1 text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-2.5 py-1.5 mt-2">
+                <Sparkles className="h-3 w-3 flex-shrink-0" />
                 R$ {annualTotalPrice(plan).toFixed(2).replace('.', ',')} cobrado uma vez por ano
                 (equivale a R$ {annualMonthlyEquivalent(plan).toFixed(2).replace('.', ',')}/mês)
               </p>
             )}
           </div>
 
-          <div className="border-t border-neutral-100 pt-3">
-            <label className="block text-xs text-neutral-500 mb-1">Número do cartão</label>
-            <input
-              className={inputClass}
-              inputMode="numeric"
-              placeholder="0000 0000 0000 0000"
-              value={cardNumber}
-              onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
-              disabled={isBusy}
-              maxLength={23}
-            />
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="block text-xs text-neutral-500 mb-1">Mês</label>
-              <select
-                className={inputClass}
-                value={expirationMonth}
-                onChange={(e) => setExpirationMonth(e.target.value)}
-                disabled={isBusy}
-              >
-                <option value="">MM</option>
-                {EXPIRATION_MONTHS.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-neutral-500 mb-1">Ano</label>
-              <select
-                className={inputClass}
-                value={expirationYear}
-                onChange={(e) => setExpirationYear(e.target.value)}
-                disabled={isBusy}
-              >
-                <option value="">AAAA</option>
-                {EXPIRATION_YEARS.map((y) => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-neutral-500 mb-1">CVV</label>
+          <div className="border-t border-neutral-100 pt-4 space-y-3">
+            <p className="text-xs font-semibold text-neutral-700 uppercase tracking-wide">Dados do cartão</p>
+            <div className={fieldWrapClass}>
+              <CreditCard className={fieldIconClass} />
               <input
                 className={inputClass}
                 inputMode="numeric"
-                placeholder="000"
-                value={cvv}
-                onChange={(e) => setCvv(onlyDigits(e.target.value).slice(0, 4))}
+                placeholder="0000 0000 0000 0000"
+                value={cardNumber}
+                onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
                 disabled={isBusy}
-                maxLength={4}
+                maxLength={23}
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2">
+                <label className="block text-[11px] text-neutral-500 mb-1">Validade</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <select
+                    className="w-full rounded-lg border border-neutral-200 px-2 py-2.5 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-brand-500/15 focus:border-brand-400 disabled:bg-neutral-50 disabled:text-neutral-400"
+                    value={expirationMonth}
+                    onChange={(e) => setExpirationMonth(e.target.value)}
+                    disabled={isBusy}
+                  >
+                    <option value="">MM</option>
+                    {EXPIRATION_MONTHS.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                  <select
+                    className="w-full rounded-lg border border-neutral-200 px-1.5 py-2.5 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-brand-500/15 focus:border-brand-400 disabled:bg-neutral-50 disabled:text-neutral-400"
+                    value={expirationYear}
+                    onChange={(e) => setExpirationYear(e.target.value)}
+                    disabled={isBusy}
+                  >
+                    <option value="">AAAA</option>
+                    {EXPIRATION_YEARS.map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="col-span-1">
+                <label className="block text-[11px] text-neutral-500 mb-1">CVV</label>
+                <div className={fieldWrapClass}>
+                  <Lock className={fieldIconClass} />
+                  <input
+                    className={inputClass}
+                    inputMode="numeric"
+                    placeholder="000"
+                    value={cvv}
+                    onChange={(e) => setCvv(onlyDigits(e.target.value).slice(0, 4))}
+                    disabled={isBusy}
+                    maxLength={4}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className={fieldWrapClass}>
+              <User className={fieldIconClass} />
+              <input
+                className={inputClass}
+                placeholder="Nome impresso no cartão"
+                value={cardholderName}
+                onChange={(e) => setCardholderName(e.target.value)}
+                disabled={isBusy}
               />
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Nome no cartão</label>
-            <input
-              className={inputClass}
-              placeholder="Como está impresso no cartão"
-              value={cardholderName}
-              onChange={(e) => setCardholderName(e.target.value)}
-              disabled={isBusy}
-            />
+          <div className="border-t border-neutral-100 pt-4 space-y-3">
+            <p className="text-xs font-semibold text-neutral-700 uppercase tracking-wide">Seus dados</p>
+            <div className={fieldWrapClass}>
+              <Mail className={fieldIconClass} />
+              <input
+                className={inputClass}
+                type="email"
+                placeholder="E-mail para recibo"
+                value={payerEmail}
+                onChange={(e) => setPayerEmail(e.target.value)}
+                disabled={isBusy}
+              />
+            </div>
+
+            <div className={fieldWrapClass}>
+              <Phone className={fieldIconClass} />
+              <input
+                className={inputClass}
+                inputMode="numeric"
+                placeholder="Telefone com DDD"
+                value={payerPhone}
+                onChange={(e) => setPayerPhone(formatPhoneInput(e.target.value))}
+                disabled={isBusy}
+                maxLength={15}
+              />
+            </div>
+
+            <div className={fieldWrapClass}>
+              <IdCard className={fieldIconClass} />
+              <input
+                className={inputClass}
+                inputMode="numeric"
+                placeholder="CPF do titular"
+                value={payerCpf}
+                onChange={(e) => setPayerCpf(formatCpf(e.target.value))}
+                disabled={isBusy}
+                maxLength={14}
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">E-mail para recibo</label>
-            <input
-              className={inputClass}
-              type="email"
-              placeholder="voce@exemplo.com"
-              value={payerEmail}
-              onChange={(e) => setPayerEmail(e.target.value)}
+          {/* Resumo + CTA — total em destaque logo acima do botão, pra
+              deixar claro o que vai ser cobrado antes de confirmar. */}
+          <div className="border-t border-neutral-100 pt-4">
+            <div className="flex items-center justify-between mb-3 text-sm">
+              <span className="text-neutral-500">
+                Total {billingCycle === 'ANNUAL' ? '(cobrado hoje, uma vez)' : 'hoje'}
+              </span>
+              <span className="text-lg font-extrabold text-neutral-900">
+                R$ {amount.toFixed(2).replace('.', ',')}
+              </span>
+            </div>
+            <button
+              type="submit"
               disabled={isBusy}
-            />
+              className="w-full rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white text-sm font-bold py-3 hover:from-brand-600 hover:to-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              Pagar R$ {amount.toFixed(2).replace('.', ',')}
+            </button>
+            <p className="flex items-center justify-center gap-1 text-[11px] text-neutral-400 mt-3">
+              <ShieldCheck className="h-3 w-3" /> Seus dados são processados de forma segura pela Efí
+            </p>
           </div>
-
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">Telefone (com DDD)</label>
-            <input
-              className={inputClass}
-              inputMode="numeric"
-              placeholder="(11) 99999-9999"
-              value={payerPhone}
-              onChange={(e) => setPayerPhone(formatPhoneInput(e.target.value))}
-              disabled={isBusy}
-              maxLength={15}
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs text-neutral-500 mb-1">CPF do titular</label>
-            <input
-              className={inputClass}
-              inputMode="numeric"
-              placeholder="000.000.000-00"
-              value={payerCpf}
-              onChange={(e) => setPayerCpf(formatCpf(e.target.value))}
-              disabled={isBusy}
-              maxLength={14}
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={isBusy}
-            className="w-full rounded-lg bg-neutral-900 text-white text-sm font-medium py-2.5 mt-2 hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            Pagar R$ {amount.toFixed(2).replace('.', ',')}
-          </button>
         </form>
       )}
     </div>
