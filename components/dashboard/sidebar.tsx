@@ -13,9 +13,13 @@ import {
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
+import { useDashboardDict, useDashboardLocale } from '@/lib/i18n/dashboard-context'
+import { DASHBOARD_LOCALES } from '@/lib/i18n/dashboard'
+import { setDashboardLocaleAction } from '@/actions/i18n/set-locale'
+import { LanguageSwitcher } from '@/components/shared/language-switcher'
 
 interface NavItem {
-  label: string
+  id: keyof ReturnType<typeof useDashboardDict>['nav']
   href: string
   icon: React.ElementType
   badge?: number
@@ -25,7 +29,7 @@ interface NavItem {
 }
 
 interface NavSection {
-  label: string
+  sectionId: keyof ReturnType<typeof useDashboardDict>['nav']
   items: NavItem[]
 }
 
@@ -35,70 +39,76 @@ const ORDERS_ROLES = ['TENANT_ADMIN', 'MANAGER', 'ATTENDANT', 'STAFF', 'DELIVERY
 
 // Antes uma lista única de 22 itens sem hierarquia — agrupado por área
 // de uso pra ficar mais fácil de escanear visualmente.
+//
+// CORREÇÃO (i18n): os itens agora guardam um `id` (chave do dicionário em
+// lib/i18n/dashboard.ts) em vez do texto fixo em português — o label é
+// resolvido em tempo de render via `t.nav[item.id]`, então trocar o idioma
+// no seletor (independente do storefront/landing) atualiza a sidebar
+// inteira sem duplicar essa lista por idioma.
 const navSections: NavSection[] = [
   {
-    label: 'Operação',
+    sectionId: 'sectionOperacao',
     items: [
-      { label: 'Dashboard', href: '/dashboard',               icon: LayoutDashboard, allowedRoles: MANAGER_UP },
-      { label: 'Pedidos',   href: '/dashboard/orders',        icon: ShoppingBag,     allowedRoles: ORDERS_ROLES },
-      { label: 'Kanban',    href: '/dashboard/orders/kanban', icon: ClipboardList,   allowedRoles: ORDERS_ROLES },
-      { label: 'Minhas Entregas', href: '/dashboard/delivery/tracking', icon: Truck, allowedRoles: ['DELIVERY_PERSON', ...MANAGER_UP] },
-      { label: 'Mesas',     href: '/dashboard/tables',        icon: Table2,          allowedRoles: MANAGER_UP },
-      { label: 'Delivery',  href: '/dashboard/delivery',      icon: Truck,           minPlan: 'PRO', allowedRoles: MANAGER_UP },
+      { id: 'dashboard', href: '/dashboard',               icon: LayoutDashboard, allowedRoles: MANAGER_UP },
+      { id: 'pedidos',   href: '/dashboard/orders',        icon: ShoppingBag,     allowedRoles: ORDERS_ROLES },
+      { id: 'kanban',    href: '/dashboard/orders/kanban', icon: ClipboardList,   allowedRoles: ORDERS_ROLES },
+      { id: 'minhasEntregas', href: '/dashboard/delivery/tracking', icon: Truck, allowedRoles: ['DELIVERY_PERSON', ...MANAGER_UP] },
+      { id: 'mesas',     href: '/dashboard/tables',        icon: Table2,          allowedRoles: MANAGER_UP },
+      { id: 'delivery',  href: '/dashboard/delivery',      icon: Truck,           minPlan: 'PRO', allowedRoles: MANAGER_UP },
     ],
   },
   {
-    label: 'Cardápio',
+    sectionId: 'sectionCardapio',
     items: [
-      { label: 'Produtos',    href: '/dashboard/menu/products',   icon: UtensilsCrossed, allowedRoles: MANAGER_UP },
-      { label: 'Categorias',  href: '/dashboard/menu/categories', icon: UtensilsCrossed, allowedRoles: MANAGER_UP },
-      { label: 'Adicionais',  href: '/dashboard/menu/addons',     icon: UtensilsCrossed, allowedRoles: MANAGER_UP },
-      { label: 'Estoque',     href: '/dashboard/stock',           icon: Boxes,           allowedRoles: MANAGER_UP },
+      { id: 'produtos',    href: '/dashboard/menu/products',   icon: UtensilsCrossed, allowedRoles: MANAGER_UP },
+      { id: 'categorias',  href: '/dashboard/menu/categories', icon: UtensilsCrossed, allowedRoles: MANAGER_UP },
+      { id: 'adicionais',  href: '/dashboard/menu/addons',     icon: UtensilsCrossed, allowedRoles: MANAGER_UP },
+      { id: 'estoque',     href: '/dashboard/stock',           icon: Boxes,           allowedRoles: MANAGER_UP },
     ],
   },
   {
-    label: 'Clientes & Marketing',
+    sectionId: 'sectionClientes',
     items: [
-      { label: 'Clientes',    href: '/dashboard/customers',         icon: Users,          allowedRoles: MANAGER_UP },
-      { label: 'Cupons',      href: '/dashboard/coupons',           icon: Tag,            minPlan: 'PRO', allowedRoles: MANAGER_UP },
-      { label: 'Fidelidade',  href: '/dashboard/loyalty',           icon: Star,           minPlan: 'PRO', allowedRoles: MANAGER_UP },
-      { label: 'Avaliações',  href: '/dashboard/reviews',           icon: Star,           allowedRoles: MANAGER_UP },
-      { label: 'WhatsApp',    href: '/dashboard/settings/whatsapp', icon: MessageSquare,  minPlan: 'PRO', allowedRoles: MANAGER_UP },
-      { label: 'Robô WhatsApp', href: '/dashboard/settings/whatsapp/automacoes', icon: Bot, minPlan: 'PRO', allowedRoles: MANAGER_UP },
-      { label: 'WA Chat',     href: '/dashboard/whatsapp-chat',     icon: MessageCircle,  minPlan: 'PRO', allowedRoles: MANAGER_UP },
+      { id: 'clientes',    href: '/dashboard/customers',         icon: Users,          allowedRoles: MANAGER_UP },
+      { id: 'cupons',      href: '/dashboard/coupons',           icon: Tag,            minPlan: 'PRO', allowedRoles: MANAGER_UP },
+      { id: 'fidelidade',  href: '/dashboard/loyalty',           icon: Star,           minPlan: 'PRO', allowedRoles: MANAGER_UP },
+      { id: 'avaliacoes',  href: '/dashboard/reviews',           icon: Star,           allowedRoles: MANAGER_UP },
+      { id: 'whatsapp',    href: '/dashboard/settings/whatsapp', icon: MessageSquare,  minPlan: 'PRO', allowedRoles: MANAGER_UP },
+      { id: 'roboWhatsapp', href: '/dashboard/settings/whatsapp/automacoes', icon: Bot, minPlan: 'PRO', allowedRoles: MANAGER_UP },
+      { id: 'waChat',     href: '/dashboard/whatsapp-chat',     icon: MessageCircle,  minPlan: 'PRO', allowedRoles: MANAGER_UP },
     ],
   },
   {
-    label: 'Configurações',
+    sectionId: 'sectionConfiguracoes',
     items: [
-      { label: 'Financeiro',    href: '/dashboard/financeiro',            icon: Wallet,     minPlan: 'PRO', allowedRoles: ADMIN_ROLES },
-      { label: 'Relatórios',    href: '/dashboard/reports',               icon: BarChart3,  allowedRoles: MANAGER_UP },
-      { label: 'Impressoras',   href: '/dashboard/printers',              icon: Printer,    allowedRoles: MANAGER_UP },
-      { label: 'Pagamentos',    href: '/dashboard/settings/payments',     icon: QrCode,     allowedRoles: MANAGER_UP },
-      { label: 'Integrações',   href: '/dashboard/settings/integrations', icon: Plug,       minPlan: 'PRO', allowedRoles: MANAGER_UP, comingSoon: true },
-      { label: 'Permissões',    href: '/dashboard/users',                 icon: ShieldCheck, allowedRoles: ADMIN_ROLES },
-      { label: 'Configurações', href: '/dashboard/settings',              icon: Settings,   allowedRoles: ADMIN_ROLES },
+      { id: 'financeiro',    href: '/dashboard/financeiro',            icon: Wallet,     minPlan: 'PRO', allowedRoles: ADMIN_ROLES },
+      { id: 'relatorios',    href: '/dashboard/reports',               icon: BarChart3,  allowedRoles: MANAGER_UP },
+      { id: 'impressoras',   href: '/dashboard/printers',              icon: Printer,    allowedRoles: MANAGER_UP },
+      { id: 'pagamentos',    href: '/dashboard/settings/payments',     icon: QrCode,     allowedRoles: MANAGER_UP },
+      { id: 'integracoes',   href: '/dashboard/settings/integrations', icon: Plug,       minPlan: 'PRO', allowedRoles: MANAGER_UP, comingSoon: true },
+      { id: 'permissoes',    href: '/dashboard/users',                 icon: ShieldCheck, allowedRoles: ADMIN_ROLES },
+      { id: 'configuracoes', href: '/dashboard/settings',              icon: Settings,   allowedRoles: ADMIN_ROLES },
     ],
   },
 ]
 
 // Bottom nav items for mobile (most important 4)
-const bottomNavItems = (userRole: string) => {
+const bottomNavItems = (userRole: string): { id: NavItem['id']; href: string; icon: React.ElementType }[] => {
   if (userRole === 'DELIVERY_PERSON') return [
-    { label: 'Entregas', href: '/dashboard/delivery/tracking', icon: Truck },
-    { label: 'Pedidos',  href: '/dashboard/orders',          icon: ShoppingBag },
-    { label: 'Kanban',   href: '/dashboard/orders/kanban',   icon: ClipboardList },
+    { id: 'entregas', href: '/dashboard/delivery/tracking', icon: Truck },
+    { id: 'pedidos',  href: '/dashboard/orders',          icon: ShoppingBag },
+    { id: 'kanban',   href: '/dashboard/orders/kanban',   icon: ClipboardList },
   ]
   const isOp = ['STAFF', 'ATTENDANT'].includes(userRole)
   if (isOp) return [
-    { label: 'Pedidos',  href: '/dashboard/orders',          icon: ShoppingBag },
-    { label: 'Kanban',   href: '/dashboard/orders/kanban',   icon: ClipboardList },
+    { id: 'pedidos',  href: '/dashboard/orders',          icon: ShoppingBag },
+    { id: 'kanban',   href: '/dashboard/orders/kanban',   icon: ClipboardList },
   ]
   return [
-    { label: 'Início',   href: '/dashboard',                 icon: LayoutDashboard },
-    { label: 'Pedidos',  href: '/dashboard/orders',          icon: ShoppingBag },
-    { label: 'Kanban',   href: '/dashboard/orders/kanban',   icon: ClipboardList },
-    { label: 'Relatórios', href: '/dashboard/reports',       icon: BarChart3 },
+    { id: 'inicio',   href: '/dashboard',                 icon: LayoutDashboard },
+    { id: 'pedidos',  href: '/dashboard/orders',          icon: ShoppingBag },
+    { id: 'kanban',   href: '/dashboard/orders/kanban',   icon: ClipboardList },
+    { id: 'relatorios', href: '/dashboard/reports',       icon: BarChart3 },
   ]
 }
 
@@ -114,6 +124,8 @@ export function Sidebar({ userRole, tenantSlug, plan }: SidebarProps) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const userPlanLevel = PLAN_ORDER[plan as keyof typeof PLAN_ORDER] ?? 0
+  const t = useDashboardDict()
+  const locale = useDashboardLocale()
 
   // Close drawer on navigation
   useEffect(() => { setMobileOpen(false) }, [pathname])
@@ -134,9 +146,9 @@ export function Sidebar({ userRole, tenantSlug, plan }: SidebarProps) {
         if (visibleItems.length === 0) return null
 
         return (
-          <div key={section.label}>
+          <div key={section.sectionId}>
             <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
-              {section.label}
+              {t.nav[section.sectionId]}
             </p>
             <div className="space-y-0.5">
               {visibleItems.map((item) => {
@@ -144,23 +156,24 @@ export function Sidebar({ userRole, tenantSlug, plan }: SidebarProps) {
                   (item.href !== '/dashboard' && pathname.startsWith(item.href))
                 const accessible = canAccess(item)
                 const Icon = item.icon
+                const label = t.nav[item.id]
 
                 if (item.comingSoon) return (
-                  <div key={item.href} title="Em breve — disponível após o lançamento"
+                  <div key={item.href} title={`${t.nav.emBreve} — disponível após o lançamento`}
                     className="flex items-center gap-3 px-3 py-2.5 rounded-xl opacity-40 cursor-not-allowed select-none">
                     <Icon className="h-4 w-4 flex-shrink-0 text-sidebar-foreground" />
-                    <span className="text-sm text-sidebar-foreground">{item.label}</span>
+                    <span className="text-sm text-sidebar-foreground">{label}</span>
                     <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide bg-white/10 text-sidebar-foreground rounded-full px-2 py-0.5 whitespace-nowrap">
-                      Em breve
+                      {t.nav.emBreve}
                     </span>
                   </div>
                 )
 
                 if (!accessible) return (
-                  <div key={item.href} title={`Disponível no plano ${item.minPlan}`}
+                  <div key={item.href} title={`${t.nav.disponivelNoPlano} ${item.minPlan}`}
                     className="flex items-center gap-3 px-3 py-2.5 rounded-xl opacity-30 cursor-not-allowed">
                     <Icon className="h-4 w-4 flex-shrink-0 text-sidebar-foreground" />
-                    <span className="text-sm text-sidebar-foreground">{item.label}</span>
+                    <span className="text-sm text-sidebar-foreground">{label}</span>
                   </div>
                 )
 
@@ -173,7 +186,7 @@ export function Sidebar({ userRole, tenantSlug, plan }: SidebarProps) {
                         : 'text-sidebar-foreground hover:text-white hover:bg-sidebar-hover-bg'
                     )}>
                     <Icon className="h-4 w-4 flex-shrink-0" />
-                    <span>{item.label}</span>
+                    <span>{label}</span>
                     {item.badge && item.badge > 0 && (
                       <span className="ml-auto text-xs bg-destructive text-destructive-foreground rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center">
                         {item.badge}
@@ -190,8 +203,8 @@ export function Sidebar({ userRole, tenantSlug, plan }: SidebarProps) {
   )
 
   const modeLabel: Record<string, string> = {
-    MANAGER: '👔 Modo Gerente', ATTENDANT: '🧾 Modo Atendente',
-    STAFF: '🍽️ Modo Operador', DELIVERY_PERSON: '🛵 Modo Entregador',
+    MANAGER: t.modes.manager, ATTENDANT: t.modes.attendant,
+    STAFF: t.modes.staff, DELIVERY_PERSON: t.modes.deliveryPerson,
   }
   const mode = modeLabel[userRole]
 
@@ -212,7 +225,14 @@ export function Sidebar({ userRole, tenantSlug, plan }: SidebarProps) {
               }} />
             <span className="hidden text-primary-foreground font-bold text-sm">M</span>
           </div>
-          <span className="font-semibold text-white">Meu Cardápio</span>
+          <span className="font-semibold text-white flex-1">Meu Cardápio</span>
+          <LanguageSwitcher
+            locales={DASHBOARD_LOCALES}
+            currentLocale={locale}
+            onChange={setDashboardLocaleAction}
+            label={t.languageSwitcher.label}
+            variant="dark"
+          />
         </div>
 
         <NavList />
@@ -233,7 +253,7 @@ export function Sidebar({ userRole, tenantSlug, plan }: SidebarProps) {
               plan === 'PRO' || plan === 'PREMIUM'
                 ? 'bg-amber-400/20 text-amber-300'
                 : 'bg-white/10 text-sidebar-foreground')}>
-              {plan === 'PRO' ? '⚡ Plano Pro' : plan === 'PREMIUM' ? '👑 Premium' : '🆓 Starter'}
+              {plan === 'PRO' ? t.plan.pro : plan === 'PREMIUM' ? t.plan.premium : t.plan.starter}
             </span>
           </div>
         )}
@@ -253,10 +273,19 @@ export function Sidebar({ userRole, tenantSlug, plan }: SidebarProps) {
                 </div>
                 <span className="font-semibold text-white">Meu Cardápio</span>
               </div>
-              <button onClick={() => setMobileOpen(false)}
-                className="p-2 rounded-xl text-sidebar-foreground hover:text-white hover:bg-sidebar-hover-bg">
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-1">
+                <LanguageSwitcher
+                  locales={DASHBOARD_LOCALES}
+                  currentLocale={locale}
+                  onChange={setDashboardLocaleAction}
+                  label={t.languageSwitcher.label}
+                  variant="dark"
+                />
+                <button onClick={() => setMobileOpen(false)}
+                  className="p-2 rounded-xl text-sidebar-foreground hover:text-white hover:bg-sidebar-hover-bg">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
             <NavList />
@@ -280,7 +309,7 @@ export function Sidebar({ userRole, tenantSlug, plan }: SidebarProps) {
           <button onClick={() => setMobileOpen(true)}
             className="flex flex-col items-center justify-center gap-0.5 flex-1 py-2.5 text-muted-foreground hover:text-foreground transition-colors">
             <Menu className="h-5 w-5" />
-            <span className="text-[10px] font-medium">Menu</span>
+            <span className="text-[10px] font-medium">{t.nav.menuMobile}</span>
           </button>
 
           {bottomItems.map((item) => {
@@ -294,7 +323,7 @@ export function Sidebar({ userRole, tenantSlug, plan }: SidebarProps) {
                   isActive ? 'text-primary font-semibold' : 'text-muted-foreground hover:text-foreground'
                 )}>
                 <Icon className="h-5 w-5" />
-                <span className="text-[10px] font-medium">{item.label}</span>
+                <span className="text-[10px] font-medium">{t.nav[item.id]}</span>
               </Link>
             )
           })}
