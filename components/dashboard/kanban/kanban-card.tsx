@@ -6,13 +6,17 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { formatCurrency, formatRelative, formatOrderNumber } from '@/lib/utils/format'
 import { cn } from '@/lib/utils'
-import { ChevronDown, ChevronUp, User, MapPin, Table2, ExternalLink } from 'lucide-react'
+import { ChevronDown, ChevronUp, User, MapPin, Table2, ExternalLink, ArrowRight, Loader2 } from 'lucide-react'
+import { getNextKanbanStatus, ADVANCE_LABEL, canAdvanceStatus } from './kanban-board'
 import type { KanbanOrder } from './kanban-board'
 
 interface KanbanCardProps {
   order: KanbanOrder
+  userRole?: string
   isDragging: boolean
+  isAdvancing?: boolean
   onDragStart?: () => void
+  onAdvance?: () => void
 }
 
 const TYPE_CONFIG: Record<string, { label: string; emoji: string; color: string }> = {
@@ -28,10 +32,16 @@ const PAYMENT_CONFIG: Record<string, { label: string; color: string }> = {
   FAILED:  { label: 'Falhou',   color: 'text-red-600 dark:text-red-400' },
 }
 
-export function KanbanCard({ order, isDragging, onDragStart }: KanbanCardProps) {
+export function KanbanCard({ order, userRole = '', isDragging, isAdvancing, onDragStart, onAdvance }: KanbanCardProps) {
   const [expanded, setExpanded] = useState(false)
   const typeConfig = TYPE_CONFIG[order.type] ?? TYPE_CONFIG.PDV
   const paymentConfig = PAYMENT_CONFIG[order.paymentStatus] ?? PAYMENT_CONFIG.PENDING
+
+  // Botão "avançar etapa" — alternativa ao drag&drop, mostrado só quando o
+  // papel do usuário tem permissão pra dar esse passo (ver canAdvanceStatus).
+  const nextStatus = getNextKanbanStatus(order)
+  const showAdvanceButton =
+    !!onAdvance && !!nextStatus && canAdvanceStatus(userRole, order.type, nextStatus)
 
   return (
     <div
@@ -90,6 +100,30 @@ export function KanbanCard({ order, isDragging, onDragStart }: KanbanCardProps) 
             {paymentConfig.label}
           </span>
         </div>
+
+        {/* Avançar etapa — alternativa ao drag&drop, sempre visível */}
+        {showAdvanceButton && (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()} // não iniciar drag ao clicar
+            onClick={(e) => {
+              e.stopPropagation()
+              onAdvance?.()
+            }}
+            disabled={isAdvancing}
+            className={cn(
+              'w-full flex items-center justify-center gap-1.5 mt-2.5 py-1.5 text-xs font-semibold rounded-lg transition-colors',
+              'bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60 disabled:cursor-wait'
+            )}
+          >
+            {isAdvancing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ArrowRight className="h-3.5 w-3.5" />
+            )}
+            {ADVANCE_LABEL[nextStatus!] ?? 'Avançar'}
+          </button>
+        )}
       </div>
 
       {/* Expandir itens */}

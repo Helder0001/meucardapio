@@ -48,6 +48,43 @@ const COLUMNS = [
   { key: 'DELIVERED',        label: 'Entregues',     color: 'bg-green-500',   emoji: '🎉' },
 ] as const
 
+// NOVO: botão "avançar etapa" no card — alternativa ao drag&drop (que em
+// telas touch/mobile é pouco descobrível). Cada tipo de pedido tem um fluxo
+// diferente: delivery passa por OUT_FOR_DELIVERY, os demais (mesa, retirada,
+// balcão) vão direto de PRONTOS pra ENTREGUE.
+const DELIVERY_FLOW    = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'OUT_FOR_DELIVERY', 'DELIVERED']
+const NON_DELIVERY_FLOW = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'DELIVERED']
+
+export function getNextKanbanStatus(order: Pick<KanbanOrder, 'status' | 'type'>): string | null {
+  const flow = order.type === 'DELIVERY' ? DELIVERY_FLOW : NON_DELIVERY_FLOW
+  const idx = flow.indexOf(order.status)
+  if (idx === -1 || idx === flow.length - 1) return null
+  return flow[idx + 1]
+}
+
+export const ADVANCE_LABEL: Record<string, string> = {
+  CONFIRMED:        'Confirmar pedido',
+  PREPARING:        'Iniciar preparo',
+  READY:            'Marcar como pronto',
+  OUT_FOR_DELIVERY: 'Saiu para entrega',
+  DELIVERED:        'Marcar como entregue',
+}
+
+// Espelha (de forma simplificada, só pra evitar cliques que vão falhar no
+// servidor) as restrições de papel que já existem em
+// app/api/orders/[id]/update-status/route.ts. A validação de verdade
+// continua sendo feita lá — isso aqui só evita mostrar um botão fadado
+// a dar erro 403.
+export function canAdvanceStatus(role: string, orderType: string, nextStatus: string): boolean {
+  if (role === 'DELIVERY_PERSON') {
+    return orderType === 'DELIVERY' && ['OUT_FOR_DELIVERY', 'DELIVERED'].includes(nextStatus)
+  }
+  if (nextStatus === 'DELIVERED' && role === 'STAFF') return false
+  if (orderType === 'DELIVERY' && nextStatus === 'DELIVERED' && (role === 'STAFF' || role === 'ATTENDANT')) return false
+  if (nextStatus === 'OUT_FOR_DELIVERY' && (role === 'ATTENDANT' || role === 'STAFF')) return false
+  return true
+}
+
 type FilterType = 'ALL' | 'TABLE' | 'DELIVERY' | 'PICKUP'
 
 interface KanbanBoardProps {
@@ -63,6 +100,7 @@ export function KanbanBoard({ tenantId, userRole = '', lockedFilter }: KanbanBoa
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [filter, setFilter] = useState<FilterType>(lockedFilter ?? 'ALL')
   const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [advancingId, setAdvancingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const isDeliveryPerson = userRole === 'DELIVERY_PERSON'
   const eventSourceRef = useRef<EventSource | null>(null)
@@ -198,23 +236,17 @@ export function KanbanBoard({ tenantId, userRole = '', lockedFilter }: KanbanBoa
     setDraggingId(orderId)
   }
 
-  const handleDrop = async (targetStatus: string) => {
-    if (!draggingId) return
-    const order = orders.find((o) => o.id === draggingId)
-    if (!order || order.status === targetStatus) {
-      setDraggingId(null)
-      return
-    }
-
-    // Otimistic update: atualizar UI imediatamente
+  // CORREÇÃO: extraído de handleDrop pra ser compartilhado com o novo botão
+  // "avançar etapa" (handleAdvance) — mesmo fluxo de update otimista +
+  // persistência + rollback em caso de erro, só muda quem dispara.
+  const updateOrderStatus = useCallback(async (orderId: string, targetStatus: string, previousStatus: string) => {
     setOrders((prev) =>
-      prev.map((o) => (o.id === draggingId ? { ...o, status: targetStatus } : o))
+      prev.map((o) => (o.id === orderId ? { ...o, status: targetStatus } : o))
     )
-    setDraggingId(null)
+    setAdvancingId(orderId)
 
-    // Persistir no servidor
     try {
-      const res = await fetch(`/api/orders/${draggingId}/update-status`, {
+      const res = await fetch(`/api/orders/${orderId}/update-status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: targetStatus }),
@@ -223,17 +255,37 @@ export function KanbanBoard({ tenantId, userRole = '', lockedFilter }: KanbanBoa
       if (!res.ok) {
         const err = await res.json()
         toast.error(err.error ?? 'Erro ao atualizar status')
-        // Reverter update otimista
         setOrders((prev) =>
-          prev.map((o) => (o.id === draggingId ? { ...o, status: order.status } : o))
+          prev.map((o) => (o.id === orderId ? { ...o, status: previousStatus } : o))
         )
       }
     } catch {
       toast.error('Erro de conexão ao atualizar pedido')
       setOrders((prev) =>
-        prev.map((o) => (o.id === order.id ? { ...o, status: order.status } : o))
+        prev.map((o) => (o.id === orderId ? { ...o, status: previousStatus } : o))
       )
+    } finally {
+      setAdvancingId((cur) => (cur === orderId ? null : cur))
     }
+  }, [])
+
+  const handleDrop = (targetStatus: string) => {
+    if (!draggingId) return
+    const order = orders.find((o) => o.id === draggingId)
+    const id = draggingId
+    setDraggingId(null)
+    if (!order || order.status === targetStatus) return
+    updateOrderStatus(id, targetStatus, order.status)
+  }
+
+  // NOVO: botão "avançar etapa" no card — calcula a próxima etapa do fluxo
+  // do próprio pedido e persiste, sem precisar arrastar.
+  const handleAdvance = (orderId: string) => {
+    const order = orders.find((o) => o.id === orderId)
+    if (!order) return
+    const next = getNextKanbanStatus(order)
+    if (!next || !canAdvanceStatus(userRole, order.type, next)) return
+    updateOrderStatus(orderId, next, order.status)
   }
 
   // Filtrar pedidos
@@ -326,8 +378,11 @@ export function KanbanBoard({ tenantId, userRole = '', lockedFilter }: KanbanBoa
             column={col}
             orders={ordersByStatus(col.key)}
             draggingId={draggingId}
+            advancingId={advancingId}
+            userRole={userRole}
             onDragStart={isDeliveryPerson ? undefined : handleDragStart}
             onDrop={isDeliveryPerson ? undefined : handleDrop}
+            onAdvance={handleAdvance}
             loading={loading}
           />
         ))}

@@ -18,8 +18,11 @@ interface KanbanColumnProps {
   column: ColumnDef
   orders: KanbanOrder[]
   draggingId: string | null
+  advancingId?: string | null
+  userRole?: string
   onDragStart?: (id: string) => void
   onDrop?: (status: string) => void
+  onAdvance?: (id: string) => void
   loading?: boolean
 }
 
@@ -27,8 +30,11 @@ export function KanbanColumn({
   column,
   orders,
   draggingId,
+  advancingId,
+  userRole = '',
   onDragStart,
   onDrop,
+  onAdvance,
   loading,
 }: KanbanColumnProps) {
   const [isOver, setIsOver] = useState(false)
@@ -88,8 +94,11 @@ export function KanbanColumn({
             <KanbanCard
               key={order.id}
               order={order}
+              userRole={userRole}
               isDragging={draggingId === order.id}
+              isAdvancing={advancingId === order.id}
               onDragStart={onDragStart ? () => onDragStart(order.id) : undefined}
+              onAdvance={onAdvance ? () => onAdvance(order.id) : undefined}
             />
           ))
         )}
