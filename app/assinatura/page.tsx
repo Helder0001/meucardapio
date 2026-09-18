@@ -11,7 +11,7 @@ import { auth } from '@/lib/auth/session'
 import { prisma } from '@/lib/db/client'
 import { SubscriptionCardForm } from './subscription-card-form'
 import { SignOutLink } from './sign-out-link'
-import { AuthLogo } from '@/components/shared/auth-logo'
+import Image from 'next/image'
 import { AlarmClock, Lock, ShieldCheck } from 'lucide-react'
 
 export default async function AssinaturaPage() {
@@ -66,7 +66,25 @@ export default async function AssinaturaPage() {
       </div>
 
       <div className="relative w-full max-w-md flex flex-col items-center">
-        <AuthLogo className="mb-6" />
+        {/* CORREÇÃO: essa página usa cores fixas (neutral-*), sempre em tema
+            claro — nunca herda o layout do dashboard. Usar o <AuthLogo>
+            compartilhado quebrava isso: ele pinta o texto com o token
+            "foreground", que no modo escuro do dispositivo vira quase
+            branco, deixando "Meu Cardápio" praticamente invisível sobre o
+            fundo claro. Aqui a marca é montada com cor fixa (neutral-800),
+            igual ao resto da tela, pra não depender do tema do sistema. */}
+        <div className="mb-6 flex items-center gap-2">
+          <div className="w-8 h-8 relative flex-shrink-0">
+            <Image
+              src="/logo-icon.png"
+              alt="Meu Cardápio"
+              fill
+              sizes="32px"
+              className="object-contain"
+            />
+          </div>
+          <span className="font-semibold text-lg text-neutral-800">Meu Cardápio</span>
+        </div>
 
         <div className="w-full bg-white rounded-3xl shadow-modal border border-neutral-100 overflow-hidden">
           {/* Faixa superior com o aviso — separada do corpo pra dar mais
