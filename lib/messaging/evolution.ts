@@ -24,25 +24,39 @@ interface SendMessageParams {
   tenantId: string
   phone:    string
   message:  string
+  // CORREÇÃO: Normal agora pode conectar WhatsApp, mas só pra uma coisa —
+  // mandar o código de login do cliente (ver app/api/otp/send/route.ts).
+  // Automação de verdade (confirmação de pedido, status, cobrança,
+  // automações do chat) continua exclusiva do Pro. 'purpose' é como cada
+  // chamador declara qual dos dois está fazendo; default 'automation'
+  // pra que qualquer chamada existente que não passe isso continue caindo
+  // no gate de plano de sempre — só o fluxo de OTP passa 'otp'
+  // explicitamente.
+  purpose?: 'otp' | 'automation'
 }
 
-async function getConfig(tenantId: string) {
+async function getConfig(tenantId: string, purpose: 'otp' | 'automation' = 'automation') {
   if (!EVOLUTION_URL || !EVOLUTION_KEY) {
     console.error('[evolution] EVOLUTION_API_URL ou EVOLUTION_API_KEY não configurados')
     return null
   }
 
-  // CORREÇÃO: WhatsApp automático é exclusivo do plano Pro — barrado aqui
-  // (ponto único usado por toda função de envio) como rede de segurança de
-  // backend, mesmo que a tela de configuração (bloqueada pra quem é
-  // Normal) seja contornada de alguma forma.
-  const tenant = await prisma.tenant.findFirst({
-    where: { id: tenantId },
-    select: { plan: true, subscriptionStatus: true },
-  })
-  if (!tenant || !hasWhatsAppAccess(tenant)) return null
+  // CORREÇÃO: WhatsApp automático (confirmação de pedido, status, cobrança,
+  // automações do chat) é exclusivo do plano Pro — barrado aqui (ponto
+  // único usado por toda função de envio) como rede de segurança de
+  // backend, mesmo que a tela de configuração seja contornada de alguma
+  // forma. O código de login do cliente (purpose 'otp') é a única exceção:
+  // Normal também pode conectar um número e usá-lo só pra isso.
+  if (purpose !== 'otp') {
+    const tenant = await prisma.tenant.findFirst({
+      where: { id: tenantId },
+      select: { plan: true, subscriptionStatus: true },
+    })
+    if (!tenant || !hasWhatsAppAccess(tenant)) return null
+  }
 
-  // Só verifica se o tenant tem WhatsApp conectado no banco
+  // Só verifica se o tenant tem WhatsApp conectado no banco — isso vale
+  // pros dois casos: sem instância conectada, nem OTP nem automação saem.
   const config = await prisma.whatsappConfig.findFirst({
     where:  { tenantId, status: 'CONNECTED' },
     select: { instanceName: true },
@@ -141,8 +155,8 @@ export async function sendWhatsAppMedia({ tenantId, phone, base64, mediaType, mi
 }
 
 
-export async function sendWhatsAppMessage({ tenantId, phone, message }: SendMessageParams) {
-  const config = await getConfig(tenantId)
+export async function sendWhatsAppMessage({ tenantId, phone, message, purpose = 'automation' }: SendMessageParams) {
+  const config = await getConfig(tenantId, purpose)
   if (!config) return { error: 'WhatsApp não configurado ou desconectado' }
 
   const digits    = phone.replace(/\D/g, '')
