@@ -11,6 +11,10 @@ import Image from 'next/image'
 import { Poppins } from 'next/font/google'
 import { buildDemoMenuHref } from '@/lib/utils/demo-tenant'
 import { monthlyPrice, annualTotalPrice, annualMonthlyEquivalent, PLAN_LABEL } from '@/lib/billing/pricing'
+import type { LandingDict, LandingLocale } from '@/lib/i18n/landing'
+import { LANDING_LOCALES } from '@/lib/i18n/landing'
+import { setLandingLocaleAction } from '@/actions/i18n/set-locale'
+import { LanguageSwitcher } from '@/components/shared/language-switcher'
 import {
   Smartphone, Truck, UtensilsCrossed, BarChart3, MessageCircle,
   Printer, Sparkles, ChevronDown, QrCode, ShoppingBag, Columns3,
@@ -128,7 +132,7 @@ const faqs = [
   { q: 'Consigo migrar meu cardápio já pronto pra plataforma?', a: 'Sim — nosso suporte te ajuda a importar produtos, preços e categorias na hora de começar, sem custo adicional.' },
 ]
 
-export function HomePageClient() {
+export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dict: LandingDict }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   // CORREÇÃO: toggle Mensal/Anual na seção de preços, pra mostrar os 15%
   // de desconto sem precisar de duas seções separadas.
@@ -140,7 +144,7 @@ export function HomePageClient() {
 
       {/* Barra de topo */}
       <div className="bg-gray-900 dark:bg-black text-white text-xs text-center py-2 font-medium">
-        🎉 &nbsp;<span className="text-brand-400 font-bold">7 dias grátis</span> · Sem fidelidade · Cancele quando quiser
+        🎉 &nbsp;<span className="text-brand-400 font-bold">{t.topBar.trialBadge}</span> · {t.topBar.rest}
       </div>
 
       {/* Navbar */}
@@ -175,24 +179,31 @@ export function HomePageClient() {
           <div className="hidden md:flex items-center gap-8">
             {['#funcionalidades', '#como-funciona', '#planos', '#faq'].map((href, i) => (
               <a key={href} href={href} className="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-brand-500 dark:hover:text-brand-400 transition-colors">
-                {['Funcionalidades', 'Como funciona', 'Planos', 'FAQ'][i]}
+                {[t.nav.funcionalidades, t.nav.comoFunciona, t.nav.planos, t.nav.faq][i]}
               </a>
             ))}
           </div>
           <div className="flex items-center gap-3">
             <Link href="/login" className="hidden sm:block text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
-              Entrar
+              {t.nav.entrar}
             </Link>
+            {/* Idioma da landing — independente do idioma do dashboard/storefront */}
+            <LanguageSwitcher
+              locales={LANDING_LOCALES}
+              currentLocale={locale}
+              onChange={setLandingLocaleAction}
+              label={t.languageSwitcher.label}
+            />
             {/* Toggle tema */}
             <button
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               className="hidden sm:flex items-center justify-center w-9 h-9 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-              aria-label="Alternar tema"
+              aria-label={t.theme.toggleAria}
             >
               {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
             <Link href="/register" className="hidden sm:block px-4 py-2 bg-brand-500 text-white text-sm font-bold rounded-xl hover:bg-brand-600 active:scale-95 transition-all shadow-sm shadow-brand-200 dark:shadow-none">
-              Começar grátis
+              {t.nav.comecarGratis}
             </Link>
             {/* Hamburger mobile */}
             <button
@@ -209,20 +220,20 @@ export function HomePageClient() {
         {/* Mobile dropdown */}
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-950 px-5 py-4 space-y-3">
-            <a href="#funcionalidades" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-700 dark:text-gray-300 py-2">Funcionalidades</a>
-            <a href="#como-funciona" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-700 dark:text-gray-300 py-2">Como funciona</a>
-            <a href="#planos" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-700 dark:text-gray-300 py-2">Planos</a>
-            <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-700 dark:text-gray-300 py-2">FAQ</a>
+            <a href="#funcionalidades" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-700 dark:text-gray-300 py-2">{t.nav.funcionalidades}</a>
+            <a href="#como-funciona" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-700 dark:text-gray-300 py-2">{t.nav.comoFunciona}</a>
+            <a href="#planos" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-700 dark:text-gray-300 py-2">{t.nav.planos}</a>
+            <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-700 dark:text-gray-300 py-2">{t.nav.faq}</a>
             <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-2">
-              <Link href="/login" className="block text-center py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-xl">Entrar</Link>
+              <Link href="/login" className="block text-center py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-xl">{t.nav.entrar}</Link>
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 className="flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-xl w-full"
               >
                 {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                {theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+                {theme === 'dark' ? t.theme.light : t.theme.dark}
               </button>
-              <Link href="/register" className="block text-center py-2.5 text-sm font-bold text-white bg-brand-500 rounded-xl">Começar grátis</Link>
+              <Link href="/register" className="block text-center py-2.5 text-sm font-bold text-white bg-brand-500 rounded-xl">{t.nav.comecarGratis}</Link>
             </div>
           </div>
         )}
@@ -234,21 +245,21 @@ export function HomePageClient() {
         <div className="relative max-w-5xl mx-auto px-5 text-center">
 
           <span className="animate-fade-up inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
-            ✦ Novo: IA para descrição de produtos
+            {t.hero.badge}
           </span>
 
           <h1 className="animate-fade-up animate-fade-up-delay-1 mt-6 text-3xl sm:text-4xl lg:text-5xl font-black text-gray-900 dark:text-white leading-[1.1] tracking-tight">
-            Seu restaurante no controle.{' '}
-            <span className="text-gradient">Seus pedidos organizados.</span>
+            {t.hero.titleStart}{' '}
+            <span className="text-gradient">{t.hero.titleHighlight}</span>
           </h1>
 
           <p className="animate-fade-up animate-fade-up-delay-2 mt-6 text-base sm:text-lg text-gray-500 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed">
-            Cardápio digital + pedidos + Kanban + WhatsApp + pagamentos em uma única plataforma. Seu cliente pede pelo celular e sua equipe acompanha tudo, do pedido até a entrega.
+            {t.hero.subtitle}
           </p>
 
           <div className="animate-fade-up animate-fade-up-delay-3 mt-10 flex flex-col sm:flex-row items-center gap-3 justify-center">
             <Link href="/register" className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold rounded-2xl hover:bg-gray-800 dark:hover:bg-gray-100 active:scale-95 transition-all text-sm shadow-lg shadow-gray-300 dark:shadow-black/30">
-              Começar grátis
+              {t.hero.ctaPrimary}
               <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
             </Link>
             {/* CORREÇÃO: CTA secundário rebaixado para link de texto — antes
