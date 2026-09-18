@@ -20,6 +20,9 @@ import { InactivityWarning } from '@/components/shared/inactivity-warning'
 import { CourierLocationTracker } from '@/components/dashboard/courier-location-tracker'
 import { NotificationListener } from '@/components/dashboard/notification-listener'
 import Script from 'next/script'
+import { readLocaleCookie } from '@/lib/i18n/cookies'
+import { DASHBOARD_LOCALE_COOKIE, getDashboardDictionary, resolveDashboardLocale } from '@/lib/i18n/dashboard'
+import { DashboardI18nProvider } from '@/lib/i18n/dashboard-context'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
@@ -62,30 +65,35 @@ export default async function DashboardLayout({ children }: { children: React.Re
     }
   }
 
+  const dashboardLocale = resolveDashboardLocale(await readLocaleCookie(DASHBOARD_LOCALE_COOKIE))
+  const dashboardDict = getDashboardDictionary(dashboardLocale)
+
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/*
-        Script de segurança do Mercado Pago — gera Device ID
-        (window.MP_DEVICE_SESSION_ID) usado ao criar PIX no fluxo de pedido
-        balcão/kanban, reduzindo recusas de antifraude.
-      */}
-      <Script src="https://www.mercadopago.com/v2/security.js" strategy="afterInteractive" {...({ view: 'checkout' } as any)} />
-      <Sidebar
-        userRole={session.user.role}
-        tenantSlug={session.user.tenantSlug ?? ''}
-        plan={session.user.plan ?? 'STARTER'}
-      />
-      <div className="flex flex-col flex-1 overflow-hidden min-w-0">
-        <Header user={session.user} />
-        <main className="flex-1 overflow-y-auto">
-          <div className="container-app py-4 md:py-6 pb-24 md:pb-6">
-            {children}
-          </div>
-        </main>
+    <DashboardI18nProvider locale={dashboardLocale} dict={dashboardDict}>
+      <div className="flex h-screen overflow-hidden bg-background">
+        {/*
+          Script de segurança do Mercado Pago — gera Device ID
+          (window.MP_DEVICE_SESSION_ID) usado ao criar PIX no fluxo de pedido
+          balcão/kanban, reduzindo recusas de antifraude.
+        */}
+        <Script src="https://www.mercadopago.com/v2/security.js" strategy="afterInteractive" {...({ view: 'checkout' } as any)} />
+        <Sidebar
+          userRole={session.user.role}
+          tenantSlug={session.user.tenantSlug ?? ''}
+          plan={session.user.plan ?? 'STARTER'}
+        />
+        <div className="flex flex-col flex-1 overflow-hidden min-w-0">
+          <Header user={session.user} />
+          <main className="flex-1 overflow-y-auto">
+            <div className="container-app py-4 md:py-6 pb-24 md:pb-6">
+              {children}
+            </div>
+          </main>
+        </div>
+        <InactivityWarning />
+        <CourierLocationTracker />
+        {session.user.tenantId && <NotificationListener />}
       </div>
-      <InactivityWarning />
-      <CourierLocationTracker />
-      {session.user.tenantId && <NotificationListener />}
-    </div>
+    </DashboardI18nProvider>
   )
 }
