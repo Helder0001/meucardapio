@@ -2,6 +2,8 @@
 
 import { auth } from '@/lib/auth/session'
 import { redirect } from 'next/navigation'
+import { prisma } from '@/lib/db/client'
+import { hasWhatsAppAccess } from '@/lib/billing/pricing'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { ChatbotAutomationSettings } from '@/components/dashboard/chatbot-automation-settings'
@@ -13,6 +15,17 @@ export default async function ChatbotAutomationsPage() {
   const session = await auth()
   if (!session?.user?.tenantId) redirect('/login')
   if (!['TENANT_ADMIN', 'MANAGER'].includes(session.user.role)) redirect('/dashboard')
+
+  // CORREÇÃO: Automações do Chat continuam exclusivas do Pro — Normal
+  // pode conectar WhatsApp (ver .../settings/whatsapp/page.tsx), mas só
+  // pra mandar o código de login do cliente, então essa tela não tem
+  // efeito nenhum pra ele. Barrado aqui também (não só escondendo o link)
+  // pra quem tenta acessar a URL direto.
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: session.user.tenantId },
+    select: { plan: true, subscriptionStatus: true },
+  })
+  if (!tenant || !hasWhatsAppAccess(tenant)) redirect('/dashboard/settings/whatsapp')
 
   return (
     <div className="max-w-2xl space-y-5">
