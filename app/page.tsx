@@ -11,6 +11,8 @@
 
 import type { Metadata } from 'next'
 import { HomePageClient } from '@/components/marketing/home-page-client'
+import { readLocaleCookie } from '@/lib/i18n/cookies'
+import { LANDING_LOCALE_COOKIE, getLandingDictionary, resolveLandingLocale } from '@/lib/i18n/landing'
 
 export const metadata: Metadata = {
   title: 'Cardápio Digital para Restaurantes com QR Code, PIX e Delivery',
@@ -32,6 +34,10 @@ export const metadata: Metadata = {
   },
 }
 
-export default function HomePage() {
-  return <HomePageClient />
+export default async function HomePage() {
+  // Idioma do VISITANTE da landing — cookie e contexto próprios deste
+  // escopo, independentes do dashboard e do storefront (ver lib/i18n/landing.ts).
+  const locale = resolveLandingLocale(await readLocaleCookie(LANDING_LOCALE_COOKIE))
+  const dict = getLandingDictionary(locale)
+  return <HomePageClient locale={locale} dict={dict} />
 }
