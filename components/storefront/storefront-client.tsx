@@ -19,6 +19,10 @@ import {
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils/format'
 import Image from 'next/image'
+import { useStorefrontDict, useStorefrontLocale } from '@/lib/i18n/storefront-context'
+import { STOREFRONT_LOCALES } from '@/lib/i18n/storefront'
+import { setStorefrontLocaleAction } from '@/actions/i18n/set-locale'
+import { LanguageSwitcher } from '@/components/shared/language-switcher'
 
 interface Product {
   id: string; name: string; description: string | null
@@ -567,6 +571,8 @@ function CustomerOrdersSection({
 }
 
 export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, viewOnly = false, isDemo = false }: StorefrontClientProps) {
+  const t = useStorefrontDict()
+  const storefrontLocale = useStorefrontLocale()
   const [searchQuery, setSearchQuery] = useState('')
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
@@ -820,8 +826,8 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, vie
             )}
             {tableInfo && (
               <span className="flex items-center justify-center gap-1 mt-1">
-                <MapPin className="w-3.5 h-3.5" /> Mesa {tableInfo.number}
-                {viewOnly && ' · Cardápio somente para consulta — peça com a equipe'}
+                <MapPin className="w-3.5 h-3.5" /> {t.table} {tableInfo.number}
+                {viewOnly && ` · ${t.viewOnlyNotice}`}
               </span>
             )}
           </div>
@@ -830,47 +836,54 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, vie
           <div className="hidden sm:flex items-center justify-center gap-2 mt-3 flex-wrap">
             <button onClick={handleNavHome}
               className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-all">
-              <HomeIcon className="w-3.5 h-3.5" /> Início
+              <HomeIcon className="w-3.5 h-3.5" /> {t.nav.inicio}
             </button>
             <button onClick={handleNavOffers}
               className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-all">
-              <Flame className="w-3.5 h-3.5" /> Ofertas
+              <Flame className="w-3.5 h-3.5" /> {t.nav.ofertas}
             </button>
             <button onClick={handleNavOrders}
               className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-all">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
-              Pedidos
+              {t.nav.pedidos}
             </button>
             <a href={`/menu/${tenant.slug}/avaliacoes`}
               className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-all">
-              <Star className="w-3.5 h-3.5" /> Avaliações
+              <Star className="w-3.5 h-3.5" /> {t.nav.avaliacoes}
             </a>
             {tenant.phone && (
               <a href={`https://wa.me/${tenant.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 transition-all">
-                <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+                <MessageCircle className="w-3.5 h-3.5" /> {t.nav.whatsapp}
               </a>
             )}
             {/* Toggle tema — desktop */}
             <button
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
-              title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+              title={theme === 'dark' ? t.theme.light : t.theme.dark}
             >
               {theme === 'dark'
                 ? <Sun className="w-3.5 h-3.5" />
                 : <Moon className="w-3.5 h-3.5" />
               }
-              {theme === 'dark' ? 'Claro' : 'Escuro'}
+              {theme === 'dark' ? t.theme.light : t.theme.dark}
             </button>
+            {/* Idioma do cardápio — independente do idioma do dashboard/landing */}
+            <LanguageSwitcher
+              locales={STOREFRONT_LOCALES}
+              currentLocale={storefrontLocale}
+              onChange={setStorefrontLocaleAction}
+              label={t.languageSwitcher.label}
+            />
             {!viewOnly && (
               <button onClick={() => setCartOpen(true)}
                 className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-bold text-white transition-all hover:opacity-90"
                 style={{ background: `linear-gradient(135deg, ${color}, ${color}bb)` }}>
                 <ShoppingBag className="w-3.5 h-3.5" />
-                {cartCount > 0 ? `Carrinho · ${formatCurrency(cartTotal)}` : 'Carrinho'}
+                {cartCount > 0 ? `${t.cart.label} · ${formatCurrency(cartTotal)}` : t.cart.label}
               </button>
             )}
           </div>
@@ -889,7 +902,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, vie
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar no cardápio…"
+                placeholder={t.searchPlaceholder}
                 className="w-full pl-10 pr-10 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:border-transparent transition-all"
                 style={{ '--tw-ring-color': color } as any}
               />
@@ -915,7 +928,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, vie
       </div>
 
       {/* ─── AVISO FECHADO ─── */}
-      {!isOpen && <ClosedBanner message={closedMessage ?? 'Estabelecimento fechado no momento.'} />}
+      {!isOpen && <ClosedBanner message={closedMessage ?? t.closedDefault} />}
 
       {/* ─── CONTEÚDO PRINCIPAL ─── */}
       <main className="max-w-3xl mx-auto pb-safe px-4 pt-5 space-y-10" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 5rem)' }}>
@@ -1100,7 +1113,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, vie
               style={activeNav === 'home' ? { color } : undefined}
             >
               <HomeIcon className="w-5 h-5" />
-              <span className="text-[10px] font-semibold">Início</span>
+              <span className="text-[10px] font-semibold">{t.nav.inicio}</span>
             </button>
 
             {/* Ofertas */}
@@ -1110,7 +1123,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, vie
               style={activeNav === 'offers' ? { color } : undefined}
             >
               <Flame className="w-5 h-5" />
-              <span className="text-[10px] font-semibold">Ofertas</span>
+              <span className="text-[10px] font-semibold">{t.nav.ofertas}</span>
             </button>
 
             {/* Carrinho — botão central destaque (nunca abre nada em modo
@@ -1131,7 +1144,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, vie
                   </span>
                 )}
               </div>
-              <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mt-1">Carrinho</span>
+              <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mt-1">{t.cart.label}</span>
             </button>
 
             {/* Pedidos */}
@@ -1143,7 +1156,7 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, vie
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
-              <span className="text-[10px] font-semibold">Pedidos</span>
+              <span className="text-[10px] font-semibold">{t.nav.pedidos}</span>
             </button>
 
             {/* WhatsApp — mobile */}
