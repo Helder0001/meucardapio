@@ -63,7 +63,7 @@ export const POST = secureHandler(async (request) => {
   // Enviar via WhatsApp
   const message = `🔐 *${tenant.name}*\n\nSeu código de verificação: *${code}*\n\nVálido por 5 minutos. Não compartilhe com ninguém.`
 
-  const sent = await sendWhatsAppMessage({ tenantId: parsed.data.tenantId, phone, message })
+  const sent = await sendWhatsAppMessage({ tenantId: parsed.data.tenantId, phone, message, purpose: 'otp' })
 
   if (sent.error) {
     // WhatsApp não configurado — em dev, logar o código
