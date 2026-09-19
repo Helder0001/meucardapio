@@ -816,6 +816,21 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, vie
             </button>
           </div>
 
+          {/* Idioma do cardápio — versão mobile. No desktop o seletor já
+              aparece na fileira de botões abaixo (linha "hidden sm:flex"),
+              mas essa fileira inteira some no mobile e não sobra espaço
+              pra mais um ícone na bottom nav (já tem 6 itens), então o
+              seletor ganha um lugar próprio aqui, visível só em telas
+              pequenas, pra não duplicar no desktop. */}
+          <div className="flex items-center justify-center mt-2 sm:hidden">
+            <LanguageSwitcher
+              locales={STOREFRONT_LOCALES}
+              currentLocale={storefrontLocale}
+              onChange={setStorefrontLocaleAction}
+              label={t.languageSwitcher.label}
+            />
+          </div>
+
           <div className="mt-1.5 text-sm text-gray-600 dark:text-gray-400">
             {isOpen ? (
               <span className="font-semibold" style={{ color }}>
