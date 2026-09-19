@@ -29,8 +29,10 @@ com o dicionário novo.
 - **Storefront**: barra de busca, nav de botões (Início/Ofertas/Pedidos/
   Avaliações/WhatsApp), toggle de tema, carrinho, "Mesa X", aviso de
   cardápio fechado — `components/storefront/storefront-client.tsx`.
-- **Landing**: barra de topo, navbar (desktop + menu mobile), hero completo
-  — `components/marketing/home-page-client.tsx`.
+- **Landing**: página inteira — barra de topo, navbar, hero, problema/solução,
+  como funciona, Kanban, WhatsApp, cardápio/QR, pagamentos, tecnologia, IA,
+  grade de funcionalidades, equipe, tipos de negócio, planos, FAQ, CTA final
+  e rodapé — `components/marketing/home-page-client.tsx`.
 
 ## O que falta (por escopo, para continuar)
 
@@ -57,11 +59,7 @@ O padrão é sempre o mesmo 3 passos — copie de qualquer arquivo já feito:
   `Product.nameEs`) e uma tela no dashboard pra cadastrar cada versão — não
   é algo que a arquitetura de dicionário estático resolve.
 
-**Landing** (`lib/i18n/landing.ts` + `-context.tsx` já prontos):
-- Seções restantes de `home-page-client.tsx`: "Tudo que seu restaurante
-  precisa" (grade de 13 features), seção de planos (Normal/Pro), FAQ (8
-  perguntas), seção de equipe, tipos de negócio, rodapé — é a maior parte
-  do arquivo (~700 das 918 linhas).
+**Landing** — ✅ completa (ver acima). Resta só:
 - Metadata de SEO (`app/page.tsx`) continua só em português de propósito —
   criar `<html lang>`/`hreflang` por idioma pra landing é um projeto de SEO
   à parte (rotas `/en`, `/es` na URL), fora do escopo do cookie de sessão
