@@ -34,32 +34,17 @@ const poppins = Poppins({ subsets: ['latin'], weight: ['400', '500', '600', '700
 // cada funcionalidade principal (Kanban, WhatsApp, Cardápio/QR, Pagamentos,
 // IA) ganhou seção própria mais acima na página, focada no problema que
 // resolve em vez de só listar o recurso.
-const features = [
-  { icon: Smartphone,   title: 'Cardápio digital',  desc: 'Seu cardápio online, responsivo e personalizado.' },
-  { icon: QrCode,       title: 'QR Code',           desc: 'Um QR Code para cada mesa, balcão ou divulgação.' },
-  { icon: ShoppingBag,  title: 'Pedidos online',     desc: 'Receba e acompanhe os pedidos em tempo real.' },
-  { icon: Columns3,     title: 'Kanban',             desc: 'Organize cada pedido por etapa, do novo ao entregue.' },
-  { icon: MessageCircle,title: 'WhatsApp',           desc: 'Mantenha o cliente informado sobre o pedido.' },
-  { icon: CreditCard,   title: 'Pagamentos',         desc: 'Organize as formas de pagamento da sua operação.' },
-  { icon: Truck,        title: 'Delivery',           desc: 'Configure sua operação de entrega e retirada.' },
-  { icon: Ticket,       title: 'Cupons',             desc: 'Crie promoções e incentive novos pedidos.' },
-  { icon: Heart,        title: 'Fidelidade',         desc: 'Crie motivos para seus clientes voltarem.' },
-  { icon: BarChart3,    title: 'Relatórios',         desc: 'Acompanhe as informações da sua operação.' },
-  { icon: Sparkles,     title: 'IA',                 desc: 'Crie descrições melhores para seus produtos.' },
-  { icon: Users,        title: 'Equipe',             desc: 'Defina permissões para cada funcionário.' },
-  { icon: Printer,      title: 'Impressão',          desc: 'Recursos para integrar a impressão à operação.' },
+// CORREÇÃO (i18n): os títulos/descrições saíram daqui — agora vêm do
+// dicionário (t.featuresSection.items), traduzido nos 3 idiomas. Esse
+// array guarda só os ícones, na mesma ordem das chaves do dicionário.
+const featureIcons = [
+  Smartphone, QrCode, ShoppingBag, Columns3, MessageCircle, CreditCard,
+  Truck, Ticket, Heart, BarChart3, Sparkles, Users, Printer,
 ]
 
 // CORREÇÃO: volta a ter 2 planos (Normal e Pro) — preço e regra de
 // desconto anual vêm de lib/billing/pricing.ts (fonte única, usada também
 // no cadastro e na renovação), não mais um valor solto aqui.
-const NORMAL_FEATURES = [
-  'Cardápio digital', 'QR Code', 'Pedidos online', 'Kanban',
-  'Delivery', 'PIX', 'Cupons', 'Fidelidade', 'Relatórios',
-  'IA para produtos', 'Gestão de equipe',
-]
-const PRO_ONLY_FEATURES = ['WhatsApp automático (confirmação, status, cobrança)']
-
 // CORREÇÃO: logos de parceiros/integrações — todas tratadas em cinza
 // uniforme com fundo transparente pra faixa de rolagem contínua. Logos que
 // antes ficavam sem nome/legenda (Sentry, Upstash, Railway, Neon) agora
@@ -97,40 +82,9 @@ const partnerLogos = [
   { name: 'Vercel', logo: '/integrations/partner-vercel.png', caption: 'Hospeda o frontend' },
 ]
 
-// Papéis de acesso — cada pessoa da equipe vê só o que precisa.
-const team = [
-  { icon: ShieldCheck,  role: 'Gerente',    desc: 'Tem visão completa da operação.' },
-  { icon: MessageCircle,role: 'Atendente',  desc: 'Foca no atendimento e nos pedidos.' },
-  { icon: Columns3,     role: 'Operador',   desc: 'Ajuda no controle dos pedidos e pagamentos.' },
-  { icon: Truck,        role: 'Entregador', desc: 'Acessa apenas os pedidos destinados à entrega.' },
-]
-
-const businessTypes = [
-  { emoji: '🍕', label: 'Pizzarias' }, { emoji: '🍔', label: 'Hamburguerias' },
-  { emoji: '🥤', label: 'Açaíterias' }, { emoji: '🍱', label: 'Restaurantes' },
-  { emoji: '🌮', label: 'Lanchonetes' }, { emoji: '🍰', label: 'Docerias' },
-  { emoji: '🍗', label: 'Espetarias' }, { emoji: '☕', label: 'Cafeterias' },
-  { emoji: '🥡', label: 'Delivery' },
-]
-
-// CORREÇÃO: pergunta sobre migrar/integrar com outros sistemas removida da
-// versão antiga; lista agora combina as perguntas já existentes (mais
-// específicas, sobre pagamento e permissões) com as sugeridas na proposta
-// nova (instalação de app, delivery/retirada, impressora etc.), sem
-// duplicar conteúdo.
-const faqs = [
-  { q: 'Preciso instalar algum aplicativo?', a: 'Não. O cardápio digital funciona direto no navegador do celular (PWA) — o cliente escaneia o QR Code e já faz o pedido, sem baixar nada. O dashboard também funciona em qualquer navegador, no computador ou celular.' },
-  { q: 'O cliente precisa criar uma conta?', a: 'Não. O objetivo é tornar o pedido rápido e simples, sem cadastro nem senha.' },
-  { q: 'Como funciona o trial de 7 dias?', a: 'Você cria a conta, cadastra o cartão (sem cobrança nenhuma nesse momento) e usa o plano Normal por 7 dias. Se cancelar antes do fim do trial, não é cobrado nada. Sem contrato de fidelidade. Quer o plano Pro (com WhatsApp automático)? É só falar com o suporte.' },
-  { q: 'Posso usar QR Code nas mesas?', a: 'Sim. Você pode gerar um QR Code exclusivo para cada mesa, balcão ou divulgação.' },
-  { q: 'Funciona no celular e computador?', a: 'Sim, em qualquer dispositivo com navegador — nenhum app para instalar, nem para você, nem para seus clientes.' },
-  { q: 'Posso cadastrar funcionários com permissões diferentes?', a: 'Sim. Você pode criar contas para garçom, atendente ou entregador com permissões reduzidas — cada um acessa só o que precisa pra sua função, sem ver relatórios ou configurações se não for o caso.' },
-  { q: 'Posso trabalhar com delivery e retirada?', a: 'Sim. A plataforma foi pensada pra diferentes formas de operação.' },
-  { q: 'Quais formas de pagamento posso oferecer aos clientes?', a: 'No PDV/balcão, o Pix já vem integrado. No cardápio digital, Pix e cartão são integrados via Efí Bank, com confirmação automática. Cartão (na maquineta) e dinheiro na entrega ou presencialmente ficam a critério de cada estabelecimento, fora da plataforma.' },
-  { q: 'Preciso ter uma impressora?', a: 'Não. A impressão é um recurso opcional para sua operação.' },
-  { q: 'Posso cancelar quando quiser?', a: 'Sim, sem multa e sem contrato de fidelidade. Você cancela direto pelo painel a qualquer momento.' },
-  { q: 'Consigo migrar meu cardápio já pronto pra plataforma?', a: 'Sim — nosso suporte te ajuda a importar produtos, preços e categorias na hora de começar, sem custo adicional.' },
-]
+// Ícones dos papéis de acesso — texto vem de t.team.roles (dicionário),
+// na mesma ordem: Gerente, Atendente, Operador, Entregador.
+const teamIcons = [ShieldCheck, MessageCircle, Columns3, Truck]
 
 export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dict: LandingDict }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -269,12 +223,12 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
                 de criar conta), só que agora com peso visual claramente
                 menor. */}
             <Link href={buildDemoMenuHref("pizzaria-do-jose")} className="group inline-flex items-center justify-center gap-1.5 px-4 py-3 text-gray-500 dark:text-gray-400 font-semibold hover:text-brand-600 dark:hover:text-brand-400 transition-colors text-sm underline decoration-gray-300 dark:decoration-gray-600 underline-offset-4 hover:decoration-brand-400">
-              Ver demonstração
+              {t.hero.ctaSecondary}
               <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
             </Link>
           </div>
           <p className="animate-fade-up animate-fade-up-delay-4 mt-4 text-xs text-gray-400 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-            <span>✓ 7 dias grátis</span><span>✓ Sem fidelidade</span><span>✓ Cancele quando quiser</span>
+            {t.hero.trustBadges.map((b) => <span key={b}>{b}</span>)}
           </p>
 
           {/* Screenshot real do produto (dashboard + cardápio no celular),
@@ -295,15 +249,15 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
             <div className="absolute left-2 sm:-left-4 -top-3 sm:top-1/3 animate-float flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 shadow-lg">
               <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center text-xs sm:text-sm">✓</div>
               <div>
-                <p className="text-[9px] sm:text-[10px] text-gray-500 leading-none">Pagamento confirmado</p>
+                <p className="text-[9px] sm:text-[10px] text-gray-500 leading-none">{t.hero.floatingPaymentConfirmed}</p>
                 <p className="text-[11px] sm:text-xs font-bold text-gray-900 dark:text-white">PIX · R$ 54,90</p>
               </div>
             </div>
             <div className="absolute right-2 sm:-right-4 -bottom-3 sm:bottom-1/4 animate-float-delay flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl px-2.5 py-1.5 sm:px-3 sm:py-2 shadow-lg">
               <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-green-100 dark:bg-green-900/40 flex items-center justify-center text-xs sm:text-sm">💬</div>
               <div>
-                <p className="text-[9px] sm:text-[10px] text-gray-500 leading-none">WhatsApp enviado</p>
-                <p className="text-[11px] sm:text-xs font-bold text-gray-900 dark:text-white">Pedido a caminho 🛵</p>
+                <p className="text-[9px] sm:text-[10px] text-gray-500 leading-none">{t.hero.floatingWhatsappSent}</p>
+                <p className="text-[11px] sm:text-xs font-bold text-gray-900 dark:text-white">{t.hero.floatingOrderOnWay}</p>
               </div>
             </div>
           </div>
@@ -314,41 +268,29 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
       <section className="py-14 sm:py-24 max-w-5xl mx-auto px-5">
         <div className="text-center mb-10 sm:mb-14">
           <h2 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-            Chega de pedidos <span className="text-gradient">espalhados</span>
+            {t.problemSolution.title} <span className="text-gradient">{t.problemSolution.titleHighlight}</span>
           </h2>
           <p className="mt-4 text-gray-500 dark:text-gray-400 max-w-xl mx-auto">
-            Quando o movimento aumenta, fica fácil perder pedido, esquecer uma observação ou deixar o cliente esperando. O Meu Cardápio coloca sua operação em um só lugar.
+            {t.problemSolution.subtitle}
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="rounded-3xl bg-red-50/60 dark:bg-red-950/10 border border-red-100 dark:border-red-900/30 p-6">
-            <p className="text-xs font-black uppercase tracking-wide text-red-500 mb-4">Antes</p>
+            <p className="text-xs font-black uppercase tracking-wide text-red-500 mb-4">{t.problemSolution.beforeLabel}</p>
             <ul className="space-y-3">
-              {[
-                'Pedidos espalhados no WhatsApp',
-                'Cliente perguntando pelo status',
-                'Cozinha sem saber o que preparar',
-                'Cardápio desatualizado',
-                'Controle manual da operação',
-              ].map((t) => (
-                <li key={t} className="flex items-start gap-2.5 text-sm text-gray-600 dark:text-gray-400">
-                  <span className="text-red-400 font-bold">✗</span>{t}
+              {t.problemSolution.beforeItems.map((item) => (
+                <li key={item} className="flex items-start gap-2.5 text-sm text-gray-600 dark:text-gray-400">
+                  <span className="text-red-400 font-bold">✗</span>{item}
                 </li>
               ))}
             </ul>
           </div>
           <div className="rounded-3xl bg-emerald-50/60 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30 p-6">
-            <p className="text-xs font-black uppercase tracking-wide text-emerald-600 mb-4">Com o Meu Cardápio</p>
+            <p className="text-xs font-black uppercase tracking-wide text-emerald-600 mb-4">{t.problemSolution.afterLabel}</p>
             <ul className="space-y-3">
-              {[
-                'Pedidos organizados',
-                'Status do pedido em tempo real',
-                'Kanban para toda a equipe',
-                'Cardápio atualizado instantaneamente',
-                'Operação centralizada',
-              ].map((t) => (
-                <li key={t} className="flex items-start gap-2.5 text-sm text-gray-700 dark:text-gray-300">
-                  <span className="text-emerald-500 font-bold">✓</span>{t}
+              {t.problemSolution.afterItems.map((item) => (
+                <li key={item} className="flex items-start gap-2.5 text-sm text-gray-700 dark:text-gray-300">
+                  <span className="text-emerald-500 font-bold">✓</span>{item}
                 </li>
               ))}
             </ul>
@@ -361,19 +303,16 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
         <div className="max-w-5xl mx-auto px-5">
           <div className="text-center mb-10 sm:mb-14">
             <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
-              🧭 Como funciona
+              {t.howItWorks.badge}
             </span>
             <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-              Do cliente ao pedido em <span className="text-gradient">4 passos</span>
+              {t.howItWorks.title} <span className="text-gradient">{t.howItWorks.titleHighlight}</span>
             </h2>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {[
-              { n: '01', icon: QrCode, title: 'Seu cliente acessa', desc: 'Pelo QR Code, Instagram, WhatsApp ou link do seu restaurante.' },
-              { n: '02', icon: UtensilsCrossed, title: 'Escolhe o que quer', desc: 'Visualiza produtos, adicionais, observações e opções de entrega ou retirada.' },
-              { n: '03', icon: ShoppingBag, title: 'Faz o pedido', desc: 'O pedido chega organizado diretamente para sua equipe.' },
-              { n: '04', icon: Columns3, title: 'Sua equipe acompanha', desc: 'Gerencie cada pedido do início ao fim: Novo → Confirmado → Preparando → Pronto → Entregue.' },
-            ].map(({ n, icon: Icon, title, desc }) => (
+            {t.howItWorks.steps.map(({ n, title, desc }, i) => {
+              const Icon = [QrCode, UtensilsCrossed, ShoppingBag, Columns3][i]
+              return (
               <div
                 key={n}
                 className="group rounded-3xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-5 cursor-default
@@ -388,7 +327,8 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
                 <h3 className="font-bold text-sm text-gray-900 dark:text-white mb-1.5">{title}</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">{desc}</p>
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </section>
@@ -397,10 +337,10 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
       <section className="py-14 sm:py-24 max-w-5xl mx-auto px-5">
         <div className="text-center mb-10 sm:mb-14">
           <h2 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-            Do pedido à entrega, <span className="text-gradient">todo mundo sabe o que fazer</span>
+            {t.kanban.title} <span className="text-gradient">{t.kanban.titleHighlight}</span>
           </h2>
           <p className="mt-4 text-gray-500 dark:text-gray-400 max-w-xl mx-auto">
-            Seu atendimento, cozinha e operação acompanham o mesmo pedido em tempo real.
+            {t.kanban.subtitle}
           </p>
         </div>
         <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-gray-900/10 dark:shadow-black/40 border border-gray-200/80 dark:border-gray-700">
@@ -413,7 +353,7 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
             className="w-full h-auto"
           />
         </div>
-        <p className="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">Menos confusão no horário de pico. Mais controle para sua equipe.</p>
+        <p className="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">{t.kanban.caption}</p>
       </section>
 
       {/* WHATSAPP */}
@@ -421,13 +361,13 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
         <div className="max-w-4xl mx-auto px-5 grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
           <div>
             <span className="inline-flex items-center gap-1.5 bg-green-100 dark:bg-green-950/40 text-green-600 dark:text-green-400 text-xs font-semibold px-3 py-1.5 rounded-full">
-              <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+              <MessageCircle className="w-3.5 h-3.5" /> {t.whatsapp.badge}
             </span>
             <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-              Seu cliente não precisa ficar <span className="text-gradient">perguntando pelo pedido</span>
+              {t.whatsapp.title} <span className="text-gradient">{t.whatsapp.titleHighlight}</span>
             </h2>
             <p className="mt-4 text-gray-500 dark:text-gray-400">
-              Com as atualizações de status, você pode manter o cliente informado durante o processo. Mais transparência para o cliente, menos interrupções para sua equipe.
+              {t.whatsapp.subtitle}
             </p>
           </div>
           <div className="rounded-3xl bg-[#e5ddd5] dark:bg-gray-800 border border-gray-100 dark:border-gray-800 p-4 shadow-xl shadow-gray-900/5">
@@ -450,13 +390,13 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
               <span className="text-sm font-bold text-gray-800 dark:text-gray-100">Meu Cardápio</span>
             </div>
             <div className="bg-white dark:bg-gray-900 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm max-w-[92%] space-y-2">
-              <p className="text-sm text-gray-800 dark:text-gray-200">Olá, João! 👋</p>
-              <p className="text-sm text-gray-800 dark:text-gray-200">Seu pedido <span className="font-bold">#1042</span> foi confirmado.</p>
-              <p className="text-sm text-gray-800 dark:text-gray-200">🍔 2x X-Burguer<br />🍟 1x Batata</p>
-              <p className="text-sm font-bold text-gray-900 dark:text-white">💰 Total: R$ 54,90</p>
+              <p className="text-sm text-gray-800 dark:text-gray-200">{t.whatsapp.greeting}</p>
+              <p className="text-sm text-gray-800 dark:text-gray-200">{locale === 'pt-BR' ? 'Seu pedido ' : locale === 'es' ? 'Tu pedido ' : 'Your order '}<span className="font-bold">#1042</span> {t.whatsapp.confirmed}</p>
+              <p className="text-sm text-gray-800 dark:text-gray-200" dangerouslySetInnerHTML={{ __html: t.whatsapp.items }} />
+              <p className="text-sm font-bold text-gray-900 dark:text-white">{t.whatsapp.total}</p>
             </div>
             <div className="mt-2 bg-white dark:bg-gray-900 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm max-w-[92%]">
-              <p className="text-sm text-gray-800 dark:text-gray-200">👨‍🍳 Seu pedido está sendo preparado!</p>
+              <p className="text-sm text-gray-800 dark:text-gray-200">{t.whatsapp.preparing}</p>
             </div>
           </div>
         </div>
@@ -466,22 +406,19 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
       <section className="py-14 sm:py-24 max-w-5xl mx-auto px-5">
         <div className="text-center mb-10 sm:mb-14">
           <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
-            📱 Cardápio digital
+            {t.menuQr.badge}
           </span>
           <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-            Seu cardápio está <span className="text-gradient">sempre atualizado</span>
+            {t.menuQr.title} <span className="text-gradient">{t.menuQr.titleHighlight}</span>
           </h2>
           <p className="mt-4 text-gray-500 dark:text-gray-400 max-w-xl mx-auto">
-            Altere produtos, preços, fotos, descrições e disponibilidade sem precisar reimprimir o cardápio. Sem aplicativo para o cliente baixar.
+            {t.menuQr.subtitle}
           </p>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {[
-            { icon: QrCode, title: 'QR Code', desc: 'O cliente escaneia.' },
-            { icon: UtensilsCrossed, title: 'Cardápio', desc: 'Escolhe os produtos.' },
-            { icon: ShoppingBag, title: 'Pedido', desc: 'Confirma a compra.' },
-            { icon: Store, title: 'Restaurante', desc: 'Recebe e organiza.' },
-          ].map(({ icon: Icon, title, desc }, i) => (
+          {t.menuQr.steps.map(({ title, desc }, i) => {
+            const Icon = [QrCode, UtensilsCrossed, ShoppingBag, Store][i]
+            return (
             <div
               key={title}
               className="group relative bg-gray-50 dark:bg-gray-900/50 rounded-3xl p-5 border border-gray-100 dark:border-gray-800 text-center cursor-default
@@ -494,19 +431,20 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{desc}</p>
               {i < 3 && <span className="hidden sm:block absolute top-1/2 -right-3 -translate-y-1/2 text-gray-300 dark:text-gray-700">→</span>}
             </div>
-          ))}
+            )
+          })}
         </div>
-        <p className="mt-8 text-center text-sm font-medium text-gray-600 dark:text-gray-300">Atualize uma vez. Seus clientes veem a mudança imediatamente.</p>
+        <p className="mt-8 text-center text-sm font-medium text-gray-600 dark:text-gray-300">{t.menuQr.footer}</p>
       </section>
 
       {/* PAGAMENTOS */}
       <section className="py-14 sm:py-24 bg-gray-50/60 dark:bg-gray-900/30">
         <div className="max-w-2xl mx-auto px-5 text-center">
           <span className="inline-flex items-center gap-1.5 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-full">
-            <CreditCard className="w-3.5 h-3.5" /> Pagamentos
+            <CreditCard className="w-3.5 h-3.5" /> {t.payments.badge}
           </span>
           <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-            Ofereça as formas de pagamento <span className="text-gradient">que fazem sentido para sua operação</span>
+            {t.payments.title} <span className="text-gradient">{t.payments.titleHighlight}</span>
           </h2>
           {/* CORREÇÃO: promessa de "PIX + Cartão na mesma tela" com
               webhook/cashback automático removida — ainda estamos
@@ -518,10 +456,10 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
               do estabelecimento (cartão na maquineta e dinheiro), pra não
               criar expectativa de "pagamentos automáticos" sem escopo. */}
           <p className="mt-4 text-gray-500 dark:text-gray-400">
-            PIX e cartão online integrados. Dinheiro e cartão na maquineta também podem fazer parte da operação.
+            {t.payments.subtitle}
           </p>
           <div className="mt-6 flex gap-2 flex-wrap justify-center">
-            {['PIX', 'Cartão', 'Dinheiro'].map(m => (
+            {t.payments.methods.map(m => (
               <span key={m} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold px-3 py-1.5 rounded-full">{m}</span>
             ))}
           </div>
@@ -538,13 +476,13 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
       <section id="integracoes" className="py-14 sm:py-24 max-w-6xl mx-auto px-5">
         <div className="text-center mb-10 sm:mb-14">
           <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
-            ⚙️ Tecnologia
+            {t.tech.badge}
           </span>
           <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-            Tecnologia que faz <span className="text-gradient">tudo funcionar</span>
+            {t.tech.title} <span className="text-gradient">{t.tech.titleHighlight}</span>
           </h2>
           <p className="mt-4 text-gray-500 dark:text-gray-400 max-w-xl mx-auto">
-            O Meu Cardápio utiliza tecnologias confiáveis para manter sua operação rápida, segura e conectada.
+            {t.tech.subtitle}
           </p>
         </div>
 
@@ -557,14 +495,17 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
             de deixar o visitante adivinhar o que cada logo faz. */}
         <div className="relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]">
           <div className="flex items-center w-max animate-marquee hover:[animation-play-state:paused]">
-            {[...partnerLogos, ...partnerLogos].map(({ name, logo, caption }, i) => (
+            {[...partnerLogos, ...partnerLogos].map(({ name, logo }, i) => {
+              const caption = t.tech.captions[name]
+              return (
               <div key={`${name}-${i}`} className="flex-shrink-0 w-32 mx-2 flex flex-col items-center justify-center gap-1.5">
                 <div className="relative w-24 h-10">
                   <Image src={logo} alt={name} fill sizes="96px" className="object-contain" />
                 </div>
                 {caption && <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 text-center leading-tight">{caption}</span>}
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </section>
@@ -576,22 +517,22 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
       <section className="py-14 bg-gray-50/60 dark:bg-gray-900/30">
         <div className="max-w-3xl mx-auto px-5 text-center">
           <span className="inline-flex items-center gap-1.5 bg-fuchsia-100 dark:bg-fuchsia-950/40 text-fuchsia-600 dark:text-fuchsia-400 text-xs font-semibold px-3 py-1.5 rounded-full">
-            <Sparkles className="w-3.5 h-3.5" /> Bônus: IA
+            <Sparkles className="w-3.5 h-3.5" /> {t.ai.badge}
           </span>
           <h2 className="mt-3 text-xl sm:text-2xl font-black text-gray-900 dark:text-white tracking-tight">
-            Deixe seus produtos mais <span className="text-gradient">atrativos com IA</span>
+            {t.ai.title} <span className="text-gradient">{t.ai.titleHighlight}</span>
           </h2>
           <p className="mt-3 text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-            Não sabe como descrever aquele produto novo? A IA ajuda você a criar descrições mais interessantes em poucos segundos.
+            {t.ai.subtitle}
           </p>
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
             <div className="rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 p-4">
-              <p className="text-[10px] font-black uppercase tracking-wide text-gray-400 mb-2">Antes</p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Hambúrguer com carne, queijo e molho.</p>
+              <p className="text-[10px] font-black uppercase tracking-wide text-gray-400 mb-2">{t.ai.beforeLabel}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">{t.ai.beforeExample}</p>
             </div>
             <div className="rounded-2xl bg-gradient-to-br from-fuchsia-50 to-pink-50 dark:from-fuchsia-950/20 dark:to-pink-950/10 border border-fuchsia-100 dark:border-fuchsia-900/30 p-4">
-              <p className="text-[10px] font-black uppercase tracking-wide text-fuchsia-500 mb-2">Depois</p>
-              <p className="text-sm text-gray-700 dark:text-gray-300">Hambúrguer artesanal preparado com carne suculenta, queijo cremoso e molho especial da casa.</p>
+              <p className="text-[10px] font-black uppercase tracking-wide text-fuchsia-500 mb-2">{t.ai.afterLabel}</p>
+              <p className="text-sm text-gray-700 dark:text-gray-300">{t.ai.afterExample}</p>
             </div>
           </div>
         </div>
@@ -605,15 +546,15 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
       <section id="funcionalidades" className="py-14 sm:py-24 max-w-6xl mx-auto px-5">
         <div className="text-center mb-10 sm:mb-14">
           <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
-            ⚡ E muito mais
+            {t.featuresSection.badge}
           </span>
           <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-            Tudo que seu <span className="text-gradient">restaurante precisa</span>
+            {t.featuresSection.title} <span className="text-gradient">{t.featuresSection.titleHighlight}</span>
           </h2>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {features.map((f) => {
-            const Icon = f.icon
+          {t.featuresSection.items.map((f, i) => {
+            const Icon = featureIcons[i]
             return (
               <div
                 key={f.title}
@@ -636,15 +577,17 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
         <div className="max-w-5xl mx-auto px-5">
           <div className="text-center mb-10 sm:mb-14">
             <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
-              <Users className="w-3.5 h-3.5" /> Equipe
+              <Users className="w-3.5 h-3.5" /> {t.team.badge}
             </span>
             <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-              Um sistema para <span className="text-gradient">toda a sua equipe</span>
+              {t.team.title} <span className="text-gradient">{t.team.titleHighlight}</span>
             </h2>
-            <p className="mt-4 text-gray-500 dark:text-gray-400">Cada pessoa com acesso ao que realmente precisa.</p>
+            <p className="mt-4 text-gray-500 dark:text-gray-400">{t.team.subtitle}</p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {team.map(({ icon: Icon, role, desc }) => (
+            {t.team.roles.map(({ role, desc }, i) => {
+              const Icon = teamIcons[i]
+              return (
               <div
                 key={role}
                 className="group rounded-3xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-5 text-center cursor-default
@@ -656,7 +599,8 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
                 <h3 className="font-bold text-sm text-gray-900 dark:text-white">{role}</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{desc}</p>
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </section>
@@ -664,29 +608,29 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
       {/* TIPOS DE NEGÓCIO */}
       <section className="py-14 sm:py-24 max-w-5xl mx-auto px-5 text-center">
         <h2 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-          Feito para diferentes <span className="text-gradient">tipos de negócio</span>
+          {t.businessTypes.title} <span className="text-gradient">{t.businessTypes.titleHighlight}</span>
         </h2>
         <div className="mt-10 flex flex-wrap justify-center gap-3">
-          {businessTypes.map(({ emoji, label }) => (
+          {t.businessTypes.items.map(({ emoji, label }) => (
             <span key={label} className="inline-flex items-center gap-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300 px-4 py-2 rounded-full">
               <span>{emoji}</span>{label}
             </span>
           ))}
         </div>
-        <p className="mt-8 text-gray-500 dark:text-gray-400">Se você vende comida, o Meu Cardápio pode ajudar a organizar sua operação.</p>
-        <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">Feito para pequenos e médios restaurantes que querem vender mais e organizar a operação.</p>
+        <p className="mt-8 text-gray-500 dark:text-gray-400">{t.businessTypes.footer1}</p>
+        <p className="mt-2 text-sm text-gray-400 dark:text-gray-500">{t.businessTypes.footer2}</p>
       </section>
 
       {/* PLANOS */}
       <section id="planos" className="py-14 sm:py-24 max-w-5xl mx-auto px-5">
         <div className="text-center mb-10 sm:mb-14">
           <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
-            🛡 Planos simples, sem pegadinha
+            {t.plans.badge}
           </span>
           <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-            Simples e <span className="text-gradient">transparente</span>
+            {t.plans.title} <span className="text-gradient">{t.plans.titleHighlight}</span>
           </h2>
-          <p className="mt-4 text-gray-500 dark:text-gray-400">Sem taxas escondidas. Sem fidelidade. Cancele quando quiser.</p>
+          <p className="mt-4 text-gray-500 dark:text-gray-400">{t.plans.subtitle}</p>
 
           {/* Mensal / Anual */}
           <div className="mt-6 inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-full p-1">
@@ -696,7 +640,7 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
                 pricingCycle === 'MONTHLY' ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'
               }`}
             >
-              Mensal
+              {t.plans.monthly}
             </button>
             <button
               onClick={() => setPricingCycle('ANNUAL')}
@@ -704,7 +648,7 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
                 pricingCycle === 'ANNUAL' ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'
               }`}
             >
-              Anual <span className="text-emerald-600 dark:text-emerald-400">-15%</span>
+              {t.plans.annual} <span className="text-emerald-600 dark:text-emerald-400">-15%</span>
             </button>
           </div>
         </div>
@@ -727,7 +671,7 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
               >
                 {isPro && (
                   <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-white text-[11px] font-bold px-3 py-1 rounded-full">
-                    Mais completo
+                    {t.plans.mostComplete}
                   </span>
                 )}
                 <div className="text-center mb-6">
@@ -736,25 +680,25 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
                     <span className="text-4xl font-black text-gray-900 dark:text-white">
                       R$ {price.toFixed(2).replace('.', ',')}
                     </span>
-                    <span className="text-sm text-gray-400">/mês</span>
+                    <span className="text-sm text-gray-400">{t.plans.perMonth}</span>
                   </div>
                   {pricingCycle === 'ANNUAL' && (
                     <p className="mt-1 text-xs text-gray-400">
-                      R$ {annualTotalPrice(tier).toFixed(2).replace('.', ',')} cobrado uma vez por ano
+                      R$ {annualTotalPrice(tier).toFixed(2).replace('.', ',')} {t.plans.billedOnce}
                     </p>
                   )}
                   <p className="mt-2 text-xs font-bold text-brand-600 dark:text-brand-400">
-                    {isPro ? 'Tudo do Normal + WhatsApp automático' : 'Tudo, exceto WhatsApp automático'}
+                    {isPro ? t.plans.proTagline : t.plans.normalTagline}
                   </p>
                 </div>
                 <ul className="space-y-2.5 mb-8">
-                  {NORMAL_FEATURES.map((f) => (
+                  {t.plans.normalFeatures.map((f) => (
                     <li key={f} className="flex items-start gap-2.5">
                       <div className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center mt-0.5 text-xs bg-brand-100 dark:bg-brand-950/40 text-brand-500">✓</div>
                       <span className="text-sm text-gray-600 dark:text-gray-400">{f}</span>
                     </li>
                   ))}
-                  {PRO_ONLY_FEATURES.map((f) => (
+                  {t.plans.proOnlyFeatures.map((f) => (
                     <li key={f} className="flex items-start gap-2.5">
                       <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center mt-0.5 text-xs ${
                         isPro ? 'bg-brand-100 dark:bg-brand-950/40 text-brand-500' : 'bg-gray-100 dark:bg-gray-800 text-gray-300 dark:text-gray-600'
@@ -773,14 +717,14 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
                       : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-100'
                   }`}
                 >
-                  Começar 7 dias grátis
+                  {t.plans.ctaButton}
                 </Link>
               </div>
             )
           })}
         </div>
         <p className="mt-6 text-center text-xs text-gray-400">
-          O teste grátis de 7 dias é sempre no plano Normal — mude pro Pro quando quiser.
+          {t.plans.trialNote}
         </p>
 
         {/* CORREÇÃO: bloco de migração do cardápio movido pra perto do
@@ -788,9 +732,9 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
             Isso ataca de frente uma das maiores objeções antes da compra:
             "vou ter que cadastrar tudo de novo?". */}
         <div className="max-w-md mx-auto mt-6 rounded-3xl bg-brand-50 dark:bg-brand-950/20 border border-brand-100 dark:border-brand-900/30 p-6 text-center">
-          <h4 className="font-bold text-gray-900 dark:text-white">Já tem cardápio?</h4>
+          <h4 className="font-bold text-gray-900 dark:text-white">{t.plans.migrationTitle}</h4>
           <p className="mt-1.5 text-sm text-gray-600 dark:text-gray-400">
-            Nós ajudamos você a migrar seus produtos para o Meu Cardápio. Sem precisar começar do zero.
+            {t.plans.migrationDesc}
           </p>
         </div>
       </section>
@@ -800,15 +744,15 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
         <div className="max-w-3xl mx-auto px-5">
           <div className="text-center mb-10 sm:mb-14">
             <span className="inline-flex items-center gap-1.5 bg-brand-100 dark:bg-brand-950/50 text-brand-600 dark:text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">
-              ❓ Perguntas frequentes
+              {t.faq.badge}
             </span>
             <h2 className="mt-4 text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-              Ainda com <span className="text-gradient">dúvidas?</span>
+              {t.faq.title} <span className="text-gradient">{t.faq.titleHighlight}</span>
             </h2>
           </div>
 
           <div className="space-y-3">
-            {faqs.map(({ q, a }) => (
+            {t.faq.items.map(({ q, a }) => (
               <details key={q} className="group rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <summary className="flex items-center justify-between gap-3 px-5 py-4 cursor-pointer list-none font-semibold text-sm text-gray-900 dark:text-white">
                   {q}
@@ -826,27 +770,27 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
         <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-gray-900 via-gray-900 to-gray-800 dark:from-gray-800 dark:to-gray-900 p-12 sm:p-16 text-center border border-gray-700">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(249,115,22,0.15)_0%,_transparent_70%)] pointer-events-none" />
           <div className="relative">
-            <span className="inline-flex items-center gap-1.5 bg-brand-500/20 text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">✦ Comece hoje</span>
+            <span className="inline-flex items-center gap-1.5 bg-brand-500/20 text-brand-400 text-xs font-semibold px-3 py-1.5 rounded-full">{t.finalCta.badge}</span>
             <h2 className="mt-5 text-2xl sm:text-3xl font-black text-white leading-tight">
-              Seu restaurante merece uma<br />
-              <span className="text-gradient">operação mais simples</span>
+              {t.finalCta.title}<br />
+              <span className="text-gradient">{t.finalCta.titleHighlight}</span>
             </h2>
-            <p className="mt-5 text-gray-400 max-w-lg mx-auto">Coloque seu cardápio online, organize seus pedidos e tenha mais controle da sua operação. Comece agora.</p>
+            <p className="mt-5 text-gray-400 max-w-lg mx-auto">{t.finalCta.subtitle}</p>
             <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
               {/* CORREÇÃO: os dois CTAs agora seguem exatamente o padrão do
                   hero — botão sólido + link de texto sublinhado (sem caixa
                   nem borda) como CTA secundário. */}
               <Link href="/register" className="group inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-gray-900 font-bold rounded-2xl hover:bg-gray-100 active:scale-95 transition-all text-sm shadow-lg shadow-black/20">
-                Começar meu teste grátis
+                {t.finalCta.ctaPrimary}
                 <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
               </Link>
               <Link href={buildDemoMenuHref("pizzaria-do-jose")} className="group inline-flex items-center justify-center gap-1.5 px-4 py-3 text-gray-400 font-semibold hover:text-white transition-colors text-sm underline decoration-gray-600 underline-offset-4 hover:decoration-gray-400">
-                Ver cardápio demo
+                {t.finalCta.ctaSecondary}
                 <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
               </Link>
             </div>
             {/* CORREÇÃO: removida a afirmação "+12 mil restaurantes já usam" */}
-            <p className="mt-5 text-xs text-gray-500">Sem fidelidade · Cancele quando quiser · Suporte em português</p>
+            <p className="mt-5 text-xs text-gray-500">{t.finalCta.footer}</p>
           </div>
         </div>
       </section>
@@ -874,40 +818,40 @@ export function HomePageClient({ locale, dict: t }: { locale: LandingLocale; dic
                 </div>
                 <span className="font-black text-gray-900 dark:text-white text-base tracking-tight">Meu <span className="text-brand-500">Cardápio</span></span>
               </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">Plataforma completa para restaurantes venderem mais com cardápio digital, delivery e automação.</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{t.footer.description}</p>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-8 text-sm">
               <div>
-                <p className="font-bold text-gray-900 dark:text-white mb-3">Produto</p>
+                <p className="font-bold text-gray-900 dark:text-white mb-3">{t.footer.productHeading}</p>
                 <ul className="space-y-2 text-gray-500 dark:text-gray-400">
-                  <li><a href="#funcionalidades" className="hover:text-brand-500 transition-colors">Funcionalidades</a></li>
-                  <li><a href="#como-funciona" className="hover:text-brand-500 transition-colors">Como funciona</a></li>
-                  <li><a href="#planos" className="hover:text-brand-500 transition-colors">Planos</a></li>
-                  <li><a href="#faq" className="hover:text-brand-500 transition-colors">FAQ</a></li>
-                  <li><Link href={buildDemoMenuHref("pizzaria-do-jose")} className="hover:text-brand-500 transition-colors">Demonstração</Link></li>
+                  <li><a href="#funcionalidades" className="hover:text-brand-500 transition-colors">{t.footer.productLinks.funcionalidades}</a></li>
+                  <li><a href="#como-funciona" className="hover:text-brand-500 transition-colors">{t.footer.productLinks.comoFunciona}</a></li>
+                  <li><a href="#planos" className="hover:text-brand-500 transition-colors">{t.footer.productLinks.planos}</a></li>
+                  <li><a href="#faq" className="hover:text-brand-500 transition-colors">{t.footer.productLinks.faq}</a></li>
+                  <li><Link href={buildDemoMenuHref("pizzaria-do-jose")} className="hover:text-brand-500 transition-colors">{t.footer.productLinks.demo}</Link></li>
                 </ul>
               </div>
               <div>
-                <p className="font-bold text-gray-900 dark:text-white mb-3">Conta</p>
+                <p className="font-bold text-gray-900 dark:text-white mb-3">{t.footer.accountHeading}</p>
                 <ul className="space-y-2 text-gray-500 dark:text-gray-400">
-                  <li><Link href="/register" className="hover:text-brand-500 transition-colors">Cadastro grátis</Link></li>
-                  <li><Link href="/login" className="hover:text-brand-500 transition-colors">Entrar</Link></li>
+                  <li><Link href="/register" className="hover:text-brand-500 transition-colors">{t.footer.accountLinks.cadastro}</Link></li>
+                  <li><Link href="/login" className="hover:text-brand-500 transition-colors">{t.footer.accountLinks.entrar}</Link></li>
                 </ul>
               </div>
               <div>
-                <p className="font-bold text-gray-900 dark:text-white mb-3">Legal</p>
+                <p className="font-bold text-gray-900 dark:text-white mb-3">{t.footer.legalHeading}</p>
                 <ul className="space-y-2 text-gray-500 dark:text-gray-400">
-                  <li><Link href="/termos" className="hover:text-brand-500 transition-colors">Termos de Uso</Link></li>
-                  <li><Link href="/privacidade" className="hover:text-brand-500 transition-colors">Privacidade</Link></li>
+                  <li><Link href="/termos" className="hover:text-brand-500 transition-colors">{t.footer.legalLinks.termos}</Link></li>
+                  <li><Link href="/privacidade" className="hover:text-brand-500 transition-colors">{t.footer.legalLinks.privacidade}</Link></li>
                 </ul>
               </div>
             </div>
           </div>
           <div className="mt-10 pt-6 border-t border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs text-gray-400">
-            <p>© {new Date().getFullYear()} Meu Cardápio. Todos os direitos reservados.</p>
+            <p>© {new Date().getFullYear()} Meu Cardápio. {t.footer.copyright}</p>
             <div className="flex items-center gap-1.5">
               <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Todos os sistemas operacionais</span>
+              <span>{t.footer.statusText}</span>
             </div>
           </div>
         </div>
