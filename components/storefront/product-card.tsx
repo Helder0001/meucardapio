@@ -4,6 +4,7 @@
 import { formatCurrency } from '@/lib/utils/format'
 import { Clock, Flame, Star, Plus } from 'lucide-react'
 import Image from 'next/image'
+import { useStorefrontDict } from '@/lib/i18n/storefront-context'
 
 interface ProductCardProps {
   product: {
@@ -18,6 +19,7 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, onSelect, disabled, primaryColor }: ProductCardProps) {
+  const t = useStorefrontDict()
   const color = primaryColor ?? '#f97316'
   const hasDiscount = product.comparePrice && product.comparePrice > product.price
   const discountPct = hasDiscount
@@ -51,7 +53,7 @@ export function ProductCard({ product, onSelect, disabled, primaryColor }: Produ
         {product.isOutOfStock && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40">
             <span className="bg-white/95 dark:bg-gray-900/95 text-gray-900 dark:text-gray-100 text-[10px] font-black px-2 py-1 rounded-lg shadow-sm">
-              Esgotado
+              {t.productCard.outOfStock}
             </span>
           </div>
         )}
@@ -65,12 +67,12 @@ export function ProductCard({ product, onSelect, disabled, primaryColor }: Produ
             <div className="flex gap-1 mb-1.5 flex-wrap">
               {product.isBestSeller && (
                 <span className="inline-flex items-center gap-1 text-[9px] font-black bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 px-1.5 py-0.5 rounded-lg border border-brand-100 dark:border-brand-900/40">
-                  <Flame className="w-2.5 h-2.5" /> Mais pedido
+                  <Flame className="w-2.5 h-2.5" /> {t.productCard.bestSeller}
                 </span>
               )}
               {product.isFeatured && !product.isBestSeller && (
                 <span className="inline-flex items-center gap-1 text-[9px] font-black bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-lg border border-amber-100 dark:border-amber-900/40">
-                  <Star className="w-2.5 h-2.5" /> Destaque
+                  <Star className="w-2.5 h-2.5" /> {t.productCard.featured}
                 </span>
               )}
             </div>
@@ -106,11 +108,11 @@ export function ProductCard({ product, onSelect, disabled, primaryColor }: Produ
               {product.preparationTime && (
                 <span className="flex items-center gap-0.5 text-[10px] text-gray-400 font-medium">
                   <Clock className="w-3 h-3" />
-                  {product.preparationTime}min
+                  {product.preparationTime}{t.productCard.minutesSuffix}
                 </span>
               )}
               {product.addonGroups.length > 0 && (
-                <span className="text-[10px] text-gray-400">+ opções</span>
+                <span className="text-[10px] text-gray-400">{t.productCard.moreOptions}</span>
               )}
             </div>
           </div>

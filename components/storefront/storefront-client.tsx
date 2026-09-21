@@ -80,6 +80,7 @@ function InfoModal({
   color: string
 }) {
   const [tab, setTab] = useState<'sobre' | 'horario' | 'pagamento'>('sobre')
+  const t = useStorefrontDict()
   const settings = tenant.settings as any ?? {}
   const instagram: string | null = settings?.instagram ?? null
   const address: string | null = settings?.address ?? null
@@ -88,7 +89,7 @@ function InfoModal({
     settings?.businessHoursDisplay ?? []
   const acceptedPayments: string[] = settings?.acceptedPayments ?? []
 
-  const DAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
+  const DAYS = t.days
 
   // Ícone por forma de pagamento — antes usava o mesmo ícone genérico de
   // cartão pra tudo (inclusive PIX e Dinheiro), o que confundia mais do
@@ -106,9 +107,9 @@ function InfoModal({
   if (!modalOpen) return null
 
   const TABS: Array<{ key: typeof tab; label: string }> = [
-    { key: 'sobre',     label: 'Sobre' },
-    { key: 'horario',   label: 'Horário' },
-    { key: 'pagamento', label: 'Pagamento' },
+    { key: 'sobre',     label: t.infoModal.tabs.about },
+    { key: 'horario',   label: t.infoModal.tabs.hours },
+    { key: 'pagamento', label: t.infoModal.tabs.payment },
   ]
 
   return (
@@ -169,7 +170,7 @@ function InfoModal({
                 <div className="space-y-3 pt-2">
                   {tenant.phone && (
                     <>
-                      <h3 className="font-black text-sm text-gray-900 dark:text-gray-100">Contato</h3>
+                      <h3 className="font-black text-sm text-gray-900 dark:text-gray-100">{t.infoModal.contact}</h3>
                       <div className="flex flex-col gap-2">
                         <a
                           href={`https://wa.me/${tenant.phone.replace(/\D/g, '')}`}
@@ -193,7 +194,7 @@ function InfoModal({
                   )}
                   {address && (
                     <>
-                      <h3 className="font-black text-sm text-gray-900 dark:text-gray-100 pt-2">Endereço</h3>
+                      <h3 className="font-black text-sm text-gray-900 dark:text-gray-100 pt-2">{t.infoModal.address}</h3>
                       <p className="text-sm text-gray-600 dark:text-gray-400">{address}</p>
                     </>
                   )}
@@ -201,7 +202,7 @@ function InfoModal({
               )}
 
               {!instagram && !address && !tenant.phone && (
-                <p className="text-sm text-gray-400">Informações de contato não configuradas.</p>
+                <p className="text-sm text-gray-400">{t.infoModal.noContactInfo}</p>
               )}
             </div>
           )}
@@ -215,13 +216,13 @@ function InfoModal({
                     {h.isOpen ? (
                       <span className="font-bold text-gray-900 dark:text-gray-100">{h.openTime} às {h.closeTime}</span>
                     ) : (
-                      <span className="font-bold text-gray-900 dark:text-gray-100">Fechado</span>
+                      <span className="font-bold text-gray-900 dark:text-gray-100">{t.infoModal.closedLabel}</span>
                     )}
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-400">Horários não configurados.</p>
+              <p className="text-sm text-gray-400">{t.infoModal.hoursNotConfigured}</p>
             )
           )}
 
@@ -239,7 +240,7 @@ function InfoModal({
                 })}
               </div>
             ) : (
-              <p className="text-sm text-gray-400">PIX, Dinheiro, Cartão de Crédito/Débito</p>
+              <p className="text-sm text-gray-400">{t.infoModal.defaultPayments}</p>
             )
           )}
         </div>
@@ -268,6 +269,7 @@ function CustomerAuthModal({
   const [error, setError] = useState('')
   const [devCode, setDevCode] = useState('')
   const { setCustomer, customerPhone } = useCartStore()
+  const t = useStorefrontDict()
 
   const formatPhoneDisplay = (val: string) => {
     const digits = val.replace(/\D/g, '').slice(0, 11)
@@ -278,7 +280,7 @@ function CustomerAuthModal({
 
   const handlePhoneSubmit = async () => {
     const digits = phone.replace(/\D/g, '')
-    if (digits.length < 10) { setError('Digite um número válido'); return }
+    if (digits.length < 10) { setError(t.authModal.errInvalidPhone); return }
     setIsLoading(true); setError('')
     try {
       const res = await fetch('/api/otp/send', {
@@ -287,19 +289,19 @@ function CustomerAuthModal({
         body: JSON.stringify({ phone: `55${digits}`, tenantId }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error ?? 'Erro ao enviar código'); return }
+      if (!res.ok) { setError(data.error ?? t.authModal.errSendCode); return }
       if (data.alreadyVerified) {
         setCustomer(`55${digits}`, data.name ?? '')
         onClose(); return
       }
       if (data.devCode) setDevCode(data.devCode)
       setStep('otp')
-    } catch { setError('Erro de conexão') }
+    } catch { setError(t.authModal.errConnection) }
     finally { setIsLoading(false) }
   }
 
   const handleOtpSubmit = async () => {
-    if (otpCode.length < 4) { setError('Digite o código completo'); return }
+    if (otpCode.length < 4) { setError(t.authModal.errIncompleteCode); return }
     setIsLoading(true); setError('')
     try {
       const digits = phone.replace(/\D/g, '')
@@ -309,11 +311,11 @@ function CustomerAuthModal({
         body: JSON.stringify({ phone: `55${digits}`, code: otpCode, tenantId }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error ?? 'Código inválido'); return }
+      if (!res.ok) { setError(data.error ?? t.authModal.errInvalidCode); return }
       setCustomer(`55${digits}`, data.name ?? '')
       if (!data.name) setStep('profile')
       else onClose()
-    } catch { setError('Erro de conexão') }
+    } catch { setError(t.authModal.errConnection) }
     finally { setIsLoading(false) }
   }
 
@@ -337,11 +339,11 @@ function CustomerAuthModal({
           )}
           <div className="flex-1">
             <h2 className="font-black text-gray-900 dark:text-gray-100">
-              {step === 'phone' ? 'Entrar / Cadastrar' : step === 'otp' ? 'Verificar número' : 'Seu nome'}
+              {step === 'phone' ? t.authModal.titlePhone : step === 'otp' ? t.authModal.titleOtp : t.authModal.titleProfile}
             </h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              {step === 'phone' ? 'Use seu WhatsApp para acompanhar pedidos e pontos de fidelidade' :
-               step === 'otp' ? `Código enviado para ${phone}` : 'Informe seu nome para identificação'}
+              {step === 'phone' ? t.authModal.subtitlePhone :
+               step === 'otp' ? `${t.authModal.subtitleOtpPrefix} ${phone}` : t.authModal.subtitleProfile}
             </p>
           </div>
           <button onClick={onClose} className="w-8 h-8 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center text-gray-500">
@@ -355,7 +357,7 @@ function CustomerAuthModal({
           {step === 'phone' && (
             <>
               <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">WhatsApp</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">{t.authModal.whatsappLabel}</label>
                 <input
                   type="tel"
                   value={phone}
@@ -372,16 +374,16 @@ function CustomerAuthModal({
                 className="w-full py-3.5 rounded-2xl text-white font-bold flex items-center justify-center gap-2 disabled:opacity-60"
                 style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}
               >
-                {isLoading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Enviando...</> : 'Enviar código'}
+                {isLoading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {t.authModal.sending}</> : t.authModal.sendCodeBtn}
               </button>
             </>
           )}
 
           {step === 'otp' && (
             <>
-              {devCode && <p className="text-xs text-center text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 px-3 py-2 rounded-xl">🧪 Código de desenvolvimento: <strong>{devCode}</strong></p>}
+              {devCode && <p className="text-xs text-center text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 px-3 py-2 rounded-xl">{t.authModal.devCodeLabel} <strong>{devCode}</strong></p>}
               <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Código de verificação</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">{t.authModal.otpLabel}</label>
                 <input
                   type="number"
                   value={otpCode}
@@ -397,7 +399,7 @@ function CustomerAuthModal({
                 className="w-full py-3.5 rounded-2xl text-white font-bold flex items-center justify-center gap-2 disabled:opacity-60"
                 style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}
               >
-                {isLoading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Verificando...</> : 'Confirmar'}
+                {isLoading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {t.authModal.verifyingBtn}</> : t.authModal.confirmBtn}
               </button>
             </>
           )}
@@ -405,12 +407,12 @@ function CustomerAuthModal({
           {step === 'profile' && (
             <>
               <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Seu nome</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">{t.authModal.nameLabel}</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="João Silva"
+                  placeholder={t.authModal.namePlaceholder}
                   className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm bg-transparent focus:outline-none focus:ring-2"
                   style={{ '--tw-ring-color': color } as any}
                 />
@@ -420,7 +422,7 @@ function CustomerAuthModal({
                 className="w-full py-3.5 rounded-2xl text-white font-bold"
                 style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}
               >
-                Salvar
+                {t.authModal.saveBtn}
               </button>
             </>
           )}
@@ -431,11 +433,8 @@ function CustomerAuthModal({
 }
 
 // ─── Aba Meus Pedidos ─────────────────────────────────────────────────────────
-const ORDER_STATUS_LABEL: Record<string, string> = {
-  PENDING: 'Pendente', CONFIRMED: 'Confirmado', PREPARING: 'Preparando',
-  READY: 'Pronto', OUT_FOR_DELIVERY: 'Saiu para entrega', DELIVERED: 'Entregue',
-  CANCELLED: 'Cancelado',
-}
+// CORREÇÃO (i18n): os rótulos de status agora vêm de t.orderStatus (o
+// componente que usa isto tem acesso ao dicionário via useStorefrontDict).
 const ORDER_STATUS_COLOR: Record<string, string> = {
   PENDING: 'bg-amber-100 text-amber-700', CONFIRMED: 'bg-blue-100 text-blue-700',
   PREPARING: 'bg-purple-100 text-purple-700', READY: 'bg-emerald-100 text-emerald-700',
@@ -451,6 +450,8 @@ function CustomerOrdersSection({
 }) {
   const [data, setData]       = React.useState<any>(null)
   const [loading, setLoading] = React.useState(false)
+  const t = useStorefrontDict()
+  const locale = useStorefrontLocale()
 
   React.useEffect(() => {
     if (!customerPhone) return
@@ -465,11 +466,11 @@ function CustomerOrdersSection({
     return (
       <section className="text-center py-12">
         <div className="w-16 h-16 rounded-3xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4 text-2xl">👤</div>
-        <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Entre para ver seus pedidos</p>
-        <p className="text-sm text-gray-400 mb-5">Use seu WhatsApp para acompanhar pedidos e pontos de fidelidade</p>
+        <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">{t.myOrders.notLoggedInTitle}</p>
+        <p className="text-sm text-gray-400 mb-5">{t.myOrders.notLoggedInSubtitle}</p>
         <button onClick={onLogin} className="px-6 py-3 rounded-2xl text-white font-bold text-sm"
           style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}>
-          Entrar / Cadastrar
+          {t.myOrders.loginBtn}
         </button>
       </section>
     )
@@ -488,13 +489,13 @@ function CustomerOrdersSection({
               {(customerName || '?')[0]?.toUpperCase()}
             </div>
             <div>
-              <p className="font-black text-sm text-gray-900 dark:text-white">{customerName || 'Cliente'}</p>
+              <p className="font-black text-sm text-gray-900 dark:text-white">{customerName || t.myOrders.defaultCustomerName}</p>
               <p className="text-xs text-gray-400">{customerPhone}</p>
             </div>
           </div>
           <button onClick={() => useCartStore.getState().setCustomer('', '')}
             className="text-xs text-red-400 hover:text-red-500 font-semibold flex items-center gap-1">
-            <LogOut className="w-3.5 h-3.5" /> Sair
+            <LogOut className="w-3.5 h-3.5" /> {t.myOrders.logout}
           </button>
         </div>
 
@@ -505,13 +506,13 @@ function CustomerOrdersSection({
               <p className="text-lg font-black text-amber-600 flex items-center justify-center gap-1">
                 <Star className="w-4 h-4 fill-amber-500 text-amber-500" /> {customer.loyaltyPoints}
               </p>
-              <p className="text-xs text-amber-600/80 font-medium">pontos</p>
+              <p className="text-xs text-amber-600/80 font-medium">{t.myOrders.pointsLabel}</p>
             </div>
             <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 px-3 py-2 text-center">
               <p className="text-lg font-black text-emerald-600 flex items-center justify-center gap-1">
                 <PiggyBank className="w-4 h-4" /> R$ {customer.cashbackBalance.toFixed(2).replace('.', ',')}
               </p>
-              <p className="text-xs text-emerald-600/80 font-medium">cashback</p>
+              <p className="text-xs text-emerald-600/80 font-medium">{t.myOrders.cashbackLabel}</p>
             </div>
           </div>
         )}
@@ -520,7 +521,7 @@ function CustomerOrdersSection({
       {/* Lista de pedidos */}
       <h2 className="text-base font-black text-gray-900 dark:text-white flex items-center gap-2">
         <span className="w-6 h-6 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-sm">📋</span>
-        Meus pedidos
+        {t.myOrders.title}
       </h2>
 
       {loading && (
@@ -534,8 +535,8 @@ function CustomerOrdersSection({
           <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-3">
             <ClipboardList className="w-6 h-6 text-gray-400" />
           </div>
-          <p className="font-semibold text-gray-500 text-sm">Nenhum pedido ainda</p>
-          <p className="text-xs mt-1 text-gray-400">Seus pedidos aparecem aqui depois que você fizer o primeiro</p>
+          <p className="font-semibold text-gray-500 text-sm">{t.myOrders.emptyTitle}</p>
+          <p className="text-xs mt-1 text-gray-400">{t.myOrders.emptySubtitle}</p>
         </div>
       )}
 
@@ -547,7 +548,7 @@ function CustomerOrdersSection({
               <div className="flex items-center gap-2 mb-1">
                 <span className="font-black text-sm text-gray-900 dark:text-white">#{order.orderNumber}</span>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ORDER_STATUS_COLOR[order.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                  {ORDER_STATUS_LABEL[order.status] ?? order.status}
+                  {t.orderStatus[order.status as keyof typeof t.orderStatus] ?? order.status}
                 </span>
               </div>
               <p className="text-xs text-gray-400 truncate">
@@ -560,7 +561,7 @@ function CustomerOrdersSection({
                 R$ {order.total.toFixed(2).replace('.', ',')}
               </p>
               <p className="text-xs text-gray-400">
-                {new Date(order.createdAt).toLocaleDateString('pt-BR')}
+                {new Date(order.createdAt).toLocaleDateString(locale)}
               </p>
             </div>
           </div>
@@ -808,11 +809,11 @@ export function StorefrontClient({ tenant, tableInfo, isOpen, closedMessage, vie
 
           <div className="flex items-center justify-center gap-2 mt-1 flex-wrap text-sm text-gray-500">
             <a href={`/menu/${tenant.slug}/avaliacoes`} className="flex items-center gap-1 font-semibold text-gray-700 dark:text-gray-300 hover:underline">
-              <Star className="w-3.5 h-3.5" /> Avaliações
+              <Star className="w-3.5 h-3.5" /> {t.nav.avaliacoes}
             </a>
             <span>•</span>
             <button onClick={() => setInfoModalOpen(true)} className="font-semibold text-gray-700 dark:text-gray-300 hover:underline">
-              Mais informações
+              {t.moreInfo}
             </button>
           </div>
 

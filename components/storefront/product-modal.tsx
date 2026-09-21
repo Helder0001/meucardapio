@@ -8,6 +8,8 @@ import { useCartStore } from '@/lib/store/cart'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import Image from 'next/image'
+import { useStorefrontDict } from '@/lib/i18n/storefront-context'
+import { fmt } from '@/lib/i18n/format'
 
 interface Addon { id: string; name: string; price: number }
 interface AddonGroup {
@@ -25,6 +27,7 @@ interface ProductModalProps {
 }
 
 export function ProductModal({ product, onClose, disabled, primaryColor }: ProductModalProps) {
+  const t = useStorefrontDict()
   const color = primaryColor ?? '#f97316'
   const [quantity, setQuantity] = useState(1)
   const [notes, setNotes] = useState('')
@@ -70,7 +73,7 @@ export function ProductModal({ product, onClose, disabled, primaryColor }: Produ
     for (const group of product.addonGroups) {
       const selected = selectedAddons[group.id] ?? []
       if (group.isRequired && selected.length < group.minSelect) {
-        newErrors[group.id] = `Selecione pelo menos ${group.minSelect} opção`
+        newErrors[group.id] = fmt(t.productModal.selectAtLeast, { min: group.minSelect })
       }
     }
     setErrors(newErrors)
@@ -86,7 +89,7 @@ export function ProductModal({ product, onClose, disabled, primaryColor }: Produ
       })
     )
     addItem({ productId: product.id, productName: product.name, productPrice: product.price, productImage: product.image, quantity, notes: notes.trim() || undefined, addons })
-    toast.success(`${product.name} adicionado! 🛒`)
+    toast.success(fmt(t.productModal.addedToast, { name: product.name }))
     onClose()
   }
 
@@ -141,7 +144,7 @@ export function ProductModal({ product, onClose, disabled, primaryColor }: Produ
                 <div>
                   <h3 className="font-black text-sm text-gray-900 dark:text-gray-100">{group.name}</h3>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {group.maxSelect === 1 ? 'Escolha 1 opção' : `Escolha até ${group.maxSelect}`}
+                    {group.maxSelect === 1 ? t.productModal.chooseOne : fmt(t.productModal.chooseUpTo, { max: group.maxSelect })}
                   </p>
                 </div>
                 <span className={cn(
@@ -150,7 +153,7 @@ export function ProductModal({ product, onClose, disabled, primaryColor }: Produ
                     ? 'text-white'
                     : 'bg-gray-100 dark:bg-gray-800 text-gray-500'
                 )} style={group.isRequired ? { background: color } : {}}>
-                  {group.isRequired ? 'Obrigatório' : 'Opcional'}
+                  {group.isRequired ? t.productModal.required : t.productModal.optional}
                 </span>
               </div>
 
@@ -197,12 +200,12 @@ export function ProductModal({ product, onClose, disabled, primaryColor }: Produ
           {/* Observações */}
           <div className="mb-4">
             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
-              Observações <span className="font-normal text-gray-400">(opcional)</span>
+              {t.productModal.notesLabel} <span className="font-normal text-gray-400">{t.productModal.notesOptional}</span>
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ex: sem cebola, bem passado..."
+              placeholder={t.productModal.notesPlaceholder}
               rows={2}
               maxLength={200}
               className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -240,14 +243,14 @@ export function ProductModal({ product, onClose, disabled, primaryColor }: Produ
               className="flex-1 flex items-center justify-between text-white px-5 py-3.5 rounded-2xl font-black transition-all active:scale-95"
               style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}
             >
-              <span>Adicionar</span>
+              <span>{t.productModal.addButton}</span>
               <span>{formatCurrency(total)}</span>
             </button>
           </div>
         ) : (
           <div className="px-5 py-4 border-t border-gray-100 dark:border-gray-800 flex-shrink-0">
             <div className="w-full text-center py-3.5 rounded-2xl font-black bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500">
-              {product.isOutOfStock ? 'Produto esgotado' : 'Loja fechada no momento'}
+              {product.isOutOfStock ? t.productModal.outOfStockButton : t.productModal.closedButton}
             </div>
           </div>
         )}

@@ -12,6 +12,8 @@ import { cn } from '@/lib/utils'
 import { createOrderAction } from '@/actions/orders/create-order'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import { useStorefrontDict } from '@/lib/i18n/storefront-context'
+import { fmt } from '@/lib/i18n/format'
 
 const AddressPinPicker = dynamic(
   () => import('./address-pin-picker').then((m) => m.AddressPinPicker),
@@ -69,30 +71,8 @@ type Step = 'cart' | 'info' | 'payment'
 type PaymentMethodValue = 'PIX' | 'PIX_MANUAL' | 'CASH' | 'CREDIT_CARD' | 'CREDIT_CARD_MANUAL' | 'DEBIT_CARD' | 'LINK'
 
 const STEPS: Step[] = ['cart', 'info', 'payment']
-const STEP_LABELS = { cart: 'Carrinho', info: 'Seus dados', payment: 'Pagamento' }
 
 interface PaymentOption { value: PaymentMethodValue; label: string; sub: string }
-
-// Pago agora, direto no cardápio — confirmação automática
-// NOTA: 'LINK' (Mercado Pago) foi removido de propósito das opções do
-// cardápio digital — esse método agora existe SOMENTE no PDV/balcão.
-const ONLINE_PAYMENT_OPTIONS: PaymentOption[] = [
-  { value: 'PIX',         label: '⚡ PIX',    sub: 'Confirmação automática' },
-  { value: 'PIX_MANUAL',  label: '⚡ PIX (chave direta)', sub: 'Confirmação em alguns minutos, após envio do comprovante' },
-  { value: 'CREDIT_CARD', label: '💳 Crédito', sub: 'Pague agora, na hora' },
-]
-
-// Pago na hora da entrega/retirada — confirmado manualmente pela loja
-const MANUAL_PAYMENT_OPTIONS: PaymentOption[] = [
-  { value: 'CASH',               label: '💵 Dinheiro', sub: 'Pague na entrega/retirada' },
-  // CORREÇÃO: o cliente não precisa ver "(Online)"/"(Maquininha)" — essa
-  // distinção importa pro lojista (conciliação financeira, ver
-  // lib/utils/payment-labels.ts), mas pro cliente é só ruído: o cabeçalho
-  // da seção ("PAGAMENTO NA ENTREGA/RETIRADA") já deixa claro que é na
-  // maquininha física.
-  { value: 'CREDIT_CARD_MANUAL', label: '💳 Crédito',  sub: 'Na maquininha, na entrega/retirada' },
-  { value: 'DEBIT_CARD',         label: '💳 Débito',   sub: 'Na maquininha, na entrega/retirada' },
-]
 
 interface PaymentEntry {
   id: string
@@ -107,6 +87,26 @@ function newEntry(method: PaymentMethodValue = 'PIX'): PaymentEntry {
 
 export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }: CartDrawerProps) {
   const router = useRouter()
+  const t = useStorefrontDict()
+  const STEP_LABELS = t.checkout.steps
+  // Pago agora, direto no cardápio — confirmação automática. NOTA: 'LINK'
+  // (Mercado Pago) foi removido de propósito das opções do cardápio
+  // digital — esse método agora existe SOMENTE no PDV/balcão.
+  const ONLINE_PAYMENT_OPTIONS: PaymentOption[] = [
+    { value: 'PIX', ...t.checkout.onlinePayment.pix },
+    { value: 'PIX_MANUAL', ...t.checkout.onlinePayment.pixManual },
+    { value: 'CREDIT_CARD', ...t.checkout.onlinePayment.creditOnline },
+  ]
+  // Pago na hora da entrega/retirada — confirmado manualmente pela loja.
+  // CORREÇÃO: o cliente não precisa ver "(Online)"/"(Maquininha)" — essa
+  // distinção importa pro lojista (conciliação financeira, ver
+  // lib/utils/payment-labels.ts), mas pro cliente é só ruído: o cabeçalho
+  // da seção já deixa claro que é na maquininha física.
+  const MANUAL_PAYMENT_OPTIONS: PaymentOption[] = [
+    { value: 'CASH', ...t.checkout.manualPayment.cash },
+    { value: 'CREDIT_CARD_MANUAL', ...t.checkout.manualPayment.creditManual },
+    { value: 'DEBIT_CARD', ...t.checkout.manualPayment.debit },
+  ]
   const color = tenant.primaryColor ?? '#f97316'
   const pixEnabled = tenant.pixEnabled ?? tenant.settings?.pixEnabled ?? true
   const cardEnabled = tenant.cardEnabled ?? tenant.settings?.cardEnabled ?? true
@@ -160,7 +160,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
     try {
       const res = await fetch(`/api/cep/${digits}`)
       if (!res.ok) {
-        setCepError('CEP não encontrado. Você pode digitar o endereço manualmente.')
+        setCepError(t.checkout.cepNotFound)
         setCepZone(null)
         setCepLoading(false)
         setAddressLockedByCep(false)
@@ -191,11 +191,11 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
         setCepError('')
       } else {
         setCepZone(null)
-        setCepError('Seu CEP está fora da área de entrega.')
+        setCepError(t.checkout.cepOutOfArea)
         setDeliveryBairro(null)
       }
     } catch {
-      setCepError('Erro ao buscar CEP. Verifique sua conexão.')
+      setCepError(t.checkout.cepFetchError)
       setCepZone(null)
     } finally {
       setCepLoading(false)
@@ -322,7 +322,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
       if (r.cep) setCep(r.cep)
     } else {
       setCepZone(null)
-      setCepError('Esse endereço está fora da área de entrega.')
+      setCepError(t.checkout.addressOutOfArea)
       setDeliveryBairro(null)
     }
   }
@@ -334,7 +334,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
   const [locatingMe, setLocatingMe] = useState(false)
   const useMyLocation = () => {
     if (!navigator.geolocation) {
-      setCepError('Seu navegador não suporta compartilhar localização.')
+      setCepError(t.checkout.geoNotSupported)
       return
     }
     setLocatingMe(true)
@@ -353,17 +353,17 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
             setPinLat(latitude)
             setPinLng(longitude)
           } else {
-            setCepError('Não conseguimos identificar seu endereço. Tente buscar pelo nome da rua.')
+            setCepError(t.checkout.addressNotFound)
           }
         } catch {
-          setCepError('Erro ao buscar seu endereço. Tente novamente.')
+          setCepError(t.checkout.addressFetchError)
         } finally {
           setLocatingMe(false)
         }
       },
       () => {
         setLocatingMe(false)
-        setCepError('Não foi possível acessar sua localização — verifique a permissão do navegador.')
+        setCepError(t.checkout.locationPermissionError)
       },
       { enableHighAccuracy: true, timeout: 10000 }
     )
@@ -486,12 +486,12 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
         body: JSON.stringify({ code: couponInput.trim().toUpperCase(), tenantId: tenant.id, subtotal: subtotal() }),
       })
       const data = await res.json()
-      if (!res.ok) { toast.error(data.error ?? 'Cupom inválido'); setCouponDiscount(0); setCouponDescription(''); return }
+      if (!res.ok) { toast.error(data.error ?? t.checkout.couponInvalid); setCouponDiscount(0); setCouponDescription(''); return }
       setCoupon(couponInput.trim().toUpperCase())
       setCouponDiscount(data.discount ?? 0)
       setCouponDescription(data.description ?? '')
-      toast.success(`Cupom aplicado! ${data.description}`)
-    } catch { toast.error('Erro ao validar cupom') }
+      toast.success(fmt(t.checkout.couponApplied, { desc: data.description }))
+    } catch { toast.error(t.checkout.couponError) }
     finally { setIsValidatingCoupon(false) }
   }
 
@@ -501,19 +501,19 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
     // pagamento (esse clique), depois de todo o resto do fluxo já ter
     // ficado livre pro visitante explorar.
     if (isDemoTenant) {
-      toast.error('Isso é uma demonstração — pedidos não são finalizados de verdade aqui.')
+      toast.error(t.checkout.demoOrderError)
       return
     }
-    if (!isTableOrder && !customerPhone && !phone) { toast.error('Informe seu telefone'); return }
-    if (deliveryType === 'DELIVERY' && !cepZone && tenant.deliveryZones.length > 0) { toast.error('Informe um CEP válido na área de entrega'); return }
+    if (!isTableOrder && !customerPhone && !phone) { toast.error(t.checkout.errPhone); return }
+    if (deliveryType === 'DELIVERY' && !cepZone && tenant.deliveryZones.length > 0) { toast.error(t.checkout.errCepDelivery); return }
 
     // CORREÇÃO: endereço de entrega obrigatório
     if (deliveryType === 'DELIVERY' && !deliveryAddress.trim()) {
-      toast.error('Informe o endereço completo para entrega')
+      toast.error(t.checkout.errAddressBeforeContinue)
       return
     }
     if (deliveryType === 'DELIVERY' && !deliveryNumber.trim()) {
-      toast.error('Informe o número da casa/apartamento')
+      toast.error(t.checkout.errNumber)
       return
     }
 
@@ -523,7 +523,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
 
     if (!isFullyCovered) {
       if (payments.some((p) => !p.amount || parseFloat(p.amount) <= 0)) {
-        toast.error('Informe o valor de cada forma de pagamento')
+        toast.error(t.checkout.errPaymentAmounts)
         return
       }
       if (payments.some((p) => p.method === 'LINK') && payments.length > 1) {
@@ -630,9 +630,9 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
         return
       }
       clearCart(); onClose()
-      toast.success('Pedido realizado! 🎉')
+      toast.success(t.checkout.orderSuccess)
       router.push(`/menu/${tenant.slug}/pedido/${result.orderId}`)
-    } catch { toast.error('Erro ao realizar pedido. Tente novamente.') }
+    } catch { toast.error(t.checkout.orderError) }
     finally { setIsSubmitting(false) }
   }
 
@@ -692,14 +692,14 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                   <div className="w-16 h-16 rounded-3xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4">
                     <ShoppingBag className="w-7 h-7 text-gray-400" />
                   </div>
-                  <p className="font-semibold text-gray-500">Seu carrinho está vazio</p>
-                  <p className="text-sm mt-1 text-gray-400">Adicione algo delicioso!</p>
+                  <p className="font-semibold text-gray-500">{t.checkout.emptyTitle}</p>
+                  <p className="text-sm mt-1 text-gray-400">{t.checkout.emptySubtitle}</p>
                   <button
                     onClick={onClose}
                     className="mt-4 text-sm font-semibold px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                     style={{ color }}
                   >
-                    Ver cardápio
+                    {t.checkout.seeMenu}
                   </button>
                 </div>
               ) : (
@@ -722,7 +722,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                         <p className="font-black text-sm mt-1" style={{ color }}>{formatCurrency(item.totalPrice)}</p>
                       </div>
                       <div className="flex flex-col items-end gap-2">
-                        <button onClick={() => removeItem(item.cartItemId)} className="text-gray-300 hover:text-red-400 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => removeItem(item.cartItemId)} className="text-gray-300 hover:text-red-400 transition-colors" aria-label={t.checkout.removeLabel}><Trash2 className="h-3.5 w-3.5" /></button>
                         <div className="flex items-center gap-2">
                           <button onClick={() => updateQuantity(item.cartItemId, item.quantity - 1)} className="w-7 h-7 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center justify-center hover:border-gray-300 transition-colors"><Minus className="h-3 w-3 text-gray-500" /></button>
                           <span className="text-sm font-bold w-5 text-center text-gray-900 dark:text-gray-100">{item.quantity}</span>
@@ -737,14 +737,14 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                       (sem abrir modal de customização, pra ficar rápido). */}
                   {suggestedProducts.length > 0 && (
                     <div className="pt-2">
-                      <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">Peça também</p>
+                      <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-2">{t.checkout.orderAgainLabel}</p>
                       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
                         {suggestedProducts.map((p) => (
                           <button
                             key={p.id}
                             onClick={() => {
                               addItem({ productId: p.id, productName: p.name, productPrice: p.price, productImage: p.image, quantity: 1, addons: [] })
-                              toast.success(`${p.name} adicionado`)
+                              toast.success(fmt(t.checkout.addedToast, { name: p.name }))
                             }}
                             className="flex-shrink-0 w-24 text-left bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden"
                           >
@@ -768,7 +768,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                   {/* Cupom */}
                   <div className="pt-2">
                     <div className="flex gap-2">
-                      <input value={couponInput} onChange={(e) => setCouponInput(e.target.value.toUpperCase())} placeholder="Código do cupom"
+                      <input value={couponInput} onChange={(e) => setCouponInput(e.target.value.toUpperCase())} placeholder={t.checkout.couponPlaceholder}
                         className="flex-1 px-3 py-2.5 text-sm border border-gray-200 dark:border-gray-700 rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500" />
                       <button onClick={handleApplyCoupon} disabled={isValidatingCoupon || !couponInput.trim()}
                         className="px-3 py-2.5 rounded-xl text-white text-sm font-bold transition-colors" style={{ background: color }}>
@@ -781,7 +781,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                           ✓ {couponCode}{couponDescription ? ` — ${couponDescription}` : ''}
                           {couponDiscount > 0 && <span className="ml-1 font-bold">(-{formatCurrency(couponDiscount)})</span>}
                         </span>
-                        <button onClick={() => { setCoupon(null); setCouponInput(''); setCouponDiscount(0); setCouponDescription('') }} className="text-xs text-red-400 hover:text-red-500">Remover</button>
+                        <button onClick={() => { setCoupon(null); setCouponInput(''); setCouponDiscount(0); setCouponDescription('') }} className="text-xs text-red-400 hover:text-red-500">{t.checkout.couponRemove}</button>
                       </div>
                     )}
                   </div>
@@ -793,10 +793,10 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
-                              💰 Cashback disponível
+                              {t.checkout.cashbackAvailable}
                             </p>
                             <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-0.5">
-                              Saldo: <strong>{formatCurrency(cashbackBalance)}</strong>
+                              {t.checkout.cashbackBalance} <strong>{formatCurrency(cashbackBalance)}</strong>
                             </p>
                           </div>
                           {/* Toggle */}
@@ -821,8 +821,8 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                         {useCashback && (
                           <div className="mt-3">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs text-emerald-600 dark:text-emerald-400">Usando: <strong>{formatCurrency(cashbackToUse)}</strong></span>
-                              <span className="text-xs text-emerald-600 dark:text-emerald-400">Máx: {formatCurrency(Math.min(cashbackBalance, subtotal() + deliveryFee - couponDiscount))}</span>
+                              <span className="text-xs text-emerald-600 dark:text-emerald-400">{t.checkout.cashbackUsing} <strong>{formatCurrency(cashbackToUse)}</strong></span>
+                              <span className="text-xs text-emerald-600 dark:text-emerald-400">{t.checkout.cashbackMax} {formatCurrency(Math.min(cashbackBalance, subtotal() + deliveryFee - couponDiscount))}</span>
                             </div>
                             <input
                               type="range" min={0}
@@ -833,7 +833,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                               className="w-full accent-emerald-500"
                             />
                             <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 text-center font-medium">
-                              -({formatCurrency(cashbackToUse)}) no total
+                              -({formatCurrency(cashbackToUse)}) {t.checkout.inTotalSuffix}
                             </p>
                           </div>
                         )}
@@ -847,10 +847,10 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm font-bold text-amber-700 dark:text-amber-400">
-                            ⭐ Usar pontos de fidelidade
+                            {t.checkout.loyaltyUsePoints}
                           </p>
                           <p className="text-xs text-amber-600/80 mt-0.5">
-                            Você tem <strong>{loyaltyPoints} pts</strong> · A cada {loyaltyConfig.redeemEvery} pts = {formatCurrency(loyaltyConfig.redeemValue)}
+                            {t.checkout.loyaltyYouHave} <strong>{loyaltyPoints} {t.checkout.ptsSuffix}</strong> · {t.checkout.loyaltyEvery} {loyaltyConfig.redeemEvery} {t.checkout.ptsSuffix} = {formatCurrency(loyaltyConfig.redeemValue)}
                           </p>
                         </div>
                         <button
@@ -878,10 +878,10 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                         <div className="mt-3">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-xs text-amber-700 dark:text-amber-400">
-                              Usando: <strong>{pointsToRedeem} pts</strong> = <strong>{formatCurrency(pointsDiscount)}</strong>
+                              {t.checkout.loyaltyUsing} <strong>{pointsToRedeem} {t.checkout.ptsSuffix}</strong> = <strong>{formatCurrency(pointsDiscount)}</strong>
                             </span>
                             <span className="text-xs text-amber-600/80">
-                              Restam: {loyaltyPoints - pointsToRedeem} pts
+                              {t.checkout.loyaltyRemaining} {loyaltyPoints - pointsToRedeem} {t.checkout.ptsSuffix}
                             </span>
                           </div>
                           <input
@@ -901,7 +901,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                   {/* Tipo de entrega */}
                   {!isTableOrder && (
                     <div className="pt-2">
-                      <p className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">Como deseja receber?</p>
+                      <p className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">{t.checkout.howToReceive}</p>
                       <div className="grid grid-cols-2 gap-2">
                         {(['DELIVERY', 'PICKUP'] as const).map((type) => (
                           <button key={type} onClick={() => {
@@ -922,7 +922,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                             className={cn('py-3 rounded-2xl text-sm font-bold border-2 transition-all flex items-center justify-center gap-1.5',
                               deliveryType === type ? 'text-white border-transparent' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300')}
                             style={deliveryType === type ? { background: color, borderColor: color } : {}}>
-                            {type === 'DELIVERY' ? <><Truck className="w-4 h-4" /> Entrega</> : <><Store className="w-4 h-4" /> Retirada</>}
+                            {type === 'DELIVERY' ? <><Truck className="w-4 h-4" /> {t.checkout.delivery}</> : <><Store className="w-4 h-4" /> {t.checkout.pickup}</>}
                           </button>
                         ))}
                       </div>
@@ -939,7 +939,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                               type="text"
                               value={streetQuery}
                               onChange={(e) => setStreetQuery(e.target.value)}
-                              placeholder="Digite o nome da rua"
+                              placeholder={t.checkout.streetPlaceholder}
                               className="w-full px-3 py-2.5 text-sm border rounded-xl bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
                             />
                             {streetSearching && (
@@ -960,7 +960,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                               </div>
                             )}
                             {!streetSearching && streetQuery.trim().length >= 4 && streetResults.length === 0 && (
-                              <p className="text-xs text-gray-400 mt-1">Nenhum endereço encontrado.</p>
+                              <p className="text-xs text-gray-400 mt-1">{t.checkout.noAddressFound}</p>
                             )}
                           </div>
 
@@ -980,13 +980,13 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                             ) : (
                               <MapPin className="w-3.5 h-3.5" />
                             )}
-                            {locatingMe ? 'Buscando sua localização…' : 'Usar minha localização'}
+                            {locatingMe ? t.checkout.searchingLocation : t.checkout.useMyLocation}
                           </button>
 
                           {cepError && <p className="text-xs text-red-500">{cepError}</p>}
                           {cepZone && (
                             <div className="rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-3 py-2 text-xs text-green-700 dark:text-green-400">
-                              ✓ Entrega disponível — {cepZone.name ?? cepZone.bairro} · {cepZone.freeAbove && subtotal() >= cepZone.freeAbove ? 'Frete grátis 🎉' : formatCurrency(cepZone.fee)}
+                              ✓ {t.checkout.deliveryAvailable} — {cepZone.name ?? cepZone.bairro} · {cepZone.freeAbove && subtotal() >= cepZone.freeAbove ? t.checkout.freeShipping : formatCurrency(cepZone.fee)}
                             </div>
                           )}
 
@@ -997,7 +997,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                                 type="text"
                                 value={deliveryAddress}
                                 onChange={(e) => setDeliveryAddress(e.target.value)}
-                                placeholder="Rua, complemento *"
+                                placeholder={t.checkout.streetComplementPlaceholder}
                                 readOnly={addressLockedByCep}
                                 className={cn(
                                   'w-full px-3 py-2.5 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500',
@@ -1041,7 +1041,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                               inputMode="numeric"
                               value={deliveryNumber}
                               onChange={(e) => setDeliveryNumber(e.target.value)}
-                              placeholder="Nº *"
+                              placeholder={t.checkout.numberPlaceholder}
                               className={cn(
                                 'px-3 py-2.5 text-sm border rounded-xl bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500',
                                 !deliveryNumber.trim() ? 'border-brand-300 dark:border-brand-700' : 'border-gray-200 dark:border-gray-700'
@@ -1083,14 +1083,14 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
           {step === 'info' && (
             <div className="p-5 space-y-4">
               <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Telefone (WhatsApp) *</label>
-                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(11) 99999-9999"
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">{t.checkout.phoneLabel}</label>
+                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t.checkout.phonePlaceholder}
                   className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500" />
-                <p className="text-xs text-gray-400 mt-1.5">Você receberá atualizações do pedido via WhatsApp</p>
+                <p className="text-xs text-gray-400 mt-1.5">{t.checkout.phoneHelp}</p>
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Seu nome *</label>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="João Silva" required
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">{t.checkout.nameLabel}</label>
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={t.checkout.namePlaceholder} required
                   className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500" />
               </div>
             </div>
@@ -1102,9 +1102,9 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
               {isTableOrder && (
                 <div>
                   <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">
-                    Telefone (opcional, para atualizações via WhatsApp)
+                    {t.checkout.phoneOptionalTable}
                   </label>
-                  <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(11) 99999-9999"
+                  <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t.checkout.phonePlaceholder}
                     className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500" />
                 </div>
               )}
@@ -1112,12 +1112,12 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
               {/* Formas de Pagamento Múltiplas */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-sm font-bold text-gray-700 dark:text-gray-300">Formas de pagamento</p>
+                  <p className="text-sm font-bold text-gray-700 dark:text-gray-300">{t.checkout.paymentMethods}</p>
                   {payments.length < 4 && (
                     <button onClick={addPayment}
                       className="flex items-center gap-1 text-xs font-bold px-2.5 py-1.5 rounded-xl transition-colors text-white"
                       style={{ background: color }}>
-                      <PlusCircle className="w-3.5 h-3.5" /> Dividir
+                      <PlusCircle className="w-3.5 h-3.5" /> {t.checkout.splitButton}
                     </button>
                   )}
                 </div>
@@ -1127,7 +1127,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                     <div key={entry.id} className="border-2 border-gray-100 dark:border-gray-800 rounded-2xl p-3 space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                          {payments.length > 1 ? `Pagamento ${idx + 1}` : 'Forma de pagamento'}
+                          {payments.length > 1 ? fmt(t.checkout.paymentNumbered, { n: idx + 1 }) : t.checkout.paymentSingular}
                         </span>
                         {payments.length > 1 && (
                           <button onClick={() => removePayment(entry.id)} className="text-gray-300 hover:text-red-400 transition-colors">
@@ -1142,7 +1142,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                       <div className="space-y-2.5">
                         <div>
                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1.5">
-                            Pagamento online — cobrado agora
+                            {t.checkout.onlinePaymentHeading}
                           </p>
                           <div className="grid grid-cols-2 gap-1.5">
                             {onlineOptions.map((opt) => (
@@ -1158,7 +1158,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                         </div>
                         <div>
                           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-1.5">
-                            Pagamento na entrega/retirada
+                            {t.checkout.manualPaymentHeading}
                           </p>
                           <div className="grid grid-cols-3 gap-1.5">
                             {MANUAL_PAYMENT_OPTIONS.map((opt) => (
@@ -1203,9 +1203,9 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
 
                       {entry.method === 'CASH' && (
                         <div>
-                          <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">Troco para quanto?</label>
+                          <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">{t.checkout.changeForLabel}</label>
                           <input type="number" value={entry.changeFor} onChange={(e) => updatePayment(entry.id, 'changeFor', e.target.value)}
-                            placeholder="Ex: 50.00"
+                            placeholder={t.checkout.changeForPlaceholder}
                             className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-xl text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-brand-500" />
                         </div>
                       )}
@@ -1216,7 +1216,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                 {payments.length > 1 && (
                   <div className="mt-3 space-y-1.5">
                     <div className="flex justify-between text-xs font-medium">
-                      <span className="text-gray-500">Alocado</span>
+                      <span className="text-gray-500">{t.checkout.allocated}</span>
                       <span className={cn(isFullyAllocated ? 'text-emerald-600' : totalAllocated > estimatedTotal ? 'text-red-500' : 'text-amber-500')}>
                         {formatCurrency(totalAllocated)} / {formatCurrency(estimatedTotal)}
                       </span>
@@ -1226,7 +1226,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                         style={{ width: `${Math.min(100, (totalAllocated / estimatedTotal) * 100)}%` }} />
                     </div>
                     {!isFullyAllocated && remaining > 0.01 && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400">Falta alocar {formatCurrency(remaining)}</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400">{t.checkout.missingToAllocate} {formatCurrency(remaining)}</p>
                     )}
                   </div>
                 )}
@@ -1235,40 +1235,40 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
               {/* Resumo */}
               <div className="bg-gray-50 dark:bg-gray-800/50 rounded-2xl p-4 space-y-2.5">
                 <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-                  <span>Subtotal</span><span>{formatCurrency(subtotal())}</span>
+                  <span>{t.checkout.subtotal}</span><span>{formatCurrency(subtotal())}</span>
                 </div>
                 {deliveryType === 'DELIVERY' && (
                   <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-                    <span>Entrega</span><span>{deliveryFee === 0 ? '🎉 Grátis' : formatCurrency(deliveryFee)}</span>
+                    <span>{t.checkout.deliveryFeeLabel}</span><span>{deliveryFee === 0 ? t.checkout.freeLabel : formatCurrency(deliveryFee)}</span>
                   </div>
                 )}
                 {couponCode && couponDiscount > 0 && (
                   <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400 font-semibold">
-                    <span>🏷 Cupom {couponCode}</span><span>-{formatCurrency(couponDiscount)}</span>
+                    <span>{t.checkout.couponLabel} {couponCode}</span><span>-{formatCurrency(couponDiscount)}</span>
                   </div>
                 )}
                 {useCashback && cashbackToUse > 0 && (
                   <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400 font-semibold">
-                    <span>💰 Cashback</span><span>-{formatCurrency(cashbackToUse)}</span>
+                    <span>{t.checkout.cashbackLabel}</span><span>-{formatCurrency(cashbackToUse)}</span>
                   </div>
                 )}
                 {usePoints && pointsDiscount > 0 && (
                   <div className="flex justify-between text-sm text-amber-600 dark:text-amber-400 font-semibold">
-                    <span>⭐ Pontos ({pointsToRedeem} pts)</span><span>-{formatCurrency(pointsDiscount)}</span>
+                    <span>{t.checkout.pointsLabel} ({pointsToRedeem} {t.checkout.ptsSuffix})</span><span>-{formatCurrency(pointsDiscount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-black text-gray-900 dark:text-gray-100 border-t border-gray-200 dark:border-gray-700 pt-2.5">
-                  <span>Total estimado</span>
+                  <span>{t.checkout.estimatedTotal}</span>
                   <span style={{ color }}>{formatCurrency(estimatedTotal)}</span>
                 </div>
-                <p className="text-[10px] text-gray-400 text-center">* Valor final confirmado pelo servidor</p>
+                <p className="text-[10px] text-gray-400 text-center">{t.checkout.finalValueNote}</p>
               </div>
 
               {/* CORREÇÃO (#1): avisa antes do clique — o bloqueio em si
                   acontece em handleSubmitOrder. */}
               {isDemoTenant && (
                 <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-400 text-center">
-                  🧪 Isso é uma demonstração — a confirmação do pedido está desativada.
+                  {t.checkout.demoOrderDisabledNotice}
                 </div>
               )}
             </div>
@@ -1282,19 +1282,19 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
               <button onClick={() => {
                 // Validate address before proceeding
                 if (deliveryType === 'DELIVERY' && !cepZone && tenant.deliveryZones.length > 0) {
-                  toast.error('Informe um CEP válido na área de entrega')
+                  toast.error(t.checkout.errCepDelivery)
                   return
                 }
                 if (deliveryType === 'DELIVERY' && !deliveryAddress.trim()) {
-                  toast.error('Informe o endereço completo antes de continuar')
+                  toast.error(t.checkout.errAddressBeforeContinue)
                   return
                 }
                 if (deliveryType === 'DELIVERY' && !deliveryNumber.trim()) {
-                  toast.error('Informe o número da casa/apartamento')
+                  toast.error(t.checkout.errNumber)
                   return
                 }
                 if (deliveryType === 'DELIVERY' && liveTrackingEnabled && !pinConfirmed) {
-                  toast.error('Confirme sua localização no mapa antes de continuar')
+                  toast.error(t.checkout.errConfirmLocation)
                   return
                 }
                 setStep(isTableOrder ? 'payment' : 'info')
@@ -1302,7 +1302,7 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
                 disabled={deliveryType === 'DELIVERY' && (!deliveryNumber.trim() || (liveTrackingEnabled && !pinConfirmed))}
                 className="w-full flex items-center justify-between text-white px-5 py-3.5 rounded-2xl font-bold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}>
-                <span>Continuar</span>
+                <span>{t.checkout.continueBtn}</span>
                 <div className="flex items-center gap-2">
                   <span>{formatCurrency(estimatedTotal)}</span>
                   <ArrowRight className="h-4 w-4" />
@@ -1311,32 +1311,32 @@ export function CartDrawer({ open, onClose, tenant, tableInfo, isDemo = false }:
             )}
             {step === 'info' && (
               <div className="flex gap-2">
-                <button onClick={() => setStep('cart')} className="px-4 py-3.5 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-50 transition-colors">Voltar</button>
+                <button onClick={() => setStep('cart')} className="px-4 py-3.5 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-50 transition-colors">{t.checkout.back}</button>
                 <button
                   onClick={() => {
-                    if (!phone && !customerPhone) { toast.error('Informe seu telefone'); return }
-                    if (!name.trim()) { toast.error('Informe seu nome'); return }
+                    if (!phone && !customerPhone) { toast.error(t.checkout.errPhone); return }
+                    if (!name.trim()) { toast.error(t.checkout.errName); return }
                     setCustomer(phone || customerPhone!, name)
                     setStep('payment')
                   }}
                   className="flex-1 text-white py-3.5 rounded-2xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2"
                   style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}>
-                  Continuar <ArrowRight className="h-4 w-4" />
+                  {t.checkout.continueBtn} <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
             )}
             {step === 'payment' && (
               <div className="flex gap-2">
-                <button onClick={() => setStep(isTableOrder ? 'cart' : 'info')} className="px-4 py-3.5 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-50 transition-colors">Voltar</button>
+                <button onClick={() => setStep(isTableOrder ? 'cart' : 'info')} className="px-4 py-3.5 border border-gray-200 dark:border-gray-700 rounded-2xl text-sm font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-50 transition-colors">{t.checkout.back}</button>
                 <button
                   onClick={handleSubmitOrder}
                   disabled={isSubmitting}
                   className="flex-1 text-white py-3.5 rounded-2xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60"
                   style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}>
                   {isSubmitting ? (
-                    <><Loader2 className="h-4 w-4 animate-spin" /> Enviando...</>
+                    <><Loader2 className="h-4 w-4 animate-spin" /> {t.checkout.sending}</>
                   ) : (
-                    <>Fazer pedido · {formatCurrency(estimatedTotal)}</>
+                    <>{t.checkout.placeOrder} · {formatCurrency(estimatedTotal)}</>
                   )}
                 </button>
               </div>
