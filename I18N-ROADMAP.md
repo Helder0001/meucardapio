@@ -26,13 +26,17 @@ com o dicionário novo.
 **Já traduzido de ponta a ponta** (pt-BR/en/es):
 - **Dashboard**: navegação lateral inteira (desktop + drawer mobile + barra
   inferior mobile) — `components/dashboard/sidebar.tsx`.
-- **Storefront**: barra de busca, nav de botões (Início/Ofertas/Pedidos/
-  Avaliações/WhatsApp), toggle de tema, carrinho, "Mesa X", aviso de
-  cardápio fechado — `components/storefront/storefront-client.tsx`.
 - **Landing**: página inteira — barra de topo, navbar, hero, problema/solução,
   como funciona, Kanban, WhatsApp, cardápio/QR, pagamentos, tecnologia, IA,
   grade de funcionalidades, equipe, tipos de negócio, planos, FAQ, CTA final
   e rodapé — `components/marketing/home-page-client.tsx`.
+- **Cardápio (storefront)**: ✅ completo — busca/nav/tema/carrinho, ficha de
+  produto (`product-card.tsx`, `product-modal.tsx`), modal "Mais informações"
+  (`InfoModal`), checkout inteiro (`cart-drawer.tsx`: entrega/retirada,
+  endereço, telefone/nome, cupom, cashback, pontos de fidelidade, formas de
+  pagamento, resumo, todos os toasts de erro/sucesso) e a aba "Meus Pedidos"
+  + login por WhatsApp/OTP (`CustomerOrdersSection`, `CustomerAuthModal`,
+  tudo dentro de `storefront-client.tsx`).
 
 ## O que falta (por escopo, para continuar)
 
@@ -48,10 +52,7 @@ O padrão é sempre o mesmo 3 passos — copie de qualquer arquivo já feito:
   Configurações etc.) — são dezenas de arquivos, migrar por prioridade de uso.
 - Formulários grandes: `general-settings-form.tsx`, `chatbot-automation-settings.tsx` etc.
 
-**Storefront** (`lib/i18n/storefront.ts` + `-context.tsx` já prontos):
-- `components/storefront/cart-drawer.tsx` (carrinho/checkout — o mais importante depois do header)
-- `components/storefront/product-card.tsx` e `product-modal.tsx`
-- O `InfoModal` dentro do próprio `storefront-client.tsx` (abas Sobre/Horário/Pagamento — linhas ~67-200)
+**Storefront** — ✅ completo (ver acima). Resta só:
 - Nomes/descrições de produtos e categorias cadastrados pelo restaurante —
   esses **não são strings de UI**, são dados do banco (`Product.name`,
   `Product.description`). Traduzir isso é um projeto à parte: exigiria um
